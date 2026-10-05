@@ -16,15 +16,18 @@ Wymagania: Node.js ≥ 20.
 
 ```bash
 npm install
-npm run build      # buduje UI
-npm start          # http://127.0.0.1:4317 — demo workspace „Checkout”
+npm start
 ```
+
+Następnie otwórz http://127.0.0.1:4317 (demo workspace „Checkout”). Przy pierwszym `npm start` interfejs buduje się automatycznie; po zmianach w UI uruchom `npm run build`.
 
 Tryb deweloperski (hot reload UI + API):
 
 ```bash
-npm run dev        # UI: http://localhost:5173, API: http://127.0.0.1:4317
+npm run dev
 ```
+
+UI: http://localhost:5173, API: http://127.0.0.1:4317. W bloki poleceń w tym README nie są wpisane komentarze — wklejaj je w całości (zsh na macOS nie traktuje `#` jako komentarza).
 
 Testy i typecheck:
 
@@ -121,7 +124,4 @@ Szczegóły i mapowanie koncepcji produktu na kod: [`docs/ARCHITECTURE.md`](docs
 
 ## Roadmap
 
-- Desktop shell (Tauri/Electron) wokół istniejącego UI — serwer już działa lokalnie i jest platform-agnostic.
-- Embeddingi (zamiast TF-IDF) do context discovery przy dużych organizacjach.
-- Zapisywanie decyzji z powrotem do Jira/Confluence (komentarz / sekcja „Decisions”).
-- Faza 2 — *Implementation Intelligence*: GitHub, Code ↔ Specification validation, plan implementacji.
+MVP celowo obejmuje tylko **Level 1 — Definition Intelligence** (Jira + Confluence + Figma). Kolejne poziomy (Product Context Intelligence z OpenAPI, GitHub i Product Analytics oraz Organizational Intelligence ze Slack/Teams, incydentami, supportem i testami), kolejność integracji i przykłady findings opisuje [`docs/ROADMAP.md`](docs/ROADMAP.md).
