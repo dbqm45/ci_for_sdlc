@@ -125,3 +125,5 @@ Szczegóły i mapowanie koncepcji produktu na kod: [`docs/ARCHITECTURE.md`](docs
 ## Roadmap
 
 MVP celowo obejmuje tylko **Level 1 — Definition Intelligence** (Jira + Confluence + Figma). Kolejne poziomy (Product Context Intelligence z OpenAPI, GitHub i Product Analytics oraz Organizational Intelligence ze Slack/Teams, incydentami, supportem i testami), kolejność integracji i przykłady findings opisuje [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+Docelowy model dystrybucji to **SaaS z abonamentem**: OAuth zamiast tokenów, AI wliczone w usługę, szyfrowanie per organizacja, multi-tenancy, billing. Obecny tryb self-hosted (tokeny w zmiennych środowiskowych) zostaje do testów i instalacji u klienta. Szczegóły: [`docs/SAAS.md`](docs/SAAS.md).
