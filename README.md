@@ -12,7 +12,7 @@ Produkt **nie analizuje kodu** — to świadoma decyzja zakresu MVP: najpierw �
 
 ## Szybki start
 
-Wymagania: Node.js ≥ 20. Ścieżka do folderu projektu nie może zawierać znaku `#` (ograniczenie Vite, którym budowany jest interfejs).
+Wymagania: Node.js ≥ 20.
 
 ```bash
 npm install
@@ -24,8 +24,10 @@ Następnie otwórz http://127.0.0.1:4317 (demo workspace „Checkout”). Przy p
 Tryb deweloperski (hot reload UI + API):
 
 ```bash
-npm run dev        # UI: http://localhost:5173, API: http://127.0.0.1:4317
+npm run dev
 ```
+
+UI: http://localhost:5173, API: http://127.0.0.1:4317. W bloki poleceń w tym README nie są wpisane komentarze — wklejaj je w całości (zsh na macOS nie traktuje `#` jako komentarza).
 
 Testy i typecheck:
 
