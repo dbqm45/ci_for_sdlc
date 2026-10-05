@@ -1,0 +1,19 @@
+{
+  "name": "@ci/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.34.2",
+    "@anthropic-ai/sdk": "^0.131.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "vitest": "^3.2.4"
+  }
+}

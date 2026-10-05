@@ -1,0 +1,26 @@
+{
+  "name": "continuous-intelligence-sdlc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Continuous Intelligence for Product & Software Definition — AI quality gate across Jira, Confluence and Figma",
+  "workspaces": [
+    "packages/core",
+    "packages/server",
+    "packages/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"npm run dev -w @ci/server\" \"npm run dev -w @ci/web\"",
+    "build": "npm run build -w @ci/web",
+    "start": "npm run start -w @ci/server",
+    "test": "npm run test -w @ci/core && npm run test -w @ci/server",
+    "typecheck": "tsc -p packages/core && tsc -p packages/server && tsc -p packages/web",
+    "analyze": "npm run analyze --silent -w @ci/server --"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

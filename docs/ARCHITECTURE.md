@@ -1,0 +1,102 @@
+# Architecture
+
+```
+                 Jira            Confluence           Figma
+                   │                  │                  │
+          connectors/atlassian.ts     │       connectors/figma.ts      (demo: connectors/demo.ts)
+                   └──────────┬───────┴──────────────────┘
+                              ↓
+                ProjectContext  (RequirementContext · DocumentationContext · DesignContext)
+                              ↓
+                graph.ts — Context Graph
+                  entities + explicit relations (epic link, parent, issue links, remote links,
+                  key mentions, page links, prototype transitions, "superseded by")
+                  + semantic relations (TF-IDF cosine; Figma flows by frame-name prefix)
+                  + domain detection (Jira components ↔ labels / spaces)
+                              ↓
+                analysis/context.ts — per-item context, traits, claims (analysis/claims.ts)
+                              ↓
+        ┌─────────────────────┼─────────────────────────┐
+        ↓                     ↓                         ↓
+  analysis/rules.ts     ai/ (optional)            analysis/states.ts
+  deterministic rules   semantic reviewer +       state machine, journeys,
+  GAP / CONFLICT /      adversarial questions;    adversarial probes
+  AMBIGUITY / OUTDATED  evidence-validated
+  / MISSING_COVERAGE
+        └─────────────────────┼─────────────────────────┘
+                              ↓
+                Findings + Questions  →  Human Decisions (server: /api/decisions)
+                              ↓
+                analysis/analyze.ts — readiness, dimensions, checklist,
+                cross-item pass (dependencies, bug root cause, epic rollup)
+                              ↓
+                project.ts — metrics, decision debt, top risks, snapshot,
+                drift (vs previous snapshot and approved baselines)
+                              ↓
+                impact.ts — impact analysis on the graph + claims
+```
+
+## Mapping: product concept → implementation
+
+| Concept | Where |
+|---|---|
+| Context before code / Context Discovery (§15) | `graph.ts` (`buildContextGraph`, `bundleFor`) |
+| Context Graph — entities & relations (§16) | `model.ts` (`Entity`, `Relation`), `graph.ts` |
+| Claims & semantic conflicts (§17) | `analysis/claims.ts`, rule `CON-001` |
+| Domain detection (§18) | `graph.ts` (`detectDomains`) |
+| AI agents (§19) | Specification Reviewer + Question Agent = `ai/types.ts` prompt; Story/Epic/Bug analyzers = `analysis/analyze.ts`; Context Discovery = `graph.ts` |
+| Adversarial review (§20, UC-07) | `analysis/states.ts` (`PROBES`) + AI `challenges` |
+| State machine analysis (§21) | `analysis/states.ts` (`requiredStates`, `stateCoverage`), rule `DES-002` |
+| User journey coverage (§22) | `analysis/states.ts` (`journeyCoverage`) |
+| Hybrid intelligence (§23) | rules (`analysis/rules.ts`) + `ai/` + graph + decisions |
+| Feature readiness (§24, UC-01) | `analysis/analyze.ts` (`scoreItem`) — critical overrides the average |
+| Epic / Story / Task / Bug analysis (§11–14) | `RULES[].appliesTo`, `crossItemPass` (epic rollup, `DEP-001`, `BUG-004`), `COV-001` |
+| Evidence & provenance (§29) | every `Finding.evidence`; AI findings without valid source refs are dropped |
+| MCP / provider architecture (§31, §34) | connectors normalize into own context model; `ai/providers.ts` (Anthropic, Bedrock, OpenAI, Azure OpenAI, custom) |
+| Security & privacy (§35) | `server/src/store.ts` (encryption at rest), redaction + data minimization in `project.ts`, audit log |
+| Configuration & policy (§36) | `policy.ts`, Settings page |
+| Continuous drift detection (§32, UC-09) | `project.ts` (`diffSnapshots`, approval baselines → `DRIFT-001`), server scheduler + webhooks |
+| Impact analysis (UC-11) | `impact.ts` |
+| Decision debt (§42) | `project.ts` (`metrics`) |
+
+## Rules
+
+| Id | Applies to | Detects |
+|---|---|---|
+| REQ-001 | story | no acceptance criteria |
+| REQ-002 | story | no user story / goal statement |
+| REQ-003 | story, bug | untestable wording in AC (fast, appropriate, etc., handle errors, TBD …) |
+| REQ-004 | story | retry without a defined limit |
+| ERR-001 | story | retry failure behaviour undefined (critical for payments) |
+| ERR-002 | story | server error behaviour undefined |
+| ERR-003 | story | timeout behaviour undefined (uses the documented timeout in the question) |
+| ERR-004 | story | destructive action without confirmation / undo |
+| ERR-005 | story | session expiry undefined in authenticated flows |
+| ARCH-001 | story | retryable payment without idempotency strategy |
+| ARCH-002 | story | async API without processing state |
+| ARCH-003 | story | requirement expects immediate result, docs describe async |
+| DES-001 | story | no Figma design found |
+| DES-002 | story | required UI state missing in Figma |
+| DOC-001 | story | no documentation found |
+| DOC-002 | story, epic, bug | outdated / superseded documentation in context |
+| CON-001 | story, epic, bug | conflicting claims across sources (or sources contradicting a decision) |
+| COV-001 | story | acceptance criterion without implementation task |
+| BUG-001..003 | bug | incomplete report, no related story, no regression test |
+| BUG-004 | bug | bug matches an open finding of the related story (root cause) |
+| DEP-001 | all | depends on an item that is not ready |
+| EPIC-001..004 | epic | no goal, no stories, stories without design, inconsistent behaviour across stories |
+| DRIFT-001 | approved items | context changed since approval |
+| AI-001 | story, bug | semantic findings from the AI reviewer (evidence required) |
+
+## Decisions feed back into the analysis
+
+A decision closes the finding whose question it answers (`resolved`, `accepted_risk` or `dismissed`), and its
+answer is parsed into claims. That is how a decision like *"Idempotency key per payment attempt"* surfaces
+the fact that the Payments API Reference still says *"accepts repeated requests"* — a new, evidence-backed
+conflict instead of a silently ignored inconsistency.
+
+## Persistence
+
+`CI_DATA_DIR` (default `.ci-data/`): `settings.json`, `decisions.json`, `approvals.json`, `snapshot.json`,
+`drift.json`, `history.json`, `ai-cache.json`, `audit.jsonl`, `demo-context.json`. Context-bearing files are
+encrypted with AES-256-GCM when *Encrypt stored context* is on and `CI_ENCRYPTION_KEY` is set.
