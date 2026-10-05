@@ -1,0 +1,22 @@
+{
+  "technology": "Next.js",
+  "based_on": "16.3",
+  "min_supported": "14",
+  "verified": "2026-10-03",
+  "verified_with": "next 16.3.8 + react 19.3.0, TypeScript (tsc --noEmit) dla przykładów w references/wzorce.md",
+  "constraints": {
+    "15": {"fw-react": ">=19"},
+    "16": {"fw-react": ">=19.2"}
+  },
+  "sources": [
+    "https://nextjs.org/docs",
+    "https://nextjs.org/docs/app/guides/upgrading/version-16",
+    "https://nextjs.org/docs/app/guides/data-security",
+    "https://nextjs.org/docs/app/getting-started/caching",
+    "https://nextjs.org/docs/app/guides/testing",
+    "https://nextjs.org/blog/next-16",
+    "https://nextjs.org/blog/next-16-3",
+    "https://nextjs.org/blog/CVE-2025-66478",
+    "https://nextjs.org/support-policy"
+  ]
+}

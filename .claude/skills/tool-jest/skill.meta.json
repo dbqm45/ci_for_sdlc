@@ -1,0 +1,9 @@
+{
+  "technology": "Jest",
+  "based_on": "30",
+  "min_supported": "29",
+  "verified": "2026-09-27",
+  "verified_with": "jest 30.5.2 na Node 22.22 z ESM (--experimental-vm-modules): test.each, test.failing, expect.arrayOf, restoreMocks, --testPathPatterns; `using` wymaga transpilacji w Node 22",
+  "constraints": {},
+  "sources": ["https://jestjs.io/blog/2025/06/04/jest-30", "https://jestjs.io/docs/upgrading-to-jest30", "https://jestjs.io/docs/ecmascript-modules"]
+}

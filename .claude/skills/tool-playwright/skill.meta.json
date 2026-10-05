@@ -1,0 +1,9 @@
+{
+  "technology": "Playwright",
+  "based_on": "1.63",
+  "min_supported": "1.44",
+  "verified": "2026-09-27",
+  "verified_with": "@playwright/test 1.63.0 + @axe-core/playwright 4.13 na Chromium (executablePath): getByRole/getByLabel, toMatchAriaSnapshot, page.clock, webServer, failOnFlakyTests; test ze specyfikacji wykrył celowy błąd progu rabatu",
+  "constraints": {},
+  "sources": ["https://playwright.dev/docs/release-notes", "https://playwright.dev/docs/best-practices", "https://playwright.dev/docs/test-agents", "https://playwright.dev/docs/aria-snapshots", "https://playwright.dev/docs/clock"]
+}

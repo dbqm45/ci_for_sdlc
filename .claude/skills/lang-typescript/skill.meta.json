@@ -1,0 +1,12 @@
+{
+  "technology": "TypeScript",
+  "based_on": "7.0",
+  "min_supported": "5.0",
+  "verified": "2026-09-27",
+  "verified_with": "tsc 5.9.3, 6.0.3 i 7.0.2 (strict + noUncheckedIndexedAccess) — kod z references/ + testy",
+  "sources": [
+    "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-6-0.html",
+    "https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/",
+    "https://www.typescriptlang.org/docs/handbook/release-notes/overview.html"
+  ]
+}

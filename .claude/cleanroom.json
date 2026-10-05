@@ -1,0 +1,110 @@
+{
+  "_comment": "Izolacja informacji dla wybranych agentów (hook cleanroom_guard.py). Profil 'denylist': blokuje pliki z rozszerzeniem kodu spoza 'allow' (projektant testów nie widzi implementacji). Profil 'allowlist': agent czyta WYŁĄCZNIE ścieżki z 'allow' (generator wymagań na ślepo). Zmiana wymaga zgody człowieka.",
+  "profiles": [
+    {
+      "name": "qa",
+      "agents": [
+        "*-qa-analyst",
+        "qa-analyst"
+      ],
+      "mode": "denylist",
+      "allow": [
+        "docs/**",
+        "**/*.md",
+        "**/*.feature",
+        "**/*.spec.*",
+        "**/*.test.*",
+        "**/__tests__/**",
+        "test/**",
+        "tests/**",
+        "e2e/**",
+        "**/e2e/**",
+        "src/test/**",
+        "**/*.d.ts",
+        "**/openapi*.*",
+        "**/swagger*.*",
+        "**/*.proto",
+        "**/*.graphql",
+        "**/schema*.json",
+        "package.json",
+        "**/package.json",
+        "tsconfig*.json",
+        "**/*.config.*",
+        "pom.xml",
+        "**/build.gradle*",
+        ".claude/**",
+        "CLAUDE.md"
+      ],
+      "deny_extensions": [
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
+        ".vue",
+        ".svelte",
+        ".html",
+        ".scss",
+        ".css",
+        ".java",
+        ".kt",
+        ".kts",
+        ".groovy",
+        ".scala",
+        ".cs",
+        ".py",
+        ".go",
+        ".rs",
+        ".rb",
+        ".php",
+        ".swift",
+        ".sql"
+      ],
+      "block_tools": [
+        "Bash"
+      ]
+    },
+    {
+      "name": "blind",
+      "agents": [
+        "blind-analyst",
+        "*-blind-analyst"
+      ],
+      "mode": "allowlist",
+      "allow": [
+        "docs/project/02-domain/_blind/**",
+        ".claude/skills/ddd-model-stress-test/**"
+      ],
+      "block_tools": [
+        "Bash",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "Agent",
+        "Task"
+      ]
+    },
+    {
+      "name": "es-sim",
+      "agents": [
+        "es-participant",
+        "es-room"
+      ],
+      "mode": "allowlist",
+      "allow": [
+        "docs/training/es-sim/*/rounds/**"
+      ],
+      "block_tools": [
+        "Bash",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "Agent",
+        "Task"
+      ]
+    }
+  ]
+}
