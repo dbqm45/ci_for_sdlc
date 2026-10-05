@@ -124,7 +124,4 @@ Szczegóły i mapowanie koncepcji produktu na kod: [`docs/ARCHITECTURE.md`](docs
 
 ## Roadmap
 
-- Desktop shell (Tauri/Electron) wokół istniejącego UI — serwer już działa lokalnie i jest platform-agnostic.
-- Embeddingi (zamiast TF-IDF) do context discovery przy dużych organizacjach.
-- Zapisywanie decyzji z powrotem do Jira/Confluence (komentarz / sekcja „Decisions”).
-- Faza 2 — *Implementation Intelligence*: GitHub, Code ↔ Specification validation, plan implementacji.
+MVP celowo obejmuje tylko **Level 1 — Definition Intelligence** (Jira + Confluence + Figma). Kolejne poziomy (Product Context Intelligence z OpenAPI, GitHub i Product Analytics oraz Organizational Intelligence ze Slack/Teams, incydentami, supportem i testami), kolejność integracji i przykłady findings opisuje [`docs/ROADMAP.md`](docs/ROADMAP.md).
