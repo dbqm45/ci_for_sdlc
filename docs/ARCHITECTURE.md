@@ -100,3 +100,8 @@ conflict instead of a silently ignored inconsistency.
 `CI_DATA_DIR` (default `.ci-data/`): `settings.json`, `decisions.json`, `approvals.json`, `snapshot.json`,
 `drift.json`, `history.json`, `ai-cache.json`, `audit.jsonl`, `demo-context.json`. Context-bearing files are
 encrypted with AES-256-GCM when *Encrypt stored context* is on and `CI_ENCRYPTION_KEY` is set.
+
+The store is fail-closed: a missing file means "empty", but a file that exists and cannot be read, parsed or
+decrypted raises `StoreReadError` and is never overwritten (the AI cache is the only exception, since it can be
+rebuilt). With encryption on and no key, writes are refused rather than stored in plaintext. All writes go
+through one queue, and read-modify-write uses `update*` / `append*`, so concurrent requests cannot lose updates.

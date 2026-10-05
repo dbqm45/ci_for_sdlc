@@ -86,7 +86,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   });
 
   app.delete<{ Params: { key: string } }>('/api/items/:key/approve', async (req) => {
-    await store.saveApprovals((await store.approvals()).filter((a) => a.itemKey !== req.params.key));
+    await store.updateApprovals((all) => all.filter((a) => a.itemKey !== req.params.key));
     await store.audit({ at: new Date().toISOString(), kind: 'approval_removed', actor: 'user', summary: `Approval of ${req.params.key} withdrawn` });
     return engine.analyze(`approval withdrawn for ${req.params.key}`);
   });
@@ -110,18 +110,18 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       decidedAt: new Date().toISOString(),
       effect: b.effect === 'accept_risk' || b.effect === 'dismiss' ? b.effect : 'resolve',
     };
-    const all = (await store.decisions()).filter((d) => d.questionId !== decision.questionId);
-    all.push(decision);
-    await store.saveDecisions(all);
+    await store.updateDecisions((all) => [...all.filter((d) => d.questionId !== decision.questionId), decision]);
     await store.audit({ at: decision.decidedAt, kind: 'decision', actor: decision.decidedBy, summary: `${decision.itemKey}: "${decision.question}" → ${decision.answer} (${decision.effect})` });
     const result = await engine.analyze(`decision on ${decision.itemKey}`);
     return { decision, item: result.items.find((i) => i.key === decision.itemKey) };
   });
 
   app.delete<{ Params: { id: string } }>('/api/decisions/:id', async (req) => {
-    const all = await store.decisions();
-    const d = all.find((x) => x.id === req.params.id);
-    await store.saveDecisions(all.filter((x) => x.id !== req.params.id));
+    let d: Decision | undefined;
+    await store.updateDecisions((all) => {
+      d = all.find((x) => x.id === req.params.id);
+      return all.filter((x) => x.id !== req.params.id);
+    });
     if (d) await store.audit({ at: new Date().toISOString(), kind: 'decision_removed', actor: 'user', summary: `Decision re-opened: ${d.itemKey} "${d.question}"` });
     return engine.analyze('decision re-opened');
   });
