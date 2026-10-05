@@ -14,7 +14,7 @@
     "start": "npm run start -w @ci/server",
     "test": "npm run test -w @ci/core && npm run test -w @ci/server",
     "typecheck": "tsc -p packages/core && tsc -p packages/server && tsc -p packages/web",
-    "analyze": "npm run analyze -w @ci/server"
+    "analyze": "npm run analyze --silent -w @ci/server --"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

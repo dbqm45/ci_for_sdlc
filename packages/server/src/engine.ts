@@ -132,6 +132,7 @@ export class Engine extends EventEmitter {
 
       this.state = { result, graph, context, running: false, lastReason: reason };
       this.emit('analysis', { at: result.analyzedAt, reason, drift: result.drift.length });
+      this.emit('status', { running: false });
       return result;
     } catch (e) {
       this.state.running = false;
