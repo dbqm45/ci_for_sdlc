@@ -229,6 +229,17 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   if (opts.webDir && existsSync(opts.webDir)) {
     await app.register(fastifyStatic, { root: opts.webDir });
     app.setNotFoundHandler((req, reply) => (req.url.startsWith('/api/') ? reply.status(404).send({ error: 'Not found' }) : reply.sendFile('index.html')));
+  } else if (opts.webDir) {
+    app.get('/', (_req, reply) =>
+      reply
+        .type('text/html')
+        .send(
+          '<!doctype html><meta charset="utf-8"><title>Continuous Intelligence</title><body style="font:15px system-ui;max-width:640px;margin:60px auto;line-height:1.5">' +
+            '<h2>The web UI has not been built yet</h2><p>The API is running, but <code>packages/web/dist</code> is missing. Run:</p>' +
+            '<pre style="background:#f1f3f6;padding:12px;border-radius:8px">npm run build\nnpm start</pre>' +
+            '<p>or use <code>npm run dev</code> and open <a href="http://localhost:5173">http://localhost:5173</a>.</p></body>',
+        ),
+    );
   }
 
   await engine.reschedule();

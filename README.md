@@ -16,9 +16,10 @@ Wymagania: Node.js ≥ 20.
 
 ```bash
 npm install
-npm run build      # buduje UI
-npm start          # http://127.0.0.1:4317 — demo workspace „Checkout”
+npm start
 ```
+
+Następnie otwórz http://127.0.0.1:4317 (demo workspace „Checkout”). Przy pierwszym `npm start` interfejs buduje się automatycznie; po zmianach w UI uruchom `npm run build`.
 
 Tryb deweloperski (hot reload UI + API):
 
