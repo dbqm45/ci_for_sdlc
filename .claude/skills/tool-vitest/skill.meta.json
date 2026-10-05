@@ -1,0 +1,9 @@
+{
+  "technology": "Vitest",
+  "based_on": "5.0",
+  "min_supported": "3.0",
+  "verified": "2026-09-27",
+  "verified_with": "vitest 5.0.2 + fast-check 4.10 + @vitest/browser-playwright 5.0.2 (Chromium) + Stryker 10.0 (command runner): it.each, it.fails, vi.when, fake timers, projects, tryb przeglądarki; vitest-runner Strykera 10 z Vitest 5 dał fałszywe 0%",
+  "constraints": {},
+  "sources": ["https://vitest.dev/blog/", "https://vitest.dev/guide/migration", "https://vitest.dev/guide/browser/", "https://stryker-mutator.io/docs/stryker-js/configuration/", "https://fast-check.dev/"]
+}

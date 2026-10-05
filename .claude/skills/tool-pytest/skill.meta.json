@@ -1,0 +1,18 @@
+{
+  "technology": "pytest",
+  "based_on": "9.1",
+  "min_supported": "8",
+  "verified": "2026-10-03",
+  "verified_with": "pytest 9.1.1 + pytest-asyncio 1.4.0 + hypothesis 6.168.3 na CPython 3.14.8 (wszystkie przykłady z references/przyklady.md uruchomione)",
+  "constraints": {
+    "9": {"lang-python": ">=3.10"}
+  },
+  "sources": [
+    "https://docs.pytest.org/en/stable/changelog.html",
+    "https://docs.pytest.org/en/stable/reference/customize.html",
+    "https://docs.pytest.org/en/stable/reference/reference.html",
+    "https://docs.pytest.org/en/stable/how-to/subtests.html",
+    "https://docs.pytest.org/en/stable/explanation/goodpractices.html",
+    "https://pytest-asyncio.readthedocs.io/en/stable/reference/configuration.html"
+  ]
+}

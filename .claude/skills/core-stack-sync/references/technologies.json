@@ -1,0 +1,194 @@
+{
+  "_comment": "Rejestr technologii: jak je wykryć w projekcie i który skill je opisuje. Dopisz nową technologię, a detect_stack.py zacznie ją raportować (także jako brakujący skill).",
+  "technologies": [
+    {
+      "id": "angular",
+      "name": "Angular",
+      "skill": "fw-angular",
+      "detect": {
+        "npm": [
+          "@angular/core"
+        ]
+      }
+    },
+    {
+      "id": "nx",
+      "name": "Nx",
+      "skill": "tool-nx",
+      "detect": {
+        "npm": [
+          "nx"
+        ],
+        "files": [
+          "nx.json"
+        ]
+      }
+    },
+    {
+      "id": "typescript",
+      "name": "TypeScript",
+      "skill": "lang-typescript",
+      "detect": {
+        "npm": [
+          "typescript"
+        ]
+      }
+    },
+    {
+      "id": "javascript",
+      "name": "JavaScript",
+      "skill": "lang-javascript",
+      "detect": {
+        "files": [
+          "package.json"
+        ]
+      },
+      "versionless": true
+    },
+    {
+      "id": "java",
+      "name": "Java",
+      "skill": "lang-java",
+      "detect": {
+        "java": true
+      }
+    },
+    {
+      "id": "react",
+      "name": "React",
+      "skill": "fw-react",
+      "detect": {
+        "npm": [
+          "react"
+        ]
+      }
+    },
+    {
+      "id": "vue",
+      "name": "Vue",
+      "skill": "fw-vue",
+      "detect": {
+        "npm": [
+          "vue"
+        ]
+      }
+    },
+    {
+      "id": "svelte",
+      "name": "Svelte",
+      "skill": "fw-svelte",
+      "detect": {
+        "npm": [
+          "svelte"
+        ]
+      }
+    },
+    {
+      "id": "nextjs",
+      "name": "Next.js",
+      "skill": "fw-nextjs",
+      "detect": {
+        "npm": [
+          "next"
+        ]
+      }
+    },
+    {
+      "id": "nestjs",
+      "name": "NestJS",
+      "skill": "fw-nestjs",
+      "detect": {
+        "npm": [
+          "@nestjs/core"
+        ]
+      }
+    },
+    {
+      "id": "spring-boot",
+      "name": "Spring Boot",
+      "skill": "fw-spring-boot",
+      "detect": {
+        "spring_boot": true
+      }
+    },
+    {
+      "id": "kotlin",
+      "name": "Kotlin",
+      "skill": "lang-kotlin",
+      "detect": {
+        "kotlin_plugin": true
+      }
+    },
+    {
+      "id": "python",
+      "name": "Python",
+      "skill": "lang-python",
+      "detect": {
+        "python": true
+      }
+    },
+    {
+      "id": "csharp",
+      "name": "C#/.NET",
+      "skill": "lang-csharp",
+      "detect": {
+        "glob": [
+          "*.csproj",
+          "*.sln"
+        ]
+      },
+      "versionless": true
+    },
+    {
+      "id": "go",
+      "name": "Go",
+      "skill": "lang-go",
+      "detect": {
+        "files": [
+          "go.mod"
+        ]
+      },
+      "versionless": true
+    },
+    {
+      "id": "playwright",
+      "name": "Playwright",
+      "skill": "tool-playwright",
+      "detect": {
+        "npm": [
+          "@playwright/test"
+        ]
+      }
+    },
+    {
+      "id": "vitest",
+      "name": "Vitest",
+      "skill": "tool-vitest",
+      "detect": {
+        "npm": [
+          "vitest"
+        ]
+      }
+    },
+    {
+      "id": "jest",
+      "name": "Jest",
+      "skill": "tool-jest",
+      "detect": {
+        "npm": [
+          "jest"
+        ]
+      }
+    },
+    {
+      "id": "pytest",
+      "name": "pytest",
+      "skill": "tool-pytest",
+      "detect": {
+        "pypi": [
+          "pytest"
+        ]
+      }
+    }
+  ]
+}

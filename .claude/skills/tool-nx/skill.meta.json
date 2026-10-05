@@ -1,0 +1,11 @@
+{
+  "technology": "Nx",
+  "based_on": "23",
+  "min_supported": "21",
+  "verified": "2026-09-27",
+  "verified_with": "dokumentacja i ogłoszenia wydań Nx 22, 23, 23.1 (bez uruchomienia workspace)",
+  "constraints": {
+    "23": {"fw-angular": ">=20"}
+  },
+  "sources": ["https://nx.dev/changelog", "https://nx.dev/blog/nx-23-release", "https://nx.dev/blog/nx-23-1-release", "https://nx.dev/docs/reference/releases"]
+}

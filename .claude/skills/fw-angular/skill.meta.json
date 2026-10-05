@@ -1,0 +1,21 @@
+{
+  "technology": "Angular",
+  "based_on": "22",
+  "min_supported": "17",
+  "verified": "2026-09-27",
+  "verified_with": "@angular/compiler-cli 22.2.0 + TypeScript 6.0.3 (ngc, strictTemplates); 19.x dla wariantu sprzed v22",
+  "constraints": {
+    "19": {"lang-typescript": ">=5.5 <5.9"},
+    "20": {"lang-typescript": ">=5.8 <6.0"},
+    "21": {"lang-typescript": ">=5.9 <6.1"},
+    "22": {"lang-typescript": ">=6.0 <6.1"}
+  },
+  "sources": [
+    "https://angular.dev/reference/releases",
+    "https://angular.dev/update-guide",
+    "https://blog.angular.dev/announcing-angular-v22-c52bb83a4664",
+    "https://blog.ninja-squad.com/2026/06/03/what-is-new-angular-22.0",
+    "https://blog.ninja-squad.com/2025/11/20/what-is-new-angular-21.0",
+    "https://blog.ninja-squad.com/2025/05/28/what-is-new-angular-20.0"
+  ]
+}
