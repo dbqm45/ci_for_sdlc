@@ -12,7 +12,7 @@ Produkt **nie analizuje kodu** — to świadoma decyzja zakresu MVP: najpierw �
 
 ## Szybki start
 
-Wymagania: Node.js ≥ 20.
+Wymagania: Node.js ≥ 20. Ścieżka do folderu projektu nie może zawierać znaku `#` (ograniczenie Vite, którym budowany jest interfejs).
 
 ```bash
 npm install
