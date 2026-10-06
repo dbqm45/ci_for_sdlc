@@ -17,8 +17,8 @@ export type NewDecision = Omit<Decision, 'id' | 'version' | 'status' | 'supersed
 
 /**
  * Records a decision as a new immutable version. An active decision on the
- * same question is marked superseded (a reason is required); a withdrawn one
- * only continues the version chain.
+ * same question is marked superseded (a reason is required, unless it was only
+ * a confirmation of an AI finding); a withdrawn one only continues the chain.
  */
 export function recordDecision(all: Decision[], input: NewDecision): { all: Decision[]; decision: Decision } {
   const list = all.map(normalizeDecision);
@@ -26,7 +26,7 @@ export function recordDecision(all: Decision[], input: NewDecision): { all: Deci
   const latest = chain[0];
   const active = chain.find((d) => d.status === 'active');
   const changeReason = input.changeReason?.trim() || undefined;
-  if (active && !changeReason) throw new DecisionError(`Question already has an active decision ("${active.answer}"). A reason is required to change it.`);
+  if (active && active.effect !== 'confirm' && !changeReason) throw new DecisionError(`Question already has an active decision ("${active.answer}"). A reason is required to change it.`);
   const version = (latest?.version ?? 0) + 1;
   const decision: Decision = {
     ...input,

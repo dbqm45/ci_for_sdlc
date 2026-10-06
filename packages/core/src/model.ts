@@ -247,6 +247,10 @@ export interface Finding {
   origin: 'rule' | 'ai' | 'drift';
   /** Set when a human decision resolved the finding. */
   resolution?: { decisionId: string; summary: string };
+  /** AI finding that would block but waits for a human to confirm it (policy `require_confirmation`). */
+  needsConfirmation?: boolean;
+  /** Set when a human confirmed an AI finding; it stays open and counts at full severity. */
+  confirmation?: { decisionId: string; by: string; at: string };
 }
 
 export interface Decision {
@@ -260,8 +264,8 @@ export interface Decision {
   note?: string;
   decidedBy: string;
   decidedAt: string;
-  /** What the decision does to the finding. */
-  effect: 'resolve' | 'accept_risk' | 'dismiss';
+  /** What the decision does to the finding. `confirm` keeps it open and confirms an AI finding. */
+  effect: 'resolve' | 'accept_risk' | 'dismiss' | 'confirm';
   /**
    * Decisions are immutable. A change creates a new version that supersedes
    * the previous one; removal is a withdrawal. Decisions stored before

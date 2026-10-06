@@ -96,3 +96,20 @@ describe('decisions are immutable and versioned (P3)', () => {
     expect(res.body.decision.version).toBe(3);
   });
 });
+
+describe('AI finding confirmation (P2)', () => {
+  it('stores a confirm decision as such and keeps the finding open', async () => {
+    const { body } = await json('GET', '/api/items/PAY-125');
+    const f = body.item.findings.find((x: any) => x.question && x.status === 'open');
+    const res = await json('POST', '/api/decisions', { questionId: f.question.id, findingId: f.id, itemKey: 'PAY-125', question: f.question.text, topic: f.question.topic, answer: 'Confirmed', decidedBy: 'Anna', effect: 'confirm' });
+    expect(res.status).toBe(200);
+    expect(res.body.decision.effect).toBe('confirm');
+    const item = await json('GET', '/api/items/PAY-125');
+    expect(item.body.item.findings.find((x: any) => x.id === f.id).status).toBe('open');
+  });
+
+  it('exposes the AI findings policy with its default in settings', async () => {
+    const s = await json('GET', '/api/settings');
+    expect(s.body.settings.policy.aiFindings).toBe('require_confirmation');
+  });
+});

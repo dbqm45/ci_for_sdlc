@@ -12,6 +12,7 @@ import type {
 } from '../model.js';
 import { DIMENSIONS } from '../model.js';
 import { hash } from '../text.js';
+import { aiFindingsAction, type SeverityAction } from '../policy.js';
 import { evJira, itemContext, questionOptions, type AnalysisEnv, type ItemCtx } from './context.js';
 import { RULES, taskCoverage, type FindingDraft } from './rules.js';
 import { challenges, journeyCoverage, stateCoverage } from './states.js';
@@ -84,16 +85,34 @@ export function applyDecisions(env: AnalysisEnv, a: ItemAnalysis) {
   for (const f of a.findings) {
     const dec = f.question ? env.decisionsByQuestion.get(f.question.id) : undefined;
     if (!dec) continue;
+    if (dec.effect === 'confirm') {
+      f.confirmation = { decisionId: dec.id, by: dec.decidedBy, at: dec.decidedAt };
+      continue;
+    }
     f.status = dec.effect === 'resolve' ? 'resolved' : dec.effect === 'accept_risk' ? 'accepted_risk' : 'dismissed';
     f.resolution = { decisionId: dec.id, summary: `${dec.answer}${dec.note ? ` — ${dec.note}` : ''}` };
   }
 }
 
+/** Effective policy action for a finding: AI findings that would block follow `policy.aiFindings` (P2). */
+function actionFor(env: AnalysisEnv, f: Finding): SeverityAction {
+  const base = env.policy.actions[f.severity];
+  f.needsConfirmation = undefined;
+  if (f.origin !== 'ai' || base !== 'block') return base;
+  const mode = aiFindingsAction(env.policy);
+  if (mode === 'block') return 'block';
+  if (mode === 'notify') return 'notify';
+  if (f.confirmation) return 'block';
+  if (f.status === 'open') f.needsConfirmation = true;
+  return 'notify';
+}
+
 /** Compute dimension scores, health, readiness and the checklist. */
 export function scoreItem(env: AnalysisEnv, a: ItemAnalysis, ctx?: ItemCtx) {
   a.findings.sort((x, y) => SEVERITY_ORDER[x.severity] - SEVERITY_ORDER[y.severity] || (x.status === 'open' ? -1 : 1));
+  const action = new Map(a.findings.map((f) => [f, actionFor(env, f)]));
   const open = a.findings.filter((f) => f.status === 'open');
-  const counted = open.filter((f) => env.policy.actions[f.severity] !== 'record');
+  const counted = open.filter((f) => action.get(f) !== 'record');
 
   a.dimensions = DIMENSIONS.map((dimension): DimensionScore => {
     const fs = counted.filter((f) => f.dimension === dimension);
@@ -110,12 +129,12 @@ export function scoreItem(env: AnalysisEnv, a: ItemAnalysis, ctx?: ItemCtx) {
       score = Math.min(score, Math.round((designed / req) * 100) + 10);
     }
     score = Math.max(0, Math.min(100, Math.round(score)));
-    const blocking = fs.some((f) => env.policy.actions[f.severity] === 'block');
+    const blocking = fs.some((f) => action.get(f) === 'block');
     return { dimension, score, status: blocking || score < 60 ? 'fail' : score < 85 ? 'warn' : 'ok', notes };
   });
 
-  const blocking = open.filter((f) => env.policy.actions[f.severity] === 'block');
-  const notify = open.filter((f) => env.policy.actions[f.severity] === 'notify');
+  const blocking = open.filter((f) => action.get(f) === 'block');
+  const notify = open.filter((f) => action.get(f) === 'notify');
   const weights: Record<Dimension, number> = { requirements: 1.3, design: 1, documentation: 0.8, architecture: 1.2, userJourneys: 1, errorHandling: 1.1, dependencies: 0.6 };
   const total = a.dimensions.reduce((s, d) => s + weights[d.dimension], 0);
   let health = Math.round(a.dimensions.reduce((s, d) => s + d.score * weights[d.dimension], 0) / total);

@@ -217,6 +217,13 @@ export function Settings() {
               </select>
             </Field>
           ))}
+          <Field label="🤖 AI findings that would block">
+            <select className="input" value={s.policy.aiFindings ?? 'require_confirmation'} onChange={(e) => set('policy.aiFindings', e.target.value)}>
+              <option value="require_confirmation">Block after human confirmation</option>
+              <option value="block">Block immediately</option>
+              <option value="notify">Notify only (NEEDS ATTENTION)</option>
+            </select>
+          </Field>
         </div>
         <h3 style={{ margin: '18px 0 8px' }}>Rules</h3>
         <table className="table">

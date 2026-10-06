@@ -118,7 +118,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       note: b.note?.trim().slice(0, 2000) || undefined,
       decidedBy: actor(b),
       decidedAt: new Date().toISOString(),
-      effect: b.effect === 'accept_risk' || b.effect === 'dismiss' ? b.effect : 'resolve',
+      effect: (['accept_risk', 'dismiss', 'confirm'] as const).find((e) => e === b.effect) ?? 'resolve',
       changeReason: (b.reason ?? b.changeReason)?.trim().slice(0, 2000),
     };
     let decision!: Decision;
