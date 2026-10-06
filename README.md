@@ -194,6 +194,13 @@ Zasady kontraktu:
 - **Ustawienia**: `GET /api/settings` zwraca `ETag`; `PUT` wymaga nagłówka `If-Match` (`428` bez niego, `412` gdy ktoś zmienił ustawienia w międzyczasie).
 - **Kto działa**: nagłówek `X-CI-Actor` (nazwa wyświetlana, URL-encoded) trafia do audytu razem ze sposobem autoryzacji (`via`: `admin_token` albo `loopback`).
 
+## Wersjonowanie i wydania
+
+Wersje według [SemVer](https://semver.org/lang/pl/) (teraz faza `0.y.z`), historia zmian w [`CHANGELOG.md`](CHANGELOG.md).
+Commity i tytuły PR w formacie [Conventional Commits](https://www.conventionalcommits.org/pl/v1.0.0/)
+(`feat(web): …`, `fix(server): …`). Nową wersję przygotowuje `npm run release`, a tag `vX.Y.Z` tworzy CI po merge'u.
+Szczegóły: [`docs/RELEASING.md`](docs/RELEASING.md).
+
 ## Roadmap
 
 MVP celowo obejmuje tylko **Level 1 — Definition Intelligence** (Jira + Confluence + Figma). Kolejne poziomy (Product Context Intelligence z OpenAPI, GitHub i Product Analytics oraz Organizational Intelligence ze Slack/Teams, incydentami, supportem i testami), kolejność integracji i przykłady findings opisuje [`docs/ROADMAP.md`](docs/ROADMAP.md).

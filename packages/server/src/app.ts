@@ -8,6 +8,7 @@ import { Engine } from './engine.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { MUTATION, approveBody, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
 import { deepMerge, Store, type Settings } from './store.js';
+import { APP_VERSION } from './version.js';
 
 /** Weak validator for optimistic concurrency on settings (API-07). */
 const etagOf = (s: Settings) => `"${createHash('sha256').update(JSON.stringify(s)).digest('hex').slice(0, 20)}"`;
@@ -54,7 +55,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   await app.register(fastifySwagger, {
     openapi: {
       openapi: '3.0.3',
-      info: { title: 'Continuous Intelligence for the SDLC', version: '0.1.0', description: 'State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state.' },
+      info: { title: 'Continuous Intelligence for the SDLC', version: APP_VERSION, description: 'State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state.' },
       components: { securitySchemes: { adminToken: { type: 'http', scheme: 'bearer', description: 'CI_ADMIN_TOKEN' } } },
     },
   });
@@ -69,7 +70,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
   // ------------------------------------------------------------------ analysis
-  app.get('/api/health', async () => ({ ok: true, running: engine.state.running, lastError: engine.state.lastError }));
+  app.get('/api/health', async () => ({ ok: true, version: APP_VERSION, running: engine.state.running, lastError: engine.state.lastError }));
 
   app.get('/api/analysis', async () => {
     const result = await ensure();

@@ -21,8 +21,12 @@
     "test:contract": "npm run test:contract -w @ci/server",
     "test:contract:update": "npm run test:contract:update -w @ci/server",
     "test:mutation": "npm run test:mutation -w @ci/core",
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "typecheck": "tsc -p packages/core && tsc -p packages/server && tsc -p packages/web && tsc -p e2e",
-    "analyze": "npm run analyze --silent -w @ci/server --"
+    "analyze": "npm run analyze --silent -w @ci/server --",
+    "release": "node scripts/release.mjs",
+    "lint:commit": "node scripts/check-commit-message.mjs",
+    "hooks:install": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

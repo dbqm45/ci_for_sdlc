@@ -163,15 +163,16 @@ docker compose pull
 docker compose up -d
 ```
 
-Konkretna wersja (np. do porównania): `CI_IMAGE_TAG=sha-<commit> docker compose up -d`.
+Konkretna wersja (np. do porównania): `CI_IMAGE_TAG=0.1.0 docker compose up -d` albo `CI_IMAGE_TAG=sha-<commit> docker compose up -d`.
 
 ## 9. CI/CD w repozytorium
 
 | Workflow | Kiedy | Co robi |
 |---|---|---|
-| `ci.yml` | każdy PR i push do `main` | typecheck, testy jednostkowe z pokryciem, build, e2e |
+| `ci.yml` | każdy PR i push do `main` | typecheck, testy jednostkowe z pokryciem, testy skryptów wydania, build, e2e |
 | `regression-nightly.yml` | poniedziałki, ręcznie | pełna regresja: trzy przeglądarki, testy wizualne, mutacyjne ([`TESTING-REGRESSION.md`](TESTING-REGRESSION.md)) |
-| `release.yml` | push do `main`, ręcznie | buduje obraz, uruchamia go i sprawdza (`/api/health`, UI, 401 bez tokenu, 200 z tokenem), publikuje do `ghcr.io/dbqm45/ci_for_sdlc` (`latest`, `sha-<commit>`) |
+| `release.yml` | push do `main`, ręcznie | buduje obraz, uruchamia go i sprawdza (`/api/health`, UI, 401 bez tokenu, 200 z tokenem), publikuje do `ghcr.io/dbqm45/ci_for_sdlc` (`latest`, `sha-<commit>`, a przy nowej wersji także `X.Y.Z`) i tworzy tag `vX.Y.Z` ([`RELEASING.md`](RELEASING.md)) |
+| `pr-title.yml` | każdy PR, także po zmianie tytułu | tytuł PR zgodny z Conventional Commits |
 | `security.yml` | PR zmieniający zależności, poniedziałki, ręcznie | `npm audit`: bramka na podatności high/critical we wszystkich zależnościach, moderate — tylko raport |
 | Dependabot | co tydzień | PR-y z aktualizacjami npm, GitHub Actions i obrazu bazowego Node |
 
