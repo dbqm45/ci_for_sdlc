@@ -15,7 +15,7 @@ Produkt **nie analizuje kodu** — to świadoma decyzja zakresu MVP: najpierw �
 > Pierwszy raz? Instrukcja krok po kroku dla osób nietechnicznych (Docker, klucze Jira/Confluence/Figma, pierwsza
 > historyjka i podsumowanie na dashboardzie): [`ONBOARDING.md`](ONBOARDING.md).
 
-Wymagania: Node.js ≥ 20.
+Wymagania: Node.js ≥ 22.12.
 
 ```bash
 npm install
