@@ -143,7 +143,7 @@ Wszystko poza sekretami ustawiasz w UI (*Settings*). Sekrety — zmienne środow
 | `CONFLUENCE_API_TOKEN` | opcjonalnie; domyślnie używany `JIRA_API_TOKEN` |
 | `FIGMA_TOKEN` | Figma personal access token |
 | `ANTHROPIC_API_KEY` | dostawca *Anthropic* (domyślny model `claude-opus-5-5`) |
-| AWS credential chain (`AWS_PROFILE`, `AWS_ACCESS_KEY_ID`, …) | dostawca *Amazon Bedrock* (Claude w Twoim koncie AWS) |
+| AWS credential chain (`AWS_PROFILE`, `AWS_ACCESS_KEY_ID`, `AWS_BEARER_TOKEN_BEDROCK` albo rola IAM w ECS/Fargate, App Runner lub EKS) | dostawca *Amazon Bedrock* (Claude w Twoim koncie AWS); profil instancji EC2 działa, ale Settings pokaże go jako *missing* |
 | `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `CUSTOM_AI_API_KEY` | pozostali dostawcy (OpenAI-compatible) |
 | `CI_ENCRYPTION_KEY` | szyfrowanie stanu at-rest |
 | `CI_WEBHOOK_SECRET` | zabezpieczenie `/api/webhooks/{jira,confluence,figma}` (nagłówek `x-ci-webhook-secret`) |
