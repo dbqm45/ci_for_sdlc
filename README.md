@@ -67,6 +67,19 @@ Każdy obszar aplikacji ma własny plik w `e2e/` (ścieżki podobne są zgrupowa
 
 Testy dzielą jeden serwer, więc biegną po kolei; `e2e/support/helpers.ts` przed każdym testem przywraca czysty stan przez API.
 
+### Docker (środowisko lokalne z prawdziwymi integracjami)
+
+Ten sam obraz, który CI testuje i publikuje do GHCR przy każdym merge'u do `main`. Dane w wolumenie `ci-data`, port tylko
+na `127.0.0.1`, sekrety ze zmiennych środowiskowych (najlepiej wstrzykiwanych z menedżera haseł, np. `op run -- …`):
+
+```bash
+export CI_ADMIN_TOKEN=$(openssl rand -hex 32)
+docker compose up -d --build
+```
+
+Krok po kroku (darmowe konta Jira, Confluence i Figma, tokeny, lokalny model AI przez Ollamę, kopie zapasowe):
+[`docs/LOCAL-ENVIRONMENT.md`](docs/LOCAL-ENVIRONMENT.md).
+
 ### Co zobaczysz w demo
 
 Workspace „Checkout” odtwarza przykłady z koncepcji produktu:
