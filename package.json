@@ -2,7 +2,7 @@
   "name": "continuous-intelligence-sdlc",
   "version": "0.1.0",
   "private": true,
-  "description": "Continuous Intelligence for Product & Software Definition \u2014 AI quality gate across Jira, Confluence and Figma",
+  "description": "Continuous Intelligence for Product & Software Definition — AI quality gate across Jira, Confluence and Figma",
   "workspaces": [
     "packages/core",
     "packages/server",
@@ -14,10 +14,12 @@
     "start": "node scripts/ensure-web.mjs && npm run start -w @ci/server",
     "test": "npm run test -w @ci/core && npm run test -w @ci/server",
     "test:coverage": "npm run test:coverage -w @ci/core && npm run test:coverage -w @ci/server",
-    "typecheck": "tsc -p packages/core && tsc -p packages/server && tsc -p packages/web",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc -p packages/core && tsc -p packages/server && tsc -p packages/web && tsc -p e2e",
     "analyze": "npm run analyze --silent -w @ci/server --"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "concurrently": "^9.1.0",
     "typescript": "^5.6.3"
   },

@@ -10,3 +10,5 @@ tools/
 .claude/logs/
 __pycache__/
 coverage/
+test-results/
+playwright-report/

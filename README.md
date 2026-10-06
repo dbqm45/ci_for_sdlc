@@ -36,6 +36,21 @@ npm test
 npm run typecheck
 ```
 
+Pokrycie testów jednostkowych (raport w `packages/*/coverage/`):
+
+```bash
+npm run test:coverage
+```
+
+Testy e2e (Playwright, Chromium) budują UI i uruchamiają serwer w trybie demo na porcie 4399 (zmiana przez `E2E_PORT`) z pustym katalogiem danych w katalogu tymczasowym — nie dotykają `.ci-data`. Przeglądarkę instaluje się raz:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
+Gdy Chromium jest już zainstalowany poza Playwrightem, wskaż go zmienną `PW_CHROMIUM_PATH`.
+
 ### Co zobaczysz w demo
 
 Workspace „Checkout” odtwarza przykłady z koncepcji produktu:

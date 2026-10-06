@@ -169,7 +169,7 @@ export function App() {
           <main className="content">{page}</main>
         </div>
       </div>
-      {toastMsg && <div className="toast">{toastMsg}</div>}
+      {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
     </Ctx.Provider>
   );
 }
