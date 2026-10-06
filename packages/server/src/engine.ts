@@ -9,6 +9,7 @@ import {
   fetchFigma,
   fetchJira,
   type AnalysisResult,
+  type Approval,
   type ContextGraph,
   type ProjectContext,
   type SemanticOutput,
@@ -140,13 +141,16 @@ export class Engine extends EventEmitter {
     }
   }
 
-  async approve(key: string, by: string) {
+  async approve(key: string, by: string, forced?: { reason: string }) {
     const { result, graph } = this.state;
     const item = result?.items.find((i) => i.key === key);
     if (!item || !graph) throw new Error(`Unknown item ${key}`);
-    const approval = { itemKey: key, approvedAt: new Date().toISOString(), approvedBy: by, contextHashes: approvalBaseline(graph, item) };
+    const approval: Approval = { itemKey: key, approvedAt: new Date().toISOString(), approvedBy: by, contextHashes: approvalBaseline(graph, item), ...(forced && { forced: true, reason: forced.reason }) };
     await this.store.updateApprovals((all) => [...all.filter((a) => a.itemKey !== key), approval]);
-    await this.store.audit({ at: new Date().toISOString(), kind: 'approval', actor: by, summary: `${key} approved as ready for implementation (health ${item.health})` });
+    const summary = forced
+      ? `${key} force-approved despite blocking issues (${item.blockingIssues.join('; ') || 'none'}). Reason: ${forced.reason}`
+      : `${key} approved as ready for implementation (health ${item.health})`;
+    await this.store.audit({ at: approval.approvedAt, kind: 'approval', actor: by, summary });
   }
 
   async applyDemoScenario(id: string) {

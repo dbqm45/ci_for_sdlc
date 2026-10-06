@@ -6,6 +6,9 @@ import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, hash, impactAnalysis, type Decis
 import { Engine } from './engine.js';
 import { deepMerge, Store, type Settings } from './store.js';
 
+/** Only leaf work items are approved; feature and epic readiness is derived from their stories. */
+const APPROVABLE = new Set(['story', 'bug']);
+
 export interface AppOptions {
   dataDir: string;
   webDir?: string;
@@ -76,12 +79,19 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     return { item: result.items.find((i) => i.key === req.params.key), errors: result.ai.errors };
   });
 
-  app.post<{ Params: { key: string }; Body: { by?: string; force?: boolean } }>('/api/items/:key/approve', async (req) => {
+  app.post<{ Params: { key: string }; Body: { by?: string; force?: boolean; reason?: string } }>('/api/items/:key/approve', async (req) => {
     const result = await ensure();
     const item = result.items.find((i) => i.key === req.params.key);
     if (!item) throw Object.assign(new Error('Not found'), { statusCode: 404 });
-    if (item.readiness === 'not_ready' && !req.body?.force) throw Object.assign(new Error(`${item.key} has blocking issues and cannot be approved.`), { statusCode: 409 });
-    await engine.approve(item.key, actor(req.body));
+    if (!APPROVABLE.has(item.type)) throw Object.assign(new Error(`${item.key} is a ${item.type}; its readiness is derived from its stories and cannot be approved directly.`), { statusCode: 409 });
+    let forced: { reason: string } | undefined;
+    if (item.readiness === 'not_ready') {
+      if (!req.body?.force) throw Object.assign(new Error(`${item.key} has blocking issues and cannot be approved.`), { statusCode: 409 });
+      const reason = req.body.reason?.trim();
+      if (!reason) throw Object.assign(new Error('A forced approval requires a reason.'), { statusCode: 400 });
+      forced = { reason: reason.slice(0, 2000) };
+    }
+    await engine.approve(item.key, actor(req.body), forced);
     return engine.analyze(`approval of ${item.key}`);
   });
 

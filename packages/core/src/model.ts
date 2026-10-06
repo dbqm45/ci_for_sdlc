@@ -370,6 +370,10 @@ export interface Approval {
   approvedBy: string;
   /** Content hashes of the item and every entity in its context at approval time. */
   contextHashes: Record<string, string>;
+  /** Set when the item was approved despite blocking issues. */
+  forced?: true;
+  /** Required justification of a forced approval. */
+  reason?: string;
 }
 
 export interface ChecklistGroup {

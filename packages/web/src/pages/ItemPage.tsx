@@ -38,9 +38,16 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
   const openChallenges = a.challenges.filter((c) => !c.answered);
   const decisionFor = (qid?: string) => d.decisions.find((x) => x.questionId === qid);
 
-  const approve = async () => {
+  const approvable = a.type === 'story' || a.type === 'bug';
+  const approve = async (force?: boolean) => {
+    let forced: { reason: string } | undefined;
+    if (force) {
+      const reason = window.prompt(`${a.key} has blocking issues. Why approve it anyway? (required, stored in audit)`)?.trim();
+      if (!reason) return;
+      forced = { reason };
+    }
     try {
-      await api.approve(a.key, currentUser());
+      await api.approve(a.key, currentUser(), forced);
       toast(`${a.key} approved — drift will be monitored from now on`);
       await changed();
     } catch (e) {
@@ -97,10 +104,11 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
             <ReadinessBadge readiness={a.readiness} />
             <StatusBadge status={a.healthStatus} />
             {d.approval && (
-              <span className="badge ok" title={`Approved by ${d.approval.approvedBy}`}>
-                ✓ Approved {ago(d.approval.approvedAt)} · drift monitored
+              <span className={`badge ${d.approval.forced ? 'warn' : 'ok'}`} title={`Approved by ${d.approval.approvedBy}${d.approval.reason ? ` — reason: ${d.approval.reason}` : ''}`}>
+                ✓ {d.approval.forced ? 'Force-approved' : 'Approved'} {ago(d.approval.approvedAt)} · drift monitored
               </span>
             )}
+            {d.approval?.reason && <span className="muted">Reason: {d.approval.reason}</span>}
           </div>
         </div>
         <div className="row">
@@ -111,8 +119,12 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
             <button className="btn" onClick={async () => (await api.unapprove(a.key), changed())}>
               Withdraw approval
             </button>
+          ) : !approvable ? null : a.readiness === 'not_ready' ? (
+            <button className="btn" onClick={() => approve(true)} title="Approve despite blocking issues — a reason is required and recorded in the audit log">
+              Force approve…
+            </button>
           ) : (
-            <button className="btn primary" onClick={approve} disabled={a.readiness === 'not_ready'} title={a.readiness === 'not_ready' ? 'Resolve blocking issues first' : 'Freeze the current specification as the baseline for drift detection'}>
+            <button className="btn primary" onClick={() => approve()} title="Freeze the current specification as the baseline for drift detection">
               Approve for implementation
             </button>
           )}
