@@ -9,3 +9,4 @@ tools/
 # Claude Code hooks: runtime logs and Python bytecode
 .claude/logs/
 __pycache__/
+coverage/
