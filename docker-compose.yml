@@ -1,0 +1,59 @@
+# Local environment: the same image CI builds, on your machine only (http://localhost:4317).
+# Guide: ONBOARDING.md (step by step), docs/LOCAL-ENVIRONMENT.md (details)
+#
+#   docker compose up -d --build        build from this checkout and start
+#   docker compose pull && docker compose up -d   run the image CI published to GHCR
+#   docker compose --profile ollama up -d         also start a local AI model server (Ollama)
+#
+# Secrets are read from the environment of the shell that runs docker compose (e.g. injected by
+# a password manager: `op run -- docker compose up -d`). Never commit them; .env is git-ignored.
+
+# Fixed project name: volumes are always ci_for_sdlc_ci-data etc., whatever the checkout directory is called.
+name: ci_for_sdlc
+
+services:
+  app:
+    image: ghcr.io/dbqm45/ci_for_sdlc:${CI_IMAGE_TAG:-latest}
+    build: .
+    ports:
+      # Bound to loopback: reachable from this computer only.
+      - '127.0.0.1:${CI_PORT:-4317}:4317'
+    volumes:
+      - ci-data:/data
+    extra_hosts:
+      # Lets the app reach services on this computer, e.g. Ollama installed natively:
+      # base URL http://host.docker.internal:11434/v1 (built into Docker Desktop, added here for Linux).
+      - host.docker.internal:host-gateway
+    environment:
+      # Requests from the browser reach the container through Docker's network, not loopback,
+      # so every change needs this token. The UI asks for it on the first change (kept for the browser session).
+      CI_ADMIN_TOKEN: ${CI_ADMIN_TOKEN:?Set CI_ADMIN_TOKEN, e.g. export CI_ADMIN_TOKEN=$(openssl rand -hex 32)}
+      CI_ENCRYPTION_KEY: ${CI_ENCRYPTION_KEY:-}
+      CI_WEBHOOK_SECRET: ${CI_WEBHOOK_SECRET:-}
+      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
+      CONFLUENCE_API_TOKEN: ${CONFLUENCE_API_TOKEN:-}
+      FIGMA_TOKEN: ${FIGMA_TOKEN:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      CUSTOM_AI_API_KEY: ${CUSTOM_AI_API_KEY:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_BEARER_TOKEN_BEDROCK: ${AWS_BEARER_TOKEN_BEDROCK:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    restart: unless-stopped
+
+  ollama:
+    profiles: [ollama]
+    image: ollama/ollama
+    # In the app: AI provider "custom", base URL http://ollama:11434/v1, model e.g. llama3.1:8b
+    # (download it first: docker compose exec ollama ollama pull llama3.1:8b).
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  ci-data:
+  ollama-models:

@@ -1,0 +1,30 @@
+name: Security
+
+# Dependency audit. CodeQL / code scanning is not available for private repositories on GitHub Free,
+# so this covers known vulnerabilities in npm packages; Dependabot (.github/dependabot.yml) proposes the updates.
+on:
+  pull_request:
+    paths: ['package.json', 'package-lock.json', 'packages/*/package.json']
+  schedule:
+    - cron: '41 3 * * 1' # Mondays 03:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Runtime dependencies (what ships in the image) must be free of high and critical advisories.
+      - run: npm audit --omit=dev --audit-level=high
+      # Development tools (vitest, playwright, …) never ship in the image: reported as a warning, not a gate.
+      # Known today: vitest 3 pulls tinypool/@vitest/mocker advisories, fixed only by the major bump to vitest 5.
+      - name: npm audit (dev dependencies, report only)
+        continue-on-error: true
+        run: npm audit --audit-level=moderate

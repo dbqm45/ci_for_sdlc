@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/coverage
+**/reports
+**/.stryker-tmp
+.git
+.github
+.claude
+.ci-data
+.env
+.env.*
+e2e
+test-results
+playwright-report
+docs
+**/*.log
+**/test

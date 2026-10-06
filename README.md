@@ -12,6 +12,9 @@ Produkt **nie analizuje kodu** — to świadoma decyzja zakresu MVP: najpierw �
 
 ## Szybki start
 
+> Pierwszy raz? Instrukcja krok po kroku dla osób nietechnicznych (Docker, klucze Jira/Confluence/Figma, pierwsza
+> historyjka i podsumowanie na dashboardzie): [`ONBOARDING.md`](ONBOARDING.md).
+
 Wymagania: Node.js ≥ 20.
 
 ```bash
@@ -80,6 +83,19 @@ Jedna kopia testów, zestawy wybierane tagami. Pełny opis, procedura wzorców w
 | nocny | w poniedziałki 02:17 UTC i ręcznie (`regression-nightly.yml`) | e2e na Chromium, Firefox i WebKit ×2 bez tolerancji dla flaky, `npm run test:visual`, `npm run test:mutation` |
 
 Pozostałe polecenia: `npm run test:a11y`, `npm run test:contract` (`test:contract:update` akceptuje zmianę API).
+
+### Docker (środowisko lokalne z prawdziwymi integracjami)
+
+Ten sam obraz, który CI testuje i publikuje do GHCR przy każdym merge'u do `main`. Dane w wolumenie `ci-data`, port tylko
+na `127.0.0.1`, sekrety ze zmiennych środowiskowych (najlepiej wstrzykiwanych z menedżera haseł, np. `op run -- …`):
+
+```bash
+export CI_ADMIN_TOKEN=$(openssl rand -hex 32)
+docker compose up -d --build
+```
+
+Dla początkujących: [`ONBOARDING.md`](ONBOARDING.md). Szczegóły techniczne (darmowe konta Jira, Confluence i Figma, tokeny, lokalny model AI przez Ollamę, kopie zapasowe):
+[`docs/LOCAL-ENVIRONMENT.md`](docs/LOCAL-ENVIRONMENT.md).
 
 ### Co zobaczysz w demo
 
