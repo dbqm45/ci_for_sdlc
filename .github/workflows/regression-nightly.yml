@@ -38,8 +38,8 @@ jobs:
       # Quarantined tests run here, so their owners see whether the fix works.
       E2E_INCLUDE_QUARANTINE: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -47,7 +47,7 @@ jobs:
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       # Every test twice in a row: order and leftover-state problems show up as failures.
       - run: npx playwright test --repeat-each=2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report-${{ matrix.browser }}
@@ -63,7 +63,7 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: npm ci
       - name: Check for baselines
         id: baselines
@@ -78,13 +78,13 @@ jobs:
       - name: Regenerate baselines
         if: ${{ inputs.update_snapshots }}
         run: npm run test:visual -- --update-snapshots=all
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ inputs.update_snapshots }}
         with:
           name: visual-baselines
           path: e2e/__screenshots__/
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: visual-report
@@ -99,14 +99,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run test:mutation
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: mutation-report
