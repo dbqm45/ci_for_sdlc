@@ -38,9 +38,9 @@ export function Settings() {
   const save = async () => {
     setSaving(true);
     try {
+      setCurrentUser(user);
       const r = await api.saveSettings(s);
       setS(r.settings);
-      setCurrentUser(user);
       toast('Settings saved');
       await api.analyze();
       await refresh();

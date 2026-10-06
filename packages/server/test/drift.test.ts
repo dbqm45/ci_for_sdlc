@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
+import { putSettings } from './helpers.js';
 
 let ctx: Awaited<ReturnType<typeof buildApp>>;
 let dir: string;
@@ -43,7 +44,7 @@ describe('drift after approval (P4)', () => {
   });
 
   it('in invalidate mode removes the approval and records it in the audit log', async () => {
-    expect((await call('PUT', '/api/settings', { policy: { driftReaction: 'invalidate' } })).status).toBe(200);
+    expect((await putSettings(ctx.app, { policy: { driftReaction: 'invalidate' } })).statusCode).toBe(200);
     await approveThenChange();
     const approvals = await ctx.store.approvals();
     expect(approvals.some((a) => a.itemKey === 'PAY-123')).toBe(false);

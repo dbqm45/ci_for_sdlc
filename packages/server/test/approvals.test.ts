@@ -45,6 +45,6 @@ describe('approvals', () => {
   it('only approves stories and bugs; epic readiness is derived (P7)', async () => {
     const res = await json('POST', '/api/items/PAY-100/approve', { by: 'po', force: true, reason: 'x' });
     expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/derived from its stories/);
+    expect(res.body.detail).toMatch(/derived from its stories/);
   });
 });

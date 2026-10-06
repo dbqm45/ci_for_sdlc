@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
+import { putSettings } from './helpers.js';
 
 let ctx: Awaited<ReturnType<typeof buildApp>>;
 const dir = mkdtempSync(join(tmpdir(), 'ci-hierarchy-'));
@@ -14,7 +15,7 @@ afterAll(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-const put = (payload: unknown) => ctx.app.inject({ method: 'PUT', url: '/api/settings', payload: payload as any });
+const put = (payload: unknown) => putSettings(ctx.app, payload);
 const map = async () => (await ctx.app.inject({ method: 'GET', url: '/api/settings' })).json().settings.integrations.jira.issueTypeMap;
 
 describe('Jira issue type mapping in settings (P1)', () => {
@@ -31,7 +32,7 @@ describe('Jira issue type mapping in settings (P1)', () => {
 
   it('rejects a level that does not exist', async () => {
     const res = await put({ integrations: { jira: { issueTypeMap: { Initiative: 'portfolio' } } } });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/portfolio/);
+    expect(res.statusCode).toBe(422);
+    expect(res.json().errors[0].field).toBe('/integrations/jira/issueTypeMap/Initiative');
   });
 });

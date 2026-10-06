@@ -37,14 +37,61 @@ export interface HistoryPoint {
   decisionDebt: number;
 }
 
-async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
+const TOKEN_KEY = 'ci.adminToken';
+const readToken = () => {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY) ?? '';
+  } catch {
+    return '';
+  }
+};
+const saveToken = (t: string) => {
+  try {
+    if (t) sessionStorage.setItem(TOKEN_KEY, t);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+};
+
+/** ETag of the settings last read, sent back as If-Match so concurrent edits are not lost. */
+let settingsEtag = '';
+
+/** RFC 9457 problem details returned by the API. */
+interface Problem {
+  title?: string;
+  status?: number;
+  detail?: string;
+  errors?: { field: string; message: string }[];
+}
+
+async function req<T>(method: string, url: string, body?: unknown, headers: Record<string, string> = {}, retried = false): Promise<T> {
+  const token = readToken();
   const res = await fetch(url, {
     method,
-    headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
+    headers: {
+      ...(body !== undefined && { 'content-type': 'application/json' }),
+      ...(method !== 'GET' && { 'x-ci-actor': encodeURIComponent(currentUser()) }),
+      ...(token && { authorization: `Bearer ${token}` }),
+      ...headers,
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  if (url === '/api/settings' && res.headers.get('etag')) settingsEtag = res.headers.get('etag')!;
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((json as { error?: string }).error ?? `HTTP ${res.status}`);
+  if (res.status === 401 && res.headers.get('www-authenticate') && !retried) {
+    // The server has CI_ADMIN_TOKEN set: ask once per browser session; the token is never written to disk.
+    const t = window.prompt(`${(json as Problem).detail ?? 'This change requires the admin token.'}\nAdmin token:`);
+    if (t?.trim()) {
+      saveToken(t.trim());
+      return req<T>(method, url, body, headers, true);
+    }
+  }
+  if (res.status === 401 && retried) saveToken('');
+  if (!res.ok) {
+    const p = json as Problem & { error?: string };
+    throw new Error(p.detail ?? p.error ?? p.title ?? `HTTP ${res.status}`);
+  }
   return json as T;
 }
 
@@ -70,7 +117,7 @@ export const api = {
   audit: () => req<AuditEntry[]>('GET', '/api/audit'),
   rules: () => req<{ id: string; name: string; description: string; appliesTo: string[] }[]>('GET', '/api/rules'),
   settings: () => req<{ settings: any; secrets: Record<string, boolean>; defaultModels: Record<string, string> }>('GET', '/api/settings'),
-  saveSettings: (patch: unknown) => req<{ settings: any }>('PUT', '/api/settings', patch),
+  saveSettings: (patch: unknown) => req<{ settings: any }>('PUT', '/api/settings', patch, settingsEtag ? { 'if-match': settingsEtag } : {}),
   testConnections: () => req<Record<string, string>>('POST', '/api/settings/test-connections'),
   scenarios: () => req<{ id: string; title: string; description: string }[]>('GET', '/api/demo/scenarios'),
   applyScenario: (id: string) => req<AnalysisResult>('POST', `/api/demo/scenarios/${id}`),

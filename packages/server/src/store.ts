@@ -3,6 +3,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_POLICY, normalizeDecision, type AiProviderConfig, type AnalysisPolicy, type Approval, type Decision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Snapshot } from '@ci/core';
+import type { Principal } from './http.js';
 
 export interface Settings {
   mode: 'demo' | 'live';
@@ -60,7 +61,9 @@ export const DEFAULT_SETTINGS: Settings = {
 export interface AuditEntry {
   at: string;
   kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change';
+  /** A display name; `via` is how the change was authorized (admin token or a loopback client). */
   actor: string;
+  via?: Principal;
   summary: string;
   details?: unknown;
 }

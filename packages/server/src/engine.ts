@@ -15,6 +15,7 @@ import {
   type ProjectContext,
   type SemanticOutput,
 } from '@ci/core';
+import type { Principal } from './http.js';
 import type { Settings, Store } from './store.js';
 
 export interface EngineState {
@@ -148,7 +149,7 @@ export class Engine extends EventEmitter {
     }
   }
 
-  async approve(key: string, by: string, forced?: { reason: string }) {
+  async approve(key: string, { actor: by, via }: { actor: string; via?: Principal }, forced?: { reason: string }) {
     const { result, graph } = this.state;
     const item = result?.items.find((i) => i.key === key);
     if (!item || !graph) throw new Error(`Unknown item ${key}`);
@@ -157,7 +158,7 @@ export class Engine extends EventEmitter {
     const summary = forced
       ? `${key} force-approved despite blocking issues (${item.blockingIssues.join('; ') || 'none'}). Reason: ${forced.reason}`
       : `${key} approved as ready for implementation (health ${item.health})`;
-    await this.store.audit({ at: approval.approvedAt, kind: 'approval', actor: by, summary });
+    await this.store.audit({ at: approval.approvedAt, kind: 'approval', actor: by, via, summary });
   }
 
   async applyDemoScenario(id: string) {
