@@ -54,11 +54,14 @@ export class Engine extends EventEmitter {
       if (!v) throw new Error(`Missing environment variable ${name}`);
       return v;
     };
+    // Read every token before the first request starts: a missing one must not leave earlier fetches rejecting unhandled.
+    const jiraToken = jira.enabled ? token('JIRA_API_TOKEN') : '';
+    const confluenceToken = confluence.enabled ? process.env.CONFLUENCE_API_TOKEN ?? token('JIRA_API_TOKEN') : '';
+    const figmaToken = figma.enabled ? token('FIGMA_TOKEN') : '';
     const tasks: Promise<void>[] = [];
-    if (jira.enabled) tasks.push(fetchJira({ ...jira, apiToken: token('JIRA_API_TOKEN') }).then((r) => void (ctx.requirements = r)));
-    if (confluence.enabled)
-      tasks.push(fetchConfluence({ ...confluence, apiToken: process.env.CONFLUENCE_API_TOKEN ?? token('JIRA_API_TOKEN') }).then((d) => void (ctx.documents = d)));
-    if (figma.enabled) tasks.push(fetchFigma({ token: token('FIGMA_TOKEN'), fileKeys: figma.fileKeys }).then((f) => void (ctx.frames = f)));
+    if (jira.enabled) tasks.push(fetchJira({ ...jira, apiToken: jiraToken }).then((r) => void (ctx.requirements = r)));
+    if (confluence.enabled) tasks.push(fetchConfluence({ ...confluence, apiToken: confluenceToken }).then((d) => void (ctx.documents = d)));
+    if (figma.enabled) tasks.push(fetchFigma({ token: figmaToken, fileKeys: figma.fileKeys }).then((f) => void (ctx.frames = f)));
     await Promise.all(tasks);
     return ctx;
   }
