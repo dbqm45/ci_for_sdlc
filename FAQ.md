@@ -311,6 +311,9 @@ W katalogu `CI_DATA_DIR` (domyślnie `.ci-data/`), w zwykłych plikach:
 - `audit.jsonl`;
 - `demo-context.json`.
 
+**Co z `settings.json` ze starszej wersji?**
+Przy starcie serwer oczyszcza plik: usuwa pola, których obecna wersja nie zna (np. dawne klucze API), i wartości spoza dozwolonego zakresu. Dla usuniętych wartości obowiązują ustawienia domyślne. Dzięki temu zapis z UI nie kończy się błędem `422`, a stare sekrety znikają z dysku.
+
 **Czy dane są szyfrowane?**
 Mogą być. Włącz *Settings → Security → Encrypt stored context* i ustaw `CI_ENCRYPTION_KEY`. Pliki z kontekstem są wtedy szyfrowane AES-256-GCM. Gdy szyfrowanie jest włączone, a klucza brak, zapis jest odrzucany. Nic nie trafi na dysk jawnym tekstem.
 

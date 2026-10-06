@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_POLICY, normalizeDecision, type AiProviderConfig, type AnalysisPolicy, type Approval, type Decision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Snapshot } from '@ci/core';
 import type { Principal } from './http.js';
+import { pruneToSchema, settingsBody } from './schemas.js';
 
 export interface Settings {
   mode: 'demo' | 'live';
@@ -107,6 +108,15 @@ export class Store {
 
   async init() {
     await mkdir(this.dir, { recursive: true });
+    await this.migrateSettings();
+  }
+
+  /** Rewrites settings.json from an older version without unknown or invalid fields (e.g. old secrets). */
+  private async migrateSettings() {
+    if (!existsSync(join(this.dir, 'settings.json'))) return;
+    const raw = await this.readJson<unknown>('settings.json', {});
+    const pruned = pruneToSchema(raw, settingsBody) ?? {};
+    if (JSON.stringify(pruned) !== JSON.stringify(raw)) await this.write('settings.json', pruned);
   }
 
   private key(): Buffer | undefined {
@@ -176,7 +186,7 @@ export class Store {
   }
 
   async settings(): Promise<Settings> {
-    const s = await this.readJson<Partial<Settings>>('settings.json', {});
+    const s = (pruneToSchema(await this.readJson<unknown>('settings.json', {}), settingsBody) ?? {}) as Partial<Settings>;
     const merged = deepMerge(structuredClone(DEFAULT_SETTINGS), s) as Settings;
     // Kept out of DEFAULT_SETTINGS so a saved mapping replaces it instead of being merged with it.
     merged.integrations.jira.issueTypeMap ??= { ...DEFAULT_JIRA_ISSUE_TYPES };

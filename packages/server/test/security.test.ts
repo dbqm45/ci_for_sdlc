@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { InjectOptions } from 'fastify';
@@ -141,6 +141,46 @@ describe('request schemas', () => {
   it('limits the impact query', async () => {
     await start();
     expect((await call({ method: 'GET', url: `/api/impact?q=${'x'.repeat(501)}` })).status).toBe(422);
+  });
+});
+
+describe('settings.json from an older version', () => {
+  const legacy = {
+    mode: 'live',
+    integrations: { jira: { enabled: true, baseUrl: 'https://x.atlassian.net', apiToken: 'old-secret', issueTypeMap: { Epic: 'epic', Saga: 'legend' } }, slack: { webhook: 'x' } },
+    schedule: { mode: 'hourly', intervalMinutes: 15 },
+    removedSection: true,
+  };
+  const startWithLegacy = async () => {
+    dir = mkdtempSync(join(tmpdir(), 'ci-sec-'));
+    writeFileSync(join(dir, 'settings.json'), JSON.stringify(legacy));
+    ctx = await buildApp({ dataDir: dir, adminToken: '', allowedHosts: [], allowedOrigins: [] });
+  };
+
+  it('drops unknown and invalid fields, keeping the valid ones', async () => {
+    await startWithLegacy();
+    const s = (await call({ method: 'GET', url: '/api/settings' })).body.settings;
+    expect(s.removedSection).toBeUndefined();
+    expect(s.integrations.slack).toBeUndefined();
+    expect(s.integrations.jira.apiToken).toBeUndefined();
+    expect(s.integrations.jira.baseUrl).toBe('https://x.atlassian.net');
+    expect(s.integrations.jira.issueTypeMap).toEqual({ Epic: 'epic' });
+    expect(s.schedule.mode).toBe('on_demand');
+    expect(s.schedule.intervalMinutes).toBe(15);
+  });
+
+  it('lets the UI save the whole object back', async () => {
+    await startWithLegacy();
+    const got = await call({ method: 'GET', url: '/api/settings' });
+    const put = await call({ method: 'PUT', url: '/api/settings', headers: { 'if-match': got.headers.etag as string }, payload: got.body.settings });
+    expect(put.status).toBe(200);
+  });
+
+  it('rewrites the file on start, so stale fields such as old secrets leave the disk', async () => {
+    await startWithLegacy();
+    const onDisk = readFileSync(join(dir, 'settings.json'), 'utf8');
+    expect(onDisk).not.toContain('old-secret');
+    expect(onDisk).not.toContain('removedSection');
   });
 });
 
