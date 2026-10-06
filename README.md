@@ -116,7 +116,7 @@ Workspace „Checkout” odtwarza przykłady z koncepcji produktu:
 
 ## Funkcje (MVP)
 
-- **Context Discovery & Context Graph** — encje (Epic, Story, Task, Bug, dokument, ramka Figma, domena, decyzja) i relacje (`belongs_to`, `implements`, `documented_by`, `designed_by`, `depends_on`, `references`, `supersedes`, …). Każda krawędź ma typ, pewność i powód (link jawny vs dopasowanie semantyczne).
+- **Context Discovery & Context Graph** — encje (Epic, Story, Task, Bug, dokument, ramka Figma, domena, decyzja) i relacje (`belongs_to`, `implements`, `documented_by`, `designed_by`, `depends_on`, `references`, `supersedes`, …). Każda krawędź ma typ, pewność i powód (link jawny vs dopasowanie semantyczne). W zakładce *Context* elementu graf sąsiedztwa jest pogrupowany według źródła (Jira, Confluence, Figma) w dwóch kolumnach; można go przybliżać (+/−, Ctrl + kółko), przesuwać, otworzyć powiększony (*Enlarge*, Esc zamyka), filtrować legendą, a kliknięcie węzła Jira otwiera ten element.
 - **Claims** — normalizacja faktów (timeout, limit retry, idempotencja, tryb sync/async, limity, czas sesji, rozmiar pliku) i wykrywanie konfliktów semantycznych między źródłami.
 - **Silnik reguł (Hybrid Intelligence)** — deterministyczne, audytowalne reguły: GAP / CONFLICT / AMBIGUITY / OUTDATED / MISSING COVERAGE / DRIFT. Lista reguł i ich wyłączanie w *Settings → Policy*.
 - **Semantic AI (opcjonalnie)** — recenzent specyfikacji + adversarial review; **każde finding AI musi cytować źródło**, inaczej jest odrzucane.
