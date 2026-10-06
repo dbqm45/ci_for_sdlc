@@ -1,4 +1,5 @@
 version: 2
+# PR titles follow Conventional Commits (docs/RELEASING.md): build(deps): / build(deps-dev): / ci(deps): …
 updates:
   - package-ecosystem: npm
     directory: /
@@ -6,6 +7,10 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+      prefix-development: build
+      include: scope
     groups:
       # One PR for all minor/patch updates; majors arrive separately so they can be reviewed one by one.
       minor-and-patch:
@@ -16,6 +21,9 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    commit-message:
+      prefix: ci
+      include: scope
     groups:
       actions:
         patterns: ['*']
@@ -25,3 +33,6 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    commit-message:
+      prefix: build
+      include: scope

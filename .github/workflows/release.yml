@@ -3,6 +3,8 @@ name: Release image
 # Builds the Docker image once, smoke-tests it and publishes it to GitHub Container Registry
 # (ghcr.io/dbqm45/ci_for_sdlc, private like the repository). Run it locally with
 # `docker compose pull && docker compose up -d` (docs/LOCAL-ENVIRONMENT.md).
+# When package.json carries a version that has no tag yet (a merged "chore(release): X.Y.Z" PR), the image
+# is also tagged X.Y.Z and the commit gets the annotated git tag vX.Y.Z (docs/RELEASING.md).
 on:
   push:
     branches: [main]
@@ -20,7 +22,26 @@ env:
   IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      new: ${{ steps.read.outputs.new }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: read
+        run: |
+          version=$(node -p "require('./package.json').version")
+          node -e "process.exit(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(process.argv[1]) ? 0 : 1)" "$version" \
+            || { echo "::error::package.json version '$version' is not X.Y.Z"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then new=false; else new=true; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+          echo "Version $version, new release: $new"
+
   image:
+    needs: version
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -69,9 +90,11 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:sha-${{ github.sha }}
+            ${{ needs.version.outputs.new == 'true' && format('{0}:{1}', env.IMAGE, needs.version.outputs.version) || '' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
           cache-from: type=gha
 
       # GHCR for a private repository on GitHub Free holds 500 MB; keep only the most recent images.
@@ -81,3 +104,23 @@ jobs:
           package-name: ${{ github.event.repository.name }}
           package-type: container
           min-versions-to-keep: 6
+
+  # A released version is never moved or re-used (SemVer rule 3): the tag is created once, on the commit
+  # whose image passed the smoke test. GitHub Releases from these tags come later.
+  tag:
+    needs: [version, image]
+    if: needs.version.outputs.new == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create tag v${{ needs.version.outputs.version }}
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "v$VERSION" -m "Release $VERSION" "$GITHUB_SHA"
+          git push origin "refs/tags/v$VERSION"

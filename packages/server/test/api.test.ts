@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -22,6 +22,12 @@ const json = async (method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payl
 };
 
 describe('API', () => {
+  it('VER-01: health and OpenAPI report the package.json version', async () => {
+    const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+    expect((await json('GET', '/api/health')).body.version).toBe(version);
+    expect((await json('GET', '/api/openapi.json')).body.info.version).toBe(version);
+  });
+
   it('analyzes the demo workspace', async () => {
     const { status, body } = await json('GET', '/api/analysis');
     expect(status).toBe(200);

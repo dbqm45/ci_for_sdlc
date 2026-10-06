@@ -22,6 +22,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # Conventional Commits and SemVer helpers behind the PR title check and `npm run release`.
+      - run: npm run test:scripts
       # Unit tests with coverage; includes the API contract test (packages/server/contracts/openapi.json).
       - run: npm run test:coverage
       - run: npm run build
