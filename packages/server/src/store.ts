@@ -116,7 +116,11 @@ export class Store {
     if (!existsSync(join(this.dir, 'settings.json'))) return;
     const raw = await this.readJson<unknown>('settings.json', {});
     const pruned = pruneToSchema(raw, settingsBody) ?? {};
-    if (JSON.stringify(pruned) !== JSON.stringify(raw)) await this.write('settings.json', pruned);
+    const removed = removedPaths(raw, pruned);
+    if (!removed.length) return;
+    await this.write('settings.json', pruned);
+    // Paths only: a removed field may hold an old secret.
+    await this.audit({ at: new Date().toISOString(), kind: 'settings', actor: 'system', summary: 'Settings from an older version cleaned up on start', details: { removed } });
   }
 
   private key(): Buffer | undefined {
@@ -265,6 +269,17 @@ export class Store {
     const lines = (await readFile(p, 'utf8')).trim().split('\n').filter(Boolean);
     return lines.slice(-limit).reverse().map((l) => JSON.parse(l) as AuditEntry);
   }
+}
+
+/** Dotted paths present in `before` but missing from `after` (a changed leaf counts as removed). */
+export function removedPaths(before: unknown, after: unknown, prefix = ''): string[] {
+  const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  if (!isObj(before)) return JSON.stringify(before) === JSON.stringify(after) ? [] : [prefix || '(root)'];
+  if (!isObj(after)) return [prefix || '(root)'];
+  return Object.keys(before).flatMap((k) => {
+    const path = prefix ? `${prefix}.${k}` : k;
+    return k in after ? removedPaths(before[k], after[k], path) : [path];
+  });
 }
 
 export function deepMerge<T extends Record<string, any>>(base: T, patch: Record<string, any>): T {
