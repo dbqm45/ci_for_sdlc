@@ -333,7 +333,7 @@ async function runPool<T>(xs: T[], n: number, fn: (x: T) => Promise<void>) {
   let i = 0;
   await Promise.all(
     Array.from({ length: Math.min(n, xs.length) }, async () => {
-      while (i < xs.length) await fn(xs[i++]);
+      while (i < xs.length) await fn(xs[i++] as T);
     }),
   );
 }
@@ -383,7 +383,7 @@ function diffSnapshots(prev: Snapshot, cur: Snapshot, items: Map<string, ItemAna
     const p = prev.claims[k];
     if (p && p.value !== c.value) {
       const imp = impacted(c.entityId);
-      const [, subject, attribute] = k.split('|');
+      const [, subject = '', attribute = ''] = k.split('|');
       ev({ kind: 'claim_changed', entityId: c.entityId, entityTitle: c.title, summary: `${subject} ${attribute.replace('_', ' ')} changed from ${p.value} to ${c.value} in "${c.title}"`, impactedItems: imp, severity: wasSafe(imp) ? 'critical' : 'warning' });
     }
   }

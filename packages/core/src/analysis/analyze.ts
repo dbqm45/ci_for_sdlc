@@ -325,7 +325,7 @@ export function crossItemPass(env: AnalysisEnv, items: Map<string, ItemAnalysis>
     }
     for (const [k, vals] of bySig) {
       if (vals.size < 2) continue;
-      const [subject, attribute] = k.split('|');
+      const [subject = '', attribute = ''] = k.split('|');
       const cs = storyClaims.filter((x) => x.subject === subject && x.attribute === attribute);
       const label = attribute.replace('_', ' ');
       highlights.push(`${subject} ${label} is inconsistent across stories`);

@@ -46,7 +46,7 @@ const expectRecord = (url: string) => (body: unknown) => {
   return body;
 };
 
-const pathOf = (url: string) => url.split('?')[0];
+const pathOf = (url: string) => url.split('?')[0] ?? url;
 
 // ---------------------------------------------------------------------------- Jira
 
@@ -170,7 +170,7 @@ export function splitSections(text: string): Map<string, string> {
   for (const line of lines) {
     const m = known.exec(line.trim());
     if (m) {
-      current = m[1].toLowerCase().replace('behaviour', 'behavior');
+      current = m[1]!.toLowerCase().replace('behaviour', 'behavior');
       buf[current] = m[2] ? [m[2]] : [];
       continue;
     }
@@ -237,6 +237,6 @@ export async function fetchConfluence(cfg: ConfluenceConfig): Promise<DocumentIt
 export async function pool<T>(xs: T[], n: number, fn: (x: T) => Promise<void>) {
   let i = 0;
   await Promise.all(Array.from({ length: Math.min(n, xs.length) }, async () => {
-    while (i < xs.length) await fn(xs[i++]);
+    while (i < xs.length) await fn(xs[i++] as T);
   }));
 }

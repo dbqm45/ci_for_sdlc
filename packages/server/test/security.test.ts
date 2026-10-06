@@ -195,8 +195,8 @@ describe('settings.json from an older version', () => {
     await startWithLegacy();
     const entries = (await ctx!.store.auditLog()).filter((a) => a.kind === 'settings');
     expect(entries).toHaveLength(1);
-    expect(entries[0].actor).toBe('system');
-    expect(entries[0].details).toEqual({
+    expect(entries[0]?.actor).toBe('system');
+    expect(entries[0]?.details).toEqual({
       removed: expect.arrayContaining(['integrations.jira.apiToken', 'integrations.jira.issueTypeMap.Saga', 'integrations.slack', 'schedule.mode', 'removedSection']),
     });
     expect(JSON.stringify(entries[0])).not.toContain('old-secret');

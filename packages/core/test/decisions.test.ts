@@ -21,7 +21,7 @@ describe('withdrawDecision', () => {
   it('returns the withdrawn version and leaves the input list untouched', () => {
     const { all } = recordDecision([], input);
     const before = structuredClone(all);
-    const r = withdrawDecision(all, all[0].id, 'bob', '2026-10-06T01:00:00Z', ' no longer true ');
+    const r = withdrawDecision(all, all[0]!.id, 'bob', '2026-10-06T01:00:00Z', ' no longer true ');
     expect(r.decision).toMatchObject({ status: 'withdrawn', withdrawnBy: 'bob', withdrawReason: 'no longer true' });
     expect(all).toEqual(before);
     expect(activeDecisions(r.all)).toHaveLength(0);

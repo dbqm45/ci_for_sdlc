@@ -21,7 +21,7 @@ const cosmetic = (ctx: ProjectContext) => {
   const r = pay123(ctx);
   r.title = 'Save a payment method';
   r.description = r.description + '  ';
-  r.acceptanceCriteria[0] = r.acceptanceCriteria[0].toUpperCase();
+  r.acceptanceCriteria[0] = r.acceptanceCriteria[0]!.toUpperCase();
 };
 const meaningful = (ctx: ProjectContext) => void pay123(ctx).acceptanceCriteria.push('The user can name the card.');
 

@@ -22,7 +22,8 @@ export function resolveIssueType(name: string, opts: { subtask?: boolean } = {},
   const n = name.trim().toLowerCase();
   const custom = Object.entries(map).find(([k]) => k.trim().toLowerCase() === n)?.[1];
   if (isIssueType(custom)) return custom;
-  if (Object.hasOwn(DEFAULT_ISSUE_TYPE_MAP, n)) return DEFAULT_ISSUE_TYPE_MAP[n];
+  const known = Object.hasOwn(DEFAULT_ISSUE_TYPE_MAP, n) ? DEFAULT_ISSUE_TYPE_MAP[n] : undefined;
+  if (known) return known;
   return n.includes('epic') ? 'epic' : n.includes('bug') ? 'bug' : n.includes('task') ? 'task' : 'story';
 }
 

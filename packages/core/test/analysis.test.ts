@@ -103,7 +103,7 @@ describe('demo project analysis', async () => {
   it('computes project metrics', () => {
     expect(run.result.counts.stories).toBe(10);
     expect(run.result.metrics.decisionDebt.critical).toBeGreaterThan(0);
-    expect(run.result.topRisks[0].severity).toBe('critical');
+    expect(run.result.topRisks[0]?.severity).toBe('critical');
   });
 
   it('answers impact analysis queries (UC-11)', () => {

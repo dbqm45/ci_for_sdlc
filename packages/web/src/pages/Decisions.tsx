@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../App';
+import type { Finding } from '@ci/core';
 import { api, type Decision } from '../api';
 import { Card, SeverityBadge, Stat } from '../components/ui';
 
@@ -10,11 +11,11 @@ export function Decisions() {
   useEffect(() => void api.decisions().then(setLog), [version]);
 
   const open = useMemo(() => {
-    const out: { key: string; title: string; severity: string; question: string; topic: string; finding: string }[] = [];
+    const out: { key: string; title: string; severity: Finding['severity']; question: string; topic: string; finding: string }[] = [];
     for (const i of analysis!.items) {
       for (const f of i.findings) if (f.status === 'open' && f.question) out.push({ key: i.key, title: i.title, severity: f.severity, question: f.question.text, topic: f.question.topic, finding: f.title });
     }
-    const order = { critical: 0, warning: 1, info: 2 } as Record<string, number>;
+    const order: Record<Finding['severity'], number> = { critical: 0, warning: 1, info: 2 };
     return out.sort((a, b) => order[a.severity] - order[b.severity]);
   }, [analysis]);
   const m = analysis!.metrics.decisionDebt;

@@ -38,9 +38,9 @@ describe('figma helpers', () => {
     };
     const frames = framesFromDocument('KEY', 'File', '2026-01-01', doc);
     expect(frames.map((f) => f.name)).toEqual(['Payment / Error', 'Payment / Success']);
-    expect(frames[0].texts).toEqual(['Payment failed']);
-    expect(frames[0].transitions).toEqual(['2:4']);
-    expect(frames[0].url).toContain('node-id=2-3');
+    expect(frames[0]?.texts).toEqual(['Payment failed']);
+    expect(frames[0]?.transitions).toEqual(['2:4']);
+    expect(frames[0]?.url).toContain('node-id=2-3');
   });
 });
 
