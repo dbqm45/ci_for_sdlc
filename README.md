@@ -12,6 +12,9 @@ Produkt **nie analizuje kodu** — to świadoma decyzja zakresu MVP: najpierw �
 
 ## Szybki start
 
+> Pierwszy raz? Instrukcja krok po kroku dla osób nietechnicznych (Docker, klucze Jira/Confluence/Figma, pierwsza
+> historyjka i podsumowanie na dashboardzie): [`ONBOARDING.md`](ONBOARDING.md).
+
 Wymagania: Node.js ≥ 20.
 
 ```bash
@@ -91,7 +94,7 @@ export CI_ADMIN_TOKEN=$(openssl rand -hex 32)
 docker compose up -d --build
 ```
 
-Krok po kroku (darmowe konta Jira, Confluence i Figma, tokeny, lokalny model AI przez Ollamę, kopie zapasowe):
+Dla początkujących: [`ONBOARDING.md`](ONBOARDING.md). Szczegóły techniczne (darmowe konta Jira, Confluence i Figma, tokeny, lokalny model AI przez Ollamę, kopie zapasowe):
 [`docs/LOCAL-ENVIRONMENT.md`](docs/LOCAL-ENVIRONMENT.md).
 
 ### Co zobaczysz w demo

@@ -4,6 +4,9 @@ Cel: uruchomić aplikację na własnym komputerze z prawdziwymi danymi z Jira, C
 i bez serwera. To ten sam obraz Dockera, który CI buduje i testuje przy każdym merge'u do `main`, więc później na
 produkcję trafi dokładnie to, co sprawdziłeś lokalnie.
 
+> Pierwszy raz z Dockerem lub Jira? Zacznij od [`ONBOARDING.md`](../ONBOARDING.md) — ta sama konfiguracja krok po kroku,
+> z przykładową historyjką i opisem tego, co zobaczysz na dashboardzie.
+
 | Element | Za darmo? | Uwagi |
 |---|---|---|
 | Docker Desktop | tak (użytek prywatny) | Mac, Windows, Linux |

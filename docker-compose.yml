@@ -1,5 +1,5 @@
 # Local environment: the same image CI builds, on your machine only (http://localhost:4317).
-# Guide: docs/LOCAL-ENVIRONMENT.md
+# Guide: ONBOARDING.md (step by step), docs/LOCAL-ENVIRONMENT.md (details)
 #
 #   docker compose up -d --build        build from this checkout and start
 #   docker compose pull && docker compose up -d   run the image CI published to GHCR
