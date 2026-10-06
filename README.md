@@ -77,7 +77,7 @@ Jedna kopia testów, zestawy wybierane tagami. Pełny opis, procedura wzorców w
 |---|---|---|
 | smoke (`@smoke`) | każdy push i PR (`ci.yml`) | `npm run test:e2e:smoke` |
 | PR | każdy push i PR (`ci.yml`) | typecheck, `npm run test:coverage` (z testem kontraktu API), `npm run test:e2e` (z `@a11y`) |
-| nocny | codziennie 02:17 UTC (`regression-nightly.yml`) | e2e na Chromium, Firefox i WebKit ×2 bez tolerancji dla flaky, `npm run test:visual`, `npm run test:mutation` |
+| nocny | w poniedziałki 02:17 UTC i ręcznie (`regression-nightly.yml`) | e2e na Chromium, Firefox i WebKit ×2 bez tolerancji dla flaky, `npm run test:visual`, `npm run test:mutation` |
 
 Pozostałe polecenia: `npm run test:a11y`, `npm run test:contract` (`test:contract:update` akceptuje zmianę API).
 

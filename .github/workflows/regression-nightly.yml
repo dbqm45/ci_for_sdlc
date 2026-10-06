@@ -4,7 +4,9 @@ name: Regression (nightly)
 # Too slow for every pull request (README → Testy regresji, docs/TESTING-REGRESSION.md).
 on:
   schedule:
-    - cron: '17 2 * * *' # 02:17 UTC
+    # Weekly, not daily: the repository is private and GitHub Free includes 2000 Actions minutes a month;
+    # a full run takes about 40 of them. Run it manually before anything important.
+    - cron: '17 2 * * 1' # Mondays 02:17 UTC
   workflow_dispatch:
     inputs:
       update_snapshots:

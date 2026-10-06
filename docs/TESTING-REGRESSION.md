@@ -9,7 +9,7 @@ wyglądu, kontraktu API ani reguł bramki jakości. Testy istnieją w jednej kop
 |---|---|---|---|
 | **smoke** | każdy push i PR (`.github/workflows/ci.yml`) | e2e z tagiem `@smoke`: po jednej ścieżce krytycznej na obszar (NAV-01, OVR-01, ITM-01, DEC-01, DRF-01, IMP-01, SET-02, AUD-01) | ~1 min |
 | **PR** | każdy push i PR (`ci.yml`) | typecheck, testy jednostkowe z progiem pokrycia 80% (w tym kontrakt API), pełne e2e na Chromium z `@a11y` | < 15 min |
-| **nocny** | codziennie 02:17 UTC i ręcznie (`.github/workflows/regression-nightly.yml`) | e2e na Chromium, Firefox i WebKit, każdy test 2× (`--repeat-each=2`), test niestabilny = błąd; regresja wizualna; testy mutacyjne `core` | ~1 h |
+| **nocny** | w poniedziałki 02:17 UTC i ręcznie (`.github/workflows/regression-nightly.yml`) | e2e na Chromium, Firefox i WebKit, każdy test 2× (`--repeat-each=2`), test niestabilny = błąd; regresja wizualna; testy mutacyjne `core` | ~1 h |
 | **przed wydaniem** | kandydat do wydania | ostatni zielony przebieg nocny + ręczna lista kontrolna na trybie live (Jira, Confluence, Figma) | wg planu |
 
 Kwarantanna (`@quarantine`) jest wyłączona z bramki PR, ale uruchamiana w przebiegu nocnym.
@@ -85,7 +85,7 @@ Każdy dopisany test, który zabija przeżyte mutanty, uzasadnia podniesienie pr
   test('SET-04: …', { tag: '@quarantine' }, async ({ page }) => { … });
   ```
 
-  Test w kwarantannie nie blokuje PR, ale biegnie co noc. Po terminie: napraw albo usuń. Bez właściciela i terminu — nie ma kwarantanny.
+  Test w kwarantannie nie blokuje PR, ale biegnie w przebiegu nocnym. Po terminie: napraw albo usuń. Bez właściciela i terminu — nie ma kwarantanny.
 - Nigdy: `waitForTimeout`, `test.skip` bez zgłoszenia, zwiększanie `retries`, żeby ukryć problem.
 
 ## Utrzymanie
