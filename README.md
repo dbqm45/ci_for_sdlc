@@ -198,7 +198,7 @@ Zasady kontraktu:
 
 Wersje według [SemVer](https://semver.org/lang/pl/) (teraz faza `0.y.z`), historia zmian w [`CHANGELOG.md`](CHANGELOG.md).
 Commity i tytuły PR w formacie [Conventional Commits](https://www.conventionalcommits.org/pl/v1.0.0/)
-(`feat(web): …`, `fix(server): …`). Nową wersję przygotowuje `npm run release`, a tag `vX.Y.Z` tworzy CI po merge'u.
+(`feat(web): …`, `fix(server): …`). Nową wersję przygotowuje `npm run release`, a tag `vX.Y.Z` i GitHub Release tworzy CI po merge'u.
 Szczegóły: [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Roadmap

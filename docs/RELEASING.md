@@ -2,8 +2,8 @@
 
 Aplikacja ma jeden numer wersji zgodny z [Semantic Versioning 2.0.0](https://semver.org/lang/pl/) (`MAJOR.MINOR.PATCH`).
 Wydaniem jest obraz Dockera i stan repozytorium, więc wszystkie pakiety (`package.json` w katalogu głównym, `@ci/core`,
-`@ci/server`, `@ci/web`) mają **ten sam** numer. Wydaną wersję oznacza tag git `vX.Y.Z`, np. `v0.2.0`. GitHub Releases
-dojdą później i będą tworzone z tych samych tagów.
+`@ci/server`, `@ci/web`) mają **ten sam** numer. Wydaną wersję oznacza tag git `vX.Y.Z`, np. `v0.2.0`, a do każdego tagu powstaje
+[GitHub Release](https://github.com/dbqm45/ci_for_sdlc/releases) z opisem z CHANGELOG.
 
 Numer wersji widać w `GET /api/health` (`version`) i w kontrakcie `GET /api/openapi.json` (`info.version`).
 
@@ -92,8 +92,13 @@ układ modułów czy treść logów, się nie liczą.
    *Usunięte*. Opcjonalnie sprawdź plik:
    `python3 .claude/skills/core-semver/scripts/semver.py check-changelog CHANGELOG.md`.
 4. Wykonaj commit `chore(release): X.Y.Z` i otwórz PR o tym samym tytule.
-5. Po merge'u workflow `Release image` (`.github/workflows/release.yml`) zauważa wersję bez tagu, buduje i sprawdza
-   obraz, publikuje go z dodatkowym tagiem `X.Y.Z`, a potem tworzy na tym commicie tag `vX.Y.Z` z adnotacją.
+5. Po merge'u workflow `Release image` (`.github/workflows/release.yml`) zauważa wersję bez tagu i:
+   - sprawdza, że `CHANGELOG.md` ma wpis `## [X.Y.Z]` (bez niego nic nie zostanie otagowane);
+   - buduje i sprawdza obraz, publikuje go z dodatkowym tagiem `X.Y.Z`;
+   - tworzy na tym commicie tag `vX.Y.Z` z adnotacją;
+   - tworzy GitHub Release `vX.Y.Z`: treścią jest wpis z CHANGELOG (`node scripts/release-notes.mjs X.Y.Z`)
+     i nazwa obrazu. Gdy Release już istnieje, zostaje bez zmian. Gdy go brakuje (np. przebieg padł po utworzeniu
+     tagu), dorobi go kolejny przebieg na `main` albo ręczne uruchomienie workflow (*Run workflow*).
 
 Zasady:
 
@@ -101,8 +106,3 @@ Zasady:
 - **Wycofywanie funkcji**: najpierw MINOR z oznaczeniem „przestarzałe” i opisem zastępstwa, a usunięcie dopiero
   w kolejnym MAJOR.
 - Wersja w ścieżce API (`/api/v1`) to osobna decyzja (`docs/BACKLOG-DEFERRED.md`).
-
-## Później: GitHub Releases
-
-Gdy będziemy potrzebować release'ów, job `tag` w `release.yml` może po utworzeniu tagu wywołać
-`gh release create vX.Y.Z --notes-file <wpis z CHANGELOG>`. Tagi i CHANGELOG są już do tego przygotowane.

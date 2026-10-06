@@ -4,7 +4,7 @@ name: Release image
 # (ghcr.io/dbqm45/ci_for_sdlc, private like the repository). Run it locally with
 # `docker compose pull && docker compose up -d` (docs/LOCAL-ENVIRONMENT.md).
 # When package.json carries a version that has no tag yet (a merged "chore(release): X.Y.Z" PR), the image
-# is also tagged X.Y.Z and the commit gets the annotated git tag vX.Y.Z (docs/RELEASING.md).
+# is also tagged X.Y.Z and the commit gets the annotated git tag vX.Y.Z with a GitHub Release (docs/RELEASING.md).
 on:
   push:
     branches: [main]
@@ -36,6 +36,8 @@ jobs:
           node -e "process.exit(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(process.argv[1]) ? 0 : 1)" "$version" \
             || { echo "::error::package.json version '$version' is not X.Y.Z"; exit 1; }
           if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then new=false; else new=true; fi
+          # A new version needs its CHANGELOG.md entry (the release notes) before anything is tagged.
+          if [ "$new" = true ]; then node scripts/release-notes.mjs "$version" > /dev/null; fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "new=$new" >> "$GITHUB_OUTPUT"
           echo "Version $version, new release: $new"
@@ -106,7 +108,7 @@ jobs:
           min-versions-to-keep: 6
 
   # A released version is never moved or re-used (SemVer rule 3): the tag is created once, on the commit
-  # whose image passed the smoke test. GitHub Releases from these tags come later.
+  # whose image passed the smoke test.
   tag:
     needs: [version, image]
     if: needs.version.outputs.new == 'true'
@@ -124,3 +126,33 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git tag -a "v$VERSION" -m "Release $VERSION" "$GITHUB_SHA"
           git push origin "refs/tags/v$VERSION"
+
+  # The GitHub Release of the current version, with its CHANGELOG.md entry as notes. Runs whenever the image
+  # passed, not only right after tagging, so a release that is missing (e.g. a failed run, or v0.1.0 tagged before
+  # this job existed) is created by the next run on main or by a manual run. An existing release is left as is.
+  github-release:
+    needs: [version, image, tag]
+    if: ${{ !cancelled() && needs.image.result == 'success' && needs.tag.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Create GitHub Release v${{ needs.version.outputs.version }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          IMAGE_REF: ${{ env.IMAGE }}:${{ needs.version.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            echo "Release v$VERSION already exists"
+            exit 0
+          fi
+          node scripts/release-notes.mjs "$VERSION" > notes.md
+          printf '\n---\n\nObraz Dockera: `%s`\n' "$IMAGE_REF" >> notes.md
+          # --verify-tag: never let gh create the tag itself; it must be the one made by the tag job.
+          gh release create "v$VERSION" --verify-tag --title "v$VERSION" --notes-file notes.md

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { bump, bumpKind, changelogEntry, compareVersions, lintMessage, nextVersion } from './conventional.mjs';
+import { bump, bumpKind, changelogEntry, compareVersions, lintMessage, nextVersion, releaseNotes } from './conventional.mjs';
 
 // Expected values come from Conventional Commits 1.0.0 and SemVer 2.0.0 (docs/RELEASING.md).
 
@@ -94,4 +94,22 @@ describe('CL: changelogEntry', () => {
   it('CL-02: an entry without user-visible changes says so', () => {
     assert.match(changelogEntry('0.1.1', '2026-10-06', ['ci: x']), /Bez zmian widocznych/);
   });
+});
+
+describe('releaseNotes: CHANGELOG entry of one version', () => {
+  const changelog = [
+    '# Changelog', '', 'Intro.', '',
+    '## [0.2.0] - 2026-10-10', '', '### Nowe', '', '- **web:** zoom', '',
+    '## [0.1.0] - 2026-10-06', '', 'Pierwsza wersja.', '', '### Nowe', '', '- MVP', '',
+    '[0.2.0]: https://example.test/v0.2.0',
+  ].join('\n');
+
+  it('REL-1: the newest entry stops before the next heading', () =>
+    assert.equal(releaseNotes(changelog, '0.2.0'), '### Nowe\n\n- **web:** zoom'));
+  it('REL-2: the last entry leaves out link definitions', () =>
+    assert.equal(releaseNotes(changelog, '0.1.0'), 'Pierwsza wersja.\n\n### Nowe\n\n- MVP'));
+  it('REL-3: a missing version gives null', () => assert.equal(releaseNotes(changelog, '0.3.0'), null));
+  it('REL-4: a prefix of another version does not match', () => assert.equal(releaseNotes(changelog, '0.2'), null));
+  it('REL-5: CRLF line endings', () =>
+    assert.equal(releaseNotes(changelog.replace(/\n/g, '\r\n'), '0.2.0'), '### Nowe\n\n- **web:** zoom'));
 });

@@ -107,3 +107,14 @@ export function changelogEntry(version, date, messages) {
   if (used.size === 0) out.push('Bez zmian widocznych dla użytkownika (dokumentacja, testy, CI).', '');
   return out.join('\n');
 }
+
+/** The body of the CHANGELOG.md entry for `version` (without its "## [X.Y.Z]" heading), or null if there is none. */
+export function releaseNotes(changelog, version) {
+  const lines = changelog.replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex((l) => l.startsWith(`## [${version}]`));
+  if (start < 0) return null;
+  const end = lines.findIndex((l, i) => i > start && /^## \[/.test(l));
+  // Link reference definitions ("[0.1.0]: https://…") at the end of the file are not part of the entry.
+  const body = lines.slice(start + 1, end < 0 ? undefined : end).filter((l) => !/^\[[^\]]+\]:\s/.test(l));
+  return body.join('\n').trim() || null;
+}
