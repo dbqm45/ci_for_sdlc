@@ -2,6 +2,7 @@ import type { SemanticAnalyzer, SemanticInput, SemanticOutput } from './ai/types
 import { analyzeItem, applyDecisions, blendEpicScores, crossItemPass, findingFromDraft, scoreItem } from './analysis/analyze.js';
 import { formatClaimValue } from './analysis/claims.js';
 import { createEnv, evJira, questionOptions, type ItemCtx } from './analysis/context.js';
+import { designCoveragePercent } from './analysis/states.js';
 import { buildContextGraph, issueId, type ContextGraph } from './graph.js';
 import type {
   AnalysisResult,
@@ -427,8 +428,7 @@ function counts(list: ItemAnalysis[]): AnalysisResult['counts'] {
 function metrics(list: ItemAnalysis[], drift: DriftEvent[]): ProjectMetrics {
   const stories = list.filter((a) => a.type === 'story');
   const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 100);
-  const ui = stories.filter((s) => s.states);
-  const designCoverage = avg(ui.map((s) => (s.states!.inDesign.length ? Math.round(((s.states!.required.length - s.states!.missingInDesign.length) / s.states!.required.length) * 100) : 0)));
+  const designCoverage = avg(stories.flatMap((s) => (s.states ? [designCoveragePercent(s.states)] : [])));
   const docIssues = list.filter((a) => a.findings.some((f) => f.status === 'open' && (f.category === 'CONFLICT' || f.category === 'OUTDATED'))).length;
   const debt = { critical: 0, important: 0, minor: 0, topics: new Map<string, number>() };
   for (const a of list) {

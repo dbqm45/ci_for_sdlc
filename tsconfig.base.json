@@ -10,6 +10,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": true,
     "forceConsistentCasingInFileNames": true,
     "allowImportingTsExtensions": false
   }

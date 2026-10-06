@@ -277,8 +277,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     const given = String(req.headers['x-ci-webhook-secret'] ?? (req.query as Record<string, string>)?.secret ?? '');
     if (secret && (given.length !== secret.length || !timingSafeEqual(Buffer.from(given), Buffer.from(secret)))) throw httpError(401, 'Invalid webhook secret');
     const s = await store.settings();
-    const enabled = { jira: s.schedule.onJiraChange, confluence: s.schedule.onConfluenceChange, figma: s.schedule.onFigmaChange }[req.params.source];
-    if (enabled === undefined) throw httpError(404, 'Unknown source');
+    const sources: Record<string, boolean> = { jira: s.schedule.onJiraChange, confluence: s.schedule.onConfluenceChange, figma: s.schedule.onFigmaChange };
+    if (!Object.hasOwn(sources, req.params.source)) throw httpError(404, 'Unknown source');
+    const enabled = sources[req.params.source];
     await store.audit({ at: new Date().toISOString(), kind: 'webhook', actor: req.params.source, summary: `Change notification from ${req.params.source}${enabled ? '' : ' (ignored by settings)'}` });
     if (enabled) void engine.analyze(`${req.params.source} change`).catch(() => undefined);
     return reply.status(202).send({ accepted: enabled });

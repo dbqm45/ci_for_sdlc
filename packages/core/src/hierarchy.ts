@@ -4,6 +4,7 @@ import type { IssueType, RequirementItem } from './model.js';
 export type IssueTypeMap = Record<string, IssueType>;
 
 const LEVELS: readonly IssueType[] = ['epic', 'feature', 'story', 'task', 'subtask', 'bug'];
+const isIssueType = (v: unknown): v is IssueType => (LEVELS as readonly unknown[]).includes(v);
 
 /** Used when the Jira project has no custom mapping. Without a Feature type the hierarchy stays epic → story. */
 export const DEFAULT_ISSUE_TYPE_MAP: IssueTypeMap = {
@@ -21,8 +22,8 @@ export function resolveIssueType(name: string, opts: { subtask?: boolean } = {},
   if (opts.subtask) return 'subtask';
   const n = name.trim().toLowerCase();
   const custom = Object.entries(map).find(([k]) => k.trim().toLowerCase() === n)?.[1];
-  if (custom && (LEVELS as string[]).includes(custom)) return custom as IssueType;
-  if (DEFAULT_ISSUE_TYPE_MAP[n]) return DEFAULT_ISSUE_TYPE_MAP[n];
+  if (isIssueType(custom)) return custom;
+  if (Object.hasOwn(DEFAULT_ISSUE_TYPE_MAP, n)) return DEFAULT_ISSUE_TYPE_MAP[n];
   return n.includes('epic') ? 'epic' : n.includes('bug') ? 'bug' : n.includes('task') ? 'task' : 'story';
 }
 

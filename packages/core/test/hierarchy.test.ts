@@ -16,6 +16,12 @@ describe('issue type mapping (P1)', () => {
     expect(resolveIssueType('Sub-task', { subtask: true })).toBe('subtask');
   });
 
+  it('does not treat Object.prototype keys as known issue types', () => {
+    expect(resolveIssueType('constructor')).toBe('story');
+    expect(resolveIssueType('toString')).toBe('story');
+    expect(resolveIssueType('constructor', {}, { Other: 'epic' })).toBe('story');
+  });
+
   it('uses a configured mapping, case-insensitively, and ignores invalid levels', () => {
     const map = { Initiative: 'epic', Capability: 'feature', Feature: 'story', Weird: 'nonsense' } as Record<string, string>;
     expect(resolveIssueType('initiative', {}, map)).toBe('epic');

@@ -183,7 +183,8 @@ export class Store {
   private update<T>(name: string, fallback: T, fn: (current: T) => T | void, encrypted: boolean) {
     return this.serialized(async () => {
       const current = await this.readJson<T>(name, fallback);
-      const next = (fn(current) ?? current) as T;
+      const result = fn(current);
+      const next = result === undefined ? current : result;
       await this.writeJson(name, next, encrypted && (await this.encrypt));
       return next;
     });
