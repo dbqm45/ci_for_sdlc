@@ -15,10 +15,17 @@
     "test": "npm run test -w @ci/core && npm run test -w @ci/server",
     "test:coverage": "npm run test:coverage -w @ci/core && npm run test:coverage -w @ci/server",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --grep @smoke",
+    "test:a11y": "playwright test --grep @a11y",
+    "test:visual": "playwright test -c playwright.visual.config.ts",
+    "test:contract": "npm run test:contract -w @ci/server",
+    "test:contract:update": "npm run test:contract:update -w @ci/server",
+    "test:mutation": "npm run test:mutation -w @ci/core",
     "typecheck": "tsc -p packages/core && tsc -p packages/server && tsc -p packages/web && tsc -p e2e",
     "analyze": "npm run analyze --silent -w @ci/server --"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "concurrently": "^9.1.0",
     "typescript": "^5.6.3"

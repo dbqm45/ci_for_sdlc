@@ -16,7 +16,7 @@ const question = (page: Page, text: string) => page.locator('.question').filter(
 /** The decision log row of the newest decision for a question (the log is append-only, newest first). */
 const logRow = (page: Page, text: string) => card(page, 'Decision log').getByRole('row').filter({ hasText: text }).first();
 
-test('DEC-01: choosing an answer resolves the conflict and makes the story ready', async ({ page }) => {
+test('DEC-01: choosing an answer resolves the conflict and makes the story ready', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/#/item/CHK-201');
   const q = question(page, TIMEOUT_QUESTION);
   await expect(q.getByRole('button', { name: 'Record decision' })).toBeDisabled();

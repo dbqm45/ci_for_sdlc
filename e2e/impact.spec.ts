@@ -10,7 +10,7 @@ test.beforeEach(async ({ page, request }) => {
   await expect(heading1(page, 'Impact analysis')).toBeVisible();
 });
 
-test('IMP-01: an example change lists the affected stories, which open on click', async ({ page }) => {
+test('IMP-01: an example change lists the affected stories, which open on click', { tag: '@smoke' }, async ({ page }) => {
   await page.getByRole('button', { name: 'Allow 10 saved cards' }).click();
   const affected = card(page, 'Affected stories, bugs and epics');
   await expect(affected.getByRole('link', { name: /^PAY-123 / })).toBeVisible();

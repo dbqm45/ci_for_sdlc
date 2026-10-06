@@ -8,7 +8,7 @@ test.beforeEach(async ({ page, request }) => {
   await page.goto('/');
 });
 
-test('NAV-01: every sidebar link opens its page', async ({ page }) => {
+test('NAV-01: every sidebar link opens its page', { tag: '@smoke' }, async ({ page }) => {
   const pages: [RegExp, string, RegExp][] = [
     [/Backlog/, 'Backlog', /#\/backlog$/],
     [/Decisions/, 'Decision debt', /#\/decisions$/],

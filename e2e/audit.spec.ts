@@ -7,7 +7,7 @@ test.beforeEach(async ({ request }) => {
   await resetWorkspace(request);
 });
 
-test('AUD-01: an approval is recorded with its actor', async ({ page, request }) => {
+test('AUD-01: an approval is recorded with its actor', { tag: '@smoke' }, async ({ page, request }) => {
   await approveViaApi(request, 'PAY-123');
   await page.goto('/');
   await nav(page, /Audit log/).click();

@@ -8,7 +8,7 @@ test.beforeEach(async ({ page, request }) => {
   await page.goto('/');
 });
 
-test('OVR-01: project health shows the demo project and its health counts', async ({ page }) => {
+test('OVR-01: project health shows the demo project and its health counts', { tag: '@smoke' }, async ({ page }) => {
   await expect(heading1(page, 'Continuous Intelligence — Checkout')).toBeVisible();
   const banner = page.getByRole('banner');
   await expect(banner.getByText('4 critical')).toBeVisible();
