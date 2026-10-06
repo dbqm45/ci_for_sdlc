@@ -2,11 +2,13 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_POLICY, normalizeDecision, type Approval, type Decision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, errorMessage, normalizeDecision, type Approval, type Decision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
 import type { Principal } from './http.js';
 import { pruneToSchema, settingsBody } from './schemas.js';
 
 export type { Settings };
+
+const isErrno = (e: unknown): e is NodeJS.ErrnoException => e instanceof Error && 'code' in e;
 
 /** Shown in Settings (P1); unmapped Jira types still fall back to the core defaults and then to story. */
 export const DEFAULT_JIRA_ISSUE_TYPES: Record<string, IssueType> = { Epic: 'epic', Feature: 'feature', Story: 'story' };
@@ -115,8 +117,8 @@ export class Store {
     try {
       raw = await readFile(p, 'utf8');
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return fallback;
-      throw new StoreReadError(name, (e as Error).message);
+      if (isErrno(e) && e.code === 'ENOENT') return fallback;
+      throw new StoreReadError(name, errorMessage(e));
     }
     try {
       const parsed = JSON.parse(raw);
@@ -129,7 +131,7 @@ export class Store {
       }
       return parsed as T;
     } catch (e) {
-      throw new StoreReadError(name, (e as Error).message);
+      throw new StoreReadError(name, errorMessage(e));
     }
   }
 
@@ -215,7 +217,7 @@ export class Store {
       return new Map(Object.entries(await this.readJson<Record<string, SemanticOutput>>('ai-cache.json', {})));
     } catch (e) {
       // A cache can always be rebuilt; losing it only costs extra AI calls.
-      console.warn(`[store] ${(e as Error).message} Starting with an empty AI cache.`);
+      console.warn(`[store] ${errorMessage(e)} Starting with an empty AI cache.`);
       return new Map();
     }
   }

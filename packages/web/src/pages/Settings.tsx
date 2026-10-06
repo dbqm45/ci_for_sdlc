@@ -1,7 +1,7 @@
 import type { AiEffort, AiProviderKind, Settings as SettingsData } from '@ci/core';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../App';
-import { api, currentUser, setCurrentUser } from '../api';
+import { api, ApiError, currentUser, errMsg, setCurrentUser } from '../api';
 import { Card, Spinner } from '../components/ui';
 
 const EFFORTS: readonly AiEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -24,8 +24,13 @@ export function Settings() {
   const [test, setTest] = useState<Record<string, string>>();
   const [user, setUser] = useState(currentUser());
 
+  const load = async () => {
+    const d = await api.settings();
+    setData(d);
+    setS(structuredClone(d.settings));
+  };
   useEffect(() => {
-    void api.settings().then((d) => (setData(d), setS(structuredClone(d.settings))));
+    void load();
     void api.rules().then(setRules);
   }, []);
   if (!s || !data) return <div className="empty"><Spinner /></div>;
@@ -42,13 +47,17 @@ export function Settings() {
     setSaving(true);
     try {
       setCurrentUser(user);
-      const r = await api.saveSettings(s);
+      const r = await api.saveSettings(s, data.etag);
       setS(r.settings);
+      setData((d) => d && { ...d, settings: r.settings, etag: r.etag });
       toast('Settings saved');
       await api.analyze();
       await refresh();
     } catch (e) {
-      toast((e as Error).message);
+      if (e instanceof ApiError && (e.status === 412 || e.status === 428)) {
+        await load();
+        toast('Settings were changed elsewhere and have been reloaded. Apply your change again.');
+      } else toast(errMsg(e));
     } finally {
       setSaving(false);
     }

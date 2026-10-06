@@ -3,7 +3,7 @@ import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, impactAnalysis, recordDecision, withdrawDecision, type Decision, type DecisionEffect, type IssueType, type NewDecision } from '@ci/core';
+import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type Decision, type DecisionEffect, type IssueType, type NewDecision } from '@ci/core';
 import { Engine } from './engine.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { MUTATION, approveBody, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
@@ -268,7 +268,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       if (s.integrations.confluence.enabled) out.confluence = `OK — ${ctx.documents.length} pages`;
       if (s.integrations.figma.enabled) out.figma = `OK — ${ctx.frames.length} frames`;
     } catch (e) {
-      out.error = (e as Error).message;
+      out.error = errorMessage(e);
     }
     return out;
   });

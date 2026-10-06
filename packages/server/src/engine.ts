@@ -4,6 +4,7 @@ import {
   activeDecisions,
   analyzeProject,
   approvalBaseline,
+  errorMessage,
   createSemanticAnalyzer,
   demoProject,
   fetchConfluence,
@@ -143,7 +144,7 @@ export class Engine extends EventEmitter {
       return result;
     } catch (e) {
       this.state.running = false;
-      this.state.lastError = (e as Error).message;
+      this.state.lastError = errorMessage(e);
       this.emit('status', { running: false, error: this.state.lastError });
       throw e;
     }

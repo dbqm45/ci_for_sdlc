@@ -14,5 +14,6 @@ export * from './ai/providers.js';
 export { demoProject, DEMO_SCENARIOS } from './connectors/demo.js';
 export * from './hierarchy.js';
 export * from './settings.js';
+export { errorMessage } from './errors.js';
 export { fetchJira, fetchConfluence, jiraIssueToRequirement, adfToText, splitSections, type JiraConfig, type ConfluenceConfig } from './connectors/atlassian.js';
 export { fetchFigma, framesFromDocument, type FigmaConfig } from './connectors/figma.js';

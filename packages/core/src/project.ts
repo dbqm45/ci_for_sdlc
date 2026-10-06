@@ -3,6 +3,7 @@ import { analyzeItem, applyDecisions, blendEpicScores, crossItemPass, findingFro
 import { formatClaimValue } from './analysis/claims.js';
 import { createEnv, evJira, questionOptions, type ItemCtx } from './analysis/context.js';
 import { designCoveragePercent } from './analysis/states.js';
+import { errorMessage } from './errors.js';
 import { buildContextGraph, issueId, type ContextGraph } from './graph.js';
 import type {
   AnalysisResult,
@@ -101,7 +102,7 @@ export async function analyzeProject(ctx: ProjectContext, opts: AnalyzeOptions =
       try {
         await semanticPass(a, ctxs.get(a.key)!, env.decisionsByQuestion, opts.ai!, now);
       } catch (e) {
-        aiErrors.push(`${a.key}: ${(e as Error).message}`);
+        aiErrors.push(`${a.key}: ${errorMessage(e)}`);
       }
     });
   }
@@ -252,7 +253,7 @@ async function semanticPass(a: ItemAnalysis, c: ItemCtx, decided: Map<string, De
   try {
     out = cached ?? (await ai.analyzer.analyze(input));
   } catch (e) {
-    ai.onAudit?.({ at: now, itemKey: r.key, provider: ai.analyzer.provider, model: ai.analyzer.model, sources: sources.map((s) => ({ ref: s.ref, entityId: s.entityId, title: s.title, chars: s.content.length })), inputHash, cached: false, findings: 0, discarded: 0, challenges: 0, error: (e as Error).message });
+    ai.onAudit?.({ at: now, itemKey: r.key, provider: ai.analyzer.provider, model: ai.analyzer.model, sources: sources.map((s) => ({ ref: s.ref, entityId: s.entityId, title: s.title, chars: s.content.length })), inputHash, cached: false, findings: 0, discarded: 0, challenges: 0, error: errorMessage(e) });
     throw e;
   }
   if (!cached) ai.cache.set(inputHash, out);

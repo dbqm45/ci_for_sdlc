@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, type ImpactReport } from '../api';
+import { api, type ImpactReport, errMsg } from '../api';
 import { Card, Source, Spinner, StatusBadge } from '../components/ui';
 
 const EXAMPLES = ['Change payment timeout from 30s to 60s', 'Make payment retry idempotent', 'Allow 10 saved cards', 'jira:PAY-125'];
@@ -18,7 +18,7 @@ export function Impact() {
     try {
       setRep(await api.impact(query));
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errMsg(e));
     } finally {
       setBusy(false);
     }

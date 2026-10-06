@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api, type AnalysisResult } from './api';
+import { api, type AnalysisResult, errMsg } from './api';
 import { ago, Spinner } from './components/ui';
 import { Overview } from './pages/Overview';
 import { Backlog } from './pages/Backlog';
@@ -66,7 +66,7 @@ export function App() {
       setVersion((v) => v + 1);
       setError(undefined);
     } catch (e) {
-      setError((e as Error).message);
+      setError(errMsg(e));
     }
   }, []);
 
@@ -78,7 +78,7 @@ export function App() {
       setVersion((v) => v + 1);
       toast(`Analysis complete — ${r.counts.critical} critical, ${r.drift.length} drift events`);
     } catch (e) {
-      toast((e as Error).message);
+      toast(errMsg(e));
     } finally {
       setRunning(false);
     }
