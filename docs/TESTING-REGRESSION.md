@@ -68,6 +68,10 @@ hierarchia, strażniki, odcisk zmian (drift) i stany UI. Mutanty statyczne (tabl
 bo kosztują 99% czasu. Wynik jest wskaźnikiem jakości testów, nie celem: przeżyty mutant to brakujący przypadek testowy.
 Próg `break` jest ustawiony tuż pod zmierzonym wynikiem, żeby wynik nie spadał niezauważony.
 
+Pierwszy pomiar (749 mutantów, ok. 8 min): **28,6%**, próg `break: 25`. Najsłabiej: `analysis/states.ts` (13,6%),
+`impact.ts` (18,7%), `analysis/fingerprint.ts` (26,1%); najlepiej `guards.ts` (74,4%) i `hierarchy.ts` (71,4%).
+Każdy dopisany test, który zabija przeżyte mutanty, uzasadnia podniesienie progu.
+
 ## Niestabilne testy i kwarantanna
 
 - Test raz zielony, raz czerwony bez zmiany kodu to **defekt** (testu albo aplikacji), nie pech.
