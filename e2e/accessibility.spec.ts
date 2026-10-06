@@ -42,19 +42,32 @@ for (const [name, url, title] of PAGES) {
   test(`A11Y-${name}: no WCAG 2 A/AA violations`, { tag: '@a11y' }, async ({ page }) => {
     await page.goto(url);
     await expect(heading1(page, title)).toBeVisible();
-
-    const { violations } = await axe(page).disableRules(['color-contrast']).analyze();
-    expect(violations.map((v) => `${v.id}: ${v.help} → ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
-
-    const contrast = await axe(page).withRules(['color-contrast']).analyze();
-    const pairs = contrast.violations.flatMap((v) =>
-      v.nodes.map((n) => {
-        const d = n.any[0]?.data as { fgColor?: string; bgColor?: string } | undefined;
-        return { pair: `${d?.fgColor} on ${d?.bgColor}`, target: n.target.join(' ') };
-      }),
-    );
-    expect(pairs.filter((p) => !KNOWN_LOW_CONTRAST.has(p.pair)), 'new low-contrast colors').toEqual([]);
+    await expectAccessible(page);
   });
+}
+
+test('A11Y-item-context: the context graph and its controls have no WCAG 2 A/AA violations', { tag: '@a11y' }, async ({ page }) => {
+  await page.goto('/#/item/PAY-123');
+  await page.getByRole('button', { name: /^Context \(\d+\)$/ }).click();
+  await expect(page.getByRole('group', { name: 'Context graph' })).toBeVisible();
+  await expectAccessible(page);
+  await page.getByRole('button', { name: /Enlarge/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Context graph (enlarged)' })).toBeVisible();
+  await expectAccessible(page);
+});
+
+async function expectAccessible(page: Page) {
+  const { violations } = await axe(page).disableRules(['color-contrast']).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.help} → ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+
+  const contrast = await axe(page).withRules(['color-contrast']).analyze();
+  const pairs = contrast.violations.flatMap((v) =>
+    v.nodes.map((n) => {
+      const d = n.any[0]?.data as { fgColor?: string; bgColor?: string } | undefined;
+      return { pair: `${d?.fgColor} on ${d?.bgColor}`, target: n.target.join(' ') };
+    }),
+  );
+  expect(pairs.filter((p) => !KNOWN_LOW_CONTRAST.has(p.pair)), 'new low-contrast colors').toEqual([]);
 }
 
 test('A11Y-SNAP-01: the sidebar exposes every section as a named link', { tag: '@a11y' }, async ({ page }) => {
