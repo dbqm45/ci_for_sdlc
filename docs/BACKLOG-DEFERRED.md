@@ -40,3 +40,12 @@ Lista propozycji, które świadomie odłożono, żeby o nich nie zapomnieć. Ka�
 - **`400` zamiast `422` dla błędów walidacji** (albo odwrotnie, ale jednolicie). To zmiana łamiąca kontrakt, więc razem z `/api/v1`.
 - **`exactOptionalPropertyTypes`** w `tsconfig`. Wymaga przejrzenia wszystkich pól opcjonalnych (`undefined` a brak pola).
 - **Runner testów dla `packages/web`** (np. Vitest z Testing Library). Dziś web ma tylko typecheck i build; m.in. przepływ `412` przy zapisie ustawień nie ma testu automatycznego.
+
+## Repozytorium i CI
+
+- **Wymagany check tytułu PR na `main`.** Ruleset (lub klasyczna ochrona gałęzi) z wymaganym checkiem
+  `conventional-commit` (workflow `PR title`) i zakazem bezpośrednich pushy. Teraz nie działa: na planie GitHub Free
+  reguły w repozytorium prywatnym są tylko zapisane („Not enforced”). Wymaga GitHub Pro/Team albo repozytorium
+  publicznego. Do tego czasu tytuł sprawdza sam workflow, ale nie blokuje merge'a. Kroki: Settings → Rules → Rulesets
+  → New branch ruleset → Include default branch → Require a pull request + Require status checks to pass
+  (`conventional-commit`). Przy okazji: tylko *squash merging* z domyślnym komunikatem *Pull request title*.
