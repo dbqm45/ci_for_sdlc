@@ -12,7 +12,7 @@ import type {
 } from '../model.js';
 import { DIMENSIONS } from '../model.js';
 import { hash } from '../text.js';
-import { aiFindingsAction, type SeverityAction } from '../policy.js';
+import { aiFindingsAction, driftReactionOf, type SeverityAction } from '../policy.js';
 import { evJira, itemContext, questionOptions, type AnalysisEnv, type ItemCtx } from './context.js';
 import { RULES, taskCoverage, type FindingDraft } from './rules.js';
 import { challenges, journeyCoverage, stateCoverage } from './states.js';
@@ -94,10 +94,14 @@ export function applyDecisions(env: AnalysisEnv, a: ItemAnalysis) {
   }
 }
 
-/** Effective policy action for a finding: AI findings that would block follow `policy.aiFindings` (P2). */
+/**
+ * Effective policy action for a finding: AI findings that would block follow
+ * `policy.aiFindings` (P2); drift after approval follows `policy.driftReaction` (P4).
+ */
 function actionFor(env: AnalysisEnv, f: Finding): SeverityAction {
   const base = env.policy.actions[f.severity];
   f.needsConfirmation = undefined;
+  if (f.origin === 'drift') return driftReactionOf(env.policy) === 'review_required' ? 'block' : base === 'record' ? 'record' : 'notify';
   if (f.origin !== 'ai' || base !== 'block') return base;
   const mode = aiFindingsAction(env.policy);
   if (mode === 'block') return 'block';
@@ -134,6 +138,7 @@ export function scoreItem(env: AnalysisEnv, a: ItemAnalysis, ctx?: ItemCtx) {
   });
 
   const blocking = open.filter((f) => action.get(f) === 'block');
+  for (const f of a.findings) f.blocks = blocking.includes(f) || undefined;
   const notify = open.filter((f) => action.get(f) === 'notify');
   const weights: Record<Dimension, number> = { requirements: 1.3, design: 1, documentation: 0.8, architecture: 1.2, userJourneys: 1, errorHandling: 1.1, dependencies: 0.6 };
   const total = a.dimensions.reduce((s, d) => s + weights[d.dimension], 0);
@@ -377,6 +382,9 @@ export function blendEpicScores(items: Map<string, ItemAnalysis>, env: AnalysisE
       a.health = Math.min(a.health, 84);
     }
     if (notReady.length) a.blockingIssues.push(`${notReady.length} of ${stories.length} stories not ready (${notReady.map((s) => s.key).join(', ')})`);
+    // P7: drift on an approved story is visible on the epic.
+    const review = stories.filter((s) => s.findings.some((f) => f.origin === 'drift' && f.status === 'open'));
+    if (review.length) a.blockingIssues.push(`Changed since approval, review needed: ${review.map((s) => s.key).join(', ')}`);
   }
 }
 

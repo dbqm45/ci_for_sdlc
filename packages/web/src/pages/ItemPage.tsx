@@ -39,6 +39,8 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
   const decisionFor = (qid?: string) => d.decisions.find((x) => x.questionId === qid);
 
   const approvable = a.type === 'story' || a.type === 'bug';
+  // Only drift blocks: the change needs a review, not a forced approval (P4).
+  const reviewNeeded = a.readiness === 'not_ready' && a.findings.some((f) => f.blocks && f.origin === 'drift') && !a.findings.some((f) => f.blocks && f.origin !== 'drift');
   const approve = async (force?: boolean) => {
     let forced: { reason: string } | undefined;
     if (force) {
@@ -115,6 +117,11 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
           <button className="btn" onClick={aiReview} disabled={aiBusy} title="Semantic review + adversarial questions by the configured AI provider">
             {aiBusy ? <Spinner /> : '✦'} AI review
           </button>
+          {d.approval && reviewNeeded && (
+            <button className="btn primary" onClick={() => approve()} title="The approved specification changed in meaning. Re-approve to accept the change as the new baseline.">
+              Re-approve after review
+            </button>
+          )}
           {d.approval ? (
             <button className="btn" onClick={async () => (await api.unapprove(a.key), changed())}>
               Withdraw approval

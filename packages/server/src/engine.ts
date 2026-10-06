@@ -117,6 +117,12 @@ export class Engine extends EventEmitter {
       await Promise.all(audits);
       if (this.aiCache.size !== cacheSize) await this.store.saveAiCache(this.aiCache);
 
+      if (result.invalidatedApprovals?.length) {
+        const revoked = new Set(result.invalidatedApprovals);
+        await this.store.updateApprovals((all) => all.filter((a) => !revoked.has(a.itemKey)));
+        for (const key of revoked)
+          await this.store.audit({ at: result.analyzedAt, kind: 'approval_removed', actor: 'system', summary: `Approval of ${key} revoked: its specification changed in meaning (drift reaction: invalidate)` });
+      }
       await this.store.saveSnapshot(snapshot);
       if (result.drift.length) await this.store.appendDriftLog(result.drift);
       await this.store.appendHistory({
@@ -146,7 +152,7 @@ export class Engine extends EventEmitter {
     const { result, graph } = this.state;
     const item = result?.items.find((i) => i.key === key);
     if (!item || !graph) throw new Error(`Unknown item ${key}`);
-    const approval: Approval = { itemKey: key, approvedAt: new Date().toISOString(), approvedBy: by, contextHashes: approvalBaseline(graph, item), ...(forced && { forced: true, reason: forced.reason }) };
+    const approval: Approval = { itemKey: key, approvedAt: new Date().toISOString(), approvedBy: by, ...approvalBaseline(graph, item), ...(forced && { forced: true, reason: forced.reason }) };
     await this.store.updateApprovals((all) => [...all.filter((a) => a.itemKey !== key), approval]);
     const summary = forced
       ? `${key} force-approved despite blocking issues (${item.blockingIssues.join('; ') || 'none'}). Reason: ${forced.reason}`

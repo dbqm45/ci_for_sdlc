@@ -86,7 +86,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     if (!item) throw Object.assign(new Error('Not found'), { statusCode: 404 });
     if (!APPROVABLE.has(item.type)) throw Object.assign(new Error(`${item.key} is a ${item.type}; its readiness is derived from its stories and cannot be approved directly.`), { statusCode: 409 });
     let forced: { reason: string } | undefined;
-    if (item.readiness === 'not_ready') {
+    // Drift alone (P4 review_required) is cleared by re-approving; anything else blocking needs a forced approval.
+    if (item.readiness === 'not_ready' && item.findings.some((f) => f.blocks && f.origin !== 'drift')) {
       if (!req.body?.force) throw Object.assign(new Error(`${item.key} has blocking issues and cannot be approved.`), { statusCode: 409 });
       const reason = req.body.reason?.trim();
       if (!reason) throw Object.assign(new Error('A forced approval requires a reason.'), { statusCode: 400 });

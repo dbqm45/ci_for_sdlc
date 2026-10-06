@@ -12,6 +12,7 @@ import type {
   RequirementItem,
 } from './model.js';
 import { TfIdf, cosine, hash, sharedTerms, type Vector } from './text.js';
+import { documentMeaning, frameMeaning, requirementMeaning } from './analysis/fingerprint.js';
 
 export const issueId = (key: string) => `jira:${key}`;
 export const docId = (id: string) => `confluence:${id}`;
@@ -113,11 +114,12 @@ export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = [
       updatedAt: r.updatedAt,
       text,
       contentHash: hash(text + r.status),
+      meaningHash: requirementMeaning(r, issueId(r.key)),
     });
   }
   for (const d of ctx.documents) {
     const text = documentText(d);
-    g.addEntity({ id: docId(d.id), kind: 'document', source: 'confluence', title: d.title, url: d.url, updatedAt: d.updatedAt, text, contentHash: hash(text) });
+    g.addEntity({ id: docId(d.id), kind: 'document', source: 'confluence', title: d.title, url: d.url, updatedAt: d.updatedAt, text, contentHash: hash(text), meaningHash: documentMeaning(d, docId(d.id)) });
   }
   for (const f of ctx.frames) {
     const text = frameText(f);
@@ -130,6 +132,7 @@ export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = [
       updatedAt: f.updatedAt,
       text,
       contentHash: hash(text + f.transitions.join(',')),
+      meaningHash: frameMeaning(f, frameId(f)),
     });
   }
   for (const dec of decisions) {

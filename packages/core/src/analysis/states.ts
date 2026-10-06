@@ -1,6 +1,7 @@
 import type { Challenge, DesignFrame, Journey, JourneyCoverage, SourceSystem, StateCoverage, UiState } from '../model.js';
 import { evDecision, evDoc, evJira, questionOptions, type ItemCtx } from './context.js';
-import { DESIGN_STATE_PATTERNS, JOURNEY_PATTERNS, STATE_PATTERNS } from './vocabulary.js';
+import { frameStates } from './fingerprint.js';
+import { JOURNEY_PATTERNS, STATE_PATTERNS } from './vocabulary.js';
 
 /**
  * State-machine view of a feature: which UI states must exist (derived from
@@ -13,14 +14,7 @@ export function statesIn(text: string): UiState[] {
 }
 
 export function designStates(frames: DesignFrame[]): UiState[] {
-  const out = new Set<UiState>();
-  for (const f of frames) {
-    const labels = [f.name, ...f.texts];
-    for (const s of Object.keys(DESIGN_STATE_PATTERNS) as UiState[]) {
-      // Frame names are authoritative; text layers only count for short labels (variants / headings).
-      if (DESIGN_STATE_PATTERNS[s].test(f.name) || labels.some((t) => t.length <= 40 && DESIGN_STATE_PATTERNS[s].test(t))) out.add(s);
-    }
-  }
+  const out = new Set<UiState>(frames.flatMap(frameStates));
   // A frame with only a form and submit button still represents "idle".
   if (frames.length) out.add('idle');
   return [...out];

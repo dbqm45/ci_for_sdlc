@@ -107,8 +107,10 @@ export interface Entity {
   updatedAt?: string;
   /** Plain text used for semantic matching. */
   text: string;
-  /** Hash of the normalized content — used for drift detection. */
+  /** Hash of the normalized content — any edit changes it (history). */
   contentHash: string;
+  /** Hash of what the artifact says (claims, acceptance criteria, states) — drives the drift reaction (P5). */
+  meaningHash?: string;
 }
 
 export type RelationType =
@@ -249,6 +251,8 @@ export interface Finding {
   resolution?: { decisionId: string; summary: string };
   /** AI finding that would block but waits for a human to confirm it (policy `require_confirmation`). */
   needsConfirmation?: boolean;
+  /** Set by scoring: the open finding makes the item NOT READY under the current policy. */
+  blocks?: boolean;
   /** Set when a human confirmed an AI finding; it stays open and counts at full severity. */
   confirmation?: { decisionId: string; by: string; at: string };
 }
@@ -396,6 +400,11 @@ export interface Approval {
   forced?: true;
   /** Required justification of a forced approval. */
   reason?: string;
+  /**
+   * Meaning fingerprints at approval time (P5). Approvals stored before this
+   * existed fall back to `contextHashes`, so any edit counts as drift.
+   */
+  meaningHashes?: Record<string, string>;
 }
 
 export interface ChecklistGroup {
@@ -480,5 +489,7 @@ export interface AnalysisResult {
   topRisks: { key: string; title: string; reason: string; severity: Severity }[];
   domains: { name: string; items: number; critical: number; needsAttention: number }[];
   drift: DriftEvent[];
+  /** Approvals the drift reaction `invalidate` revoked in this run; the server removes them. */
+  invalidatedApprovals?: string[];
   ai: { enabled: boolean; provider?: string; model?: string; errors: string[] };
 }

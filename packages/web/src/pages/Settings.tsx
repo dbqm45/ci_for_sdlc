@@ -224,6 +224,13 @@ export function Settings() {
               <option value="notify">Notify only (NEEDS ATTENTION)</option>
             </select>
           </Field>
+          <Field label="🔁 When an approved story changes in meaning">
+            <select className="input" value={s.policy.driftReaction ?? 'review_required'} onChange={(e) => set('policy.driftReaction', e.target.value)}>
+              <option value="review_required">Require review and re-approval (NOT READY)</option>
+              <option value="warn">Warn only (NEEDS ATTENTION)</option>
+              <option value="invalidate">Revoke the approval</option>
+            </select>
+          </Field>
         </div>
         <h3 style={{ margin: '18px 0 8px' }}>Rules</h3>
         <table className="table">
