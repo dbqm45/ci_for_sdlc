@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import {
   DEMO_SCENARIOS,
+  activeDecisions,
   analyzeProject,
   approvalBaseline,
   createSemanticAnalyzer,
@@ -9,10 +10,12 @@ import {
   fetchFigma,
   fetchJira,
   type AnalysisResult,
+  type Approval,
   type ContextGraph,
   type ProjectContext,
   type SemanticOutput,
 } from '@ci/core';
+import type { Principal } from './http.js';
 import type { Settings, Store } from './store.js';
 
 export interface EngineState {
@@ -71,7 +74,7 @@ export class Engine extends EventEmitter {
     this.emit('status', { running: true, reason });
     try {
       const settings = await this.store.settings();
-      const [context, decisions, approvals, previous] = await Promise.all([this.loadContext(settings), this.store.decisions(), this.store.approvals(), this.store.snapshot()]);
+      const [context, decisions, approvals, previous] = await Promise.all([this.loadContext(settings), this.store.decisions().then(activeDecisions), this.store.approvals(), this.store.snapshot()]);
 
       const analyzer = createSemanticAnalyzer(settings.ai, {
         anthropicApiKey: process.env.ANTHROPIC_API_KEY,
@@ -115,10 +118,15 @@ export class Engine extends EventEmitter {
       await Promise.all(audits);
       if (this.aiCache.size !== cacheSize) await this.store.saveAiCache(this.aiCache);
 
+      if (result.invalidatedApprovals?.length) {
+        const revoked = new Set(result.invalidatedApprovals);
+        await this.store.updateApprovals((all) => all.filter((a) => !revoked.has(a.itemKey)));
+        for (const key of revoked)
+          await this.store.audit({ at: result.analyzedAt, kind: 'approval_removed', actor: 'system', summary: `Approval of ${key} revoked: its specification changed in meaning (drift reaction: invalidate)` });
+      }
       await this.store.saveSnapshot(snapshot);
-      if (result.drift.length) await this.store.saveDriftLog([...(await this.store.driftLog()), ...result.drift]);
-      const history = await this.store.history();
-      history.push({
+      if (result.drift.length) await this.store.appendDriftLog(result.drift);
+      await this.store.appendHistory({
         at: result.analyzedAt,
         healthy: result.counts.healthy,
         needsAttention: result.counts.needsAttention,
@@ -127,7 +135,6 @@ export class Engine extends EventEmitter {
         specificationHealth: result.metrics.specificationHealth,
         decisionDebt: result.metrics.decisionDebt.critical + result.metrics.decisionDebt.important + result.metrics.decisionDebt.minor,
       });
-      await this.store.saveHistory(history);
       await this.store.audit({ at: result.analyzedAt, kind: 'analysis', actor: 'system', summary: `Analysis (${reason}): ${result.counts.critical} critical, ${result.counts.needsAttention} need attention, ${result.drift.length} drift events in ${result.durationMs} ms` });
 
       this.state = { result, graph, context, running: false, lastReason: reason };
@@ -142,22 +149,26 @@ export class Engine extends EventEmitter {
     }
   }
 
-  async approve(key: string, by: string) {
+  async approve(key: string, { actor: by, via }: { actor: string; via?: Principal }, forced?: { reason: string }) {
     const { result, graph } = this.state;
     const item = result?.items.find((i) => i.key === key);
     if (!item || !graph) throw new Error(`Unknown item ${key}`);
-    const approvals = (await this.store.approvals()).filter((a) => a.itemKey !== key);
-    approvals.push({ itemKey: key, approvedAt: new Date().toISOString(), approvedBy: by, contextHashes: approvalBaseline(graph, item) });
-    await this.store.saveApprovals(approvals);
-    await this.store.audit({ at: new Date().toISOString(), kind: 'approval', actor: by, summary: `${key} approved as ready for implementation (health ${item.health})` });
+    const approval: Approval = { itemKey: key, approvedAt: new Date().toISOString(), approvedBy: by, ...approvalBaseline(graph, item), ...(forced && { forced: true, reason: forced.reason }) };
+    await this.store.updateApprovals((all) => [...all.filter((a) => a.itemKey !== key), approval]);
+    const summary = forced
+      ? `${key} force-approved despite blocking issues (${item.blockingIssues.join('; ') || 'none'}). Reason: ${forced.reason}`
+      : `${key} approved as ready for implementation (health ${item.health})`;
+    await this.store.audit({ at: approval.approvedAt, kind: 'approval', actor: by, via, summary });
   }
 
   async applyDemoScenario(id: string) {
     const s = DEMO_SCENARIOS.find((x) => x.id === id);
     if (!s) throw new Error(`Unknown scenario ${id}`);
-    const ctx = (await this.store.demoContext()) ?? demoProject();
-    s.apply(ctx);
-    await this.store.saveDemoContext(ctx);
+    await this.store.updateDemoContext((saved) => {
+      const ctx = saved ?? demoProject();
+      s.apply(ctx);
+      return ctx;
+    });
     await this.store.audit({ at: new Date().toISOString(), kind: 'demo_change', actor: 'demo', summary: s.title });
   }
 

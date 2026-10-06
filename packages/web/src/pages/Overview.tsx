@@ -48,7 +48,7 @@ export function Overview() {
       </div>
 
       <div className="grid g4">
-        <Stat label="Epics" value={a.counts.epics} />
+        <Stat label="Epics" value={a.counts.epics} sub={a.counts.features ? `${a.counts.features} features` : undefined} />
         <Stat label="Stories" value={a.counts.stories} sub={`${a.counts.bugs} bugs · ${a.counts.tasks} tasks`} />
         <Stat label="Warnings" value={a.counts.warnings} tone="warn" sub="open findings" />
         <Stat label="Critical" value={a.counts.criticalFindings} tone="bad" sub="blocking findings" />

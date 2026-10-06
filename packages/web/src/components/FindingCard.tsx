@@ -15,6 +15,8 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
         <span className="small muted">{DIMENSION_LABELS[finding.dimension]}</span>
         {finding.origin === 'ai' && <span className="badge accent" title="Found by the semantic AI reviewer — backed by cited evidence">AI</span>}
         {finding.origin === 'drift' && <span className="badge warn">Drift</span>}
+        {finding.needsConfirmation && <span className="badge warn" title="AI finding — blocks only after a human confirms it">Needs confirmation</span>}
+        {finding.confirmation && <span className="badge" title={`Confirmed by ${finding.confirmation.by}`}>Confirmed</span>}
         <span className="right small faint mono" title="Rule that produced this finding">{finding.ruleId}</span>
       </div>
       <div className="title">{finding.title}</div>
@@ -43,6 +45,7 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
           ))}
         </div>
       )}
+      {finding.needsConfirmation && finding.question && <ConfirmButton finding={finding} onChanged={onChanged} />}
       {finding.resolution && (
         <div className="resolution">
           ✓ {finding.status === 'accepted_risk' ? 'Risk accepted' : finding.status === 'dismissed' ? 'Dismissed' : 'Decided'}: {finding.resolution.summary}
@@ -50,7 +53,7 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
             <span className="small" style={{ color: 'var(--muted)' }}>
               {' '}
               — {decision.decidedBy}, {new Date(decision.decidedAt).toLocaleString()}{' '}
-              <button className="btn ghost sm" onClick={async () => (await api.reopen(decision.id), onChanged())}>
+              <button className="btn ghost sm" onClick={async () => (await api.reopen(decision.id)) && onChanged()}>
                 Re-open
               </button>
             </span>
@@ -58,6 +61,29 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
         </div>
       )}
       {!closed && finding.question && <QuestionBox question={finding.question} findingId={finding.id} itemKey={finding.itemKey} onDecided={onChanged} allowRisk />}
+    </div>
+  );
+}
+
+/** P2: a human confirms an AI finding; it then blocks like a rule finding. */
+function ConfirmButton({ finding, onChanged }: { finding: Finding; onChanged: () => void }) {
+  const [err, setErr] = useState<string>();
+  const q = finding.question!;
+  const confirm = async () => {
+    try {
+      await api.decide({ questionId: q.id, findingId: finding.id, itemKey: finding.itemKey, topic: q.topic, question: q.text, answer: 'AI finding confirmed', decidedBy: currentUser(), effect: 'confirm' });
+      onChanged();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+  return (
+    <div className="row wrap">
+      <button className="btn sm" onClick={confirm} title="The finding is real — let it block readiness">
+        Confirm AI finding
+      </button>
+      <span className="small muted">Until confirmed it only needs attention.</span>
+      {err && <div className="banner bad">{err}</div>}
     </div>
   );
 }

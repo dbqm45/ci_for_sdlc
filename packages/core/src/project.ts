@@ -17,12 +17,12 @@ import type {
   Severity,
   SourceSystem,
 } from './model.js';
-import { DEFAULT_POLICY, type AnalysisPolicy } from './policy.js';
+import { DEFAULT_POLICY, driftReactionOf, type AnalysisPolicy } from './policy.js';
 import { hash } from './text.js';
 
 export interface Snapshot {
   analyzedAt: string;
-  entities: Record<string, { hash: string; title: string; source?: SourceSystem }>;
+  entities: Record<string, { hash: string; meaning?: string; title: string; source?: SourceSystem }>;
   claims: Record<string, { value: string; title: string; entityId: string; text: string }>;
   items: Record<string, { readiness: string; health: number; title: string }>;
 }
@@ -107,29 +107,34 @@ export async function analyzeProject(ctx: ProjectContext, opts: AnalyzeOptions =
 
   // ---------------- drift against approved baselines ----------------
   const approvals = new Map((opts.approvals ?? []).map((a) => [a.itemKey, a]));
+  const reaction = driftReactionOf(policy);
+  const invalidated: string[] = [];
   for (const [key, ap] of approvals) {
     const a = items.get(key);
     if (!a) continue;
-    const changed: Evidence[] = [];
-    for (const [entityId, h] of Object.entries(ap.contextHashes)) {
-      const e = built.graph.entities.get(entityId);
-      if (!e) changed.push({ source: 'jira', entityId, title: `${entityId} (removed)` });
-      else if (e.contentHash !== h) changed.push({ source: e.source ?? 'jira', entityId, title: e.title, url: e.url });
-    }
+    const changed = changedSinceApproval(built.graph, a, ap);
     if (!changed.length) continue;
+    if (reaction === 'invalidate') invalidated.push(key);
+    const question =
+      reaction === 'invalidate'
+        ? undefined
+        : { text: 'Is the approved specification still valid after these changes?', options: ['Still valid — re-approve', 'Re-open — specification must be updated'], topic: 'drift' };
     a.findings.push(
       findingFromDraft(
         'DRIFT-001',
         key,
         {
-          disc: hash(changed.map((c) => c.entityId + built.graph.entities.get(c.entityId)?.contentHash).join('|')),
+          disc: hash(changed.map((c) => c.entityId + (built.graph.entities.get(c.entityId)?.meaningHash ?? built.graph.entities.get(c.entityId)?.contentHash)).join('|')),
           category: 'DRIFT',
           severity: 'warning',
           dimension: changed.some((c) => c.source === 'figma') ? 'design' : changed.some((c) => c.source === 'confluence') ? 'documentation' : 'requirements',
-          title: `Impact detected: ${changed.length} related artifact${changed.length > 1 ? 's' : ''} changed since approval`,
-          explanation: `${key} was approved as ready on ${ap.approvedAt.slice(0, 10)} by ${ap.approvedBy}. Since then these artifacts changed: ${changed.map((c) => c.title).join('; ')}. The approved specification may no longer be consistent.`,
+          title:
+            reaction === 'invalidate'
+              ? `Approval revoked: ${changed.length} related artifact${changed.length > 1 ? 's' : ''} changed in meaning`
+              : `Impact detected: ${changed.length} related artifact${changed.length > 1 ? 's' : ''} changed since approval`,
+          explanation: `${key} was approved as ready on ${ap.approvedAt.slice(0, 10)} by ${ap.approvedBy}. Since then these artifacts changed: ${changed.map((c) => c.title).join('; ')}. The approved specification may no longer be consistent.${reaction === 'invalidate' ? ' The approval was revoked; approve the item again once reviewed.' : ''}`,
           evidence: changed.slice(0, 6),
-          question: { text: 'Is the approved specification still valid after these changes?', options: ['Still valid — re-approve', 'Re-open — specification must be updated'], topic: 'drift' },
+          ...(question && { question }),
         },
         'drift',
       ),
@@ -163,20 +168,51 @@ export async function analyzeProject(ctx: ProjectContext, opts: AnalyzeOptions =
     topRisks: topRisks(list),
     domains: domains(list),
     drift,
+    ...(invalidated.length && { invalidatedApprovals: invalidated }),
     ai: { enabled: !!opts.ai, provider: opts.ai?.analyzer.provider, model: opts.ai?.analyzer.model, errors: aiErrors },
   };
   return { result, snapshot, graph: built.graph };
 }
 
-/** Snapshot an item's context for an approval baseline. */
-export function approvalBaseline(graph: ContextGraph, item: ItemAnalysis): Record<string, string> {
-  const ids = [issueId(item.key), ...[...item.context.documents, ...item.context.frames, ...item.context.requirements].filter((r) => r.confidence >= 0.45 && r.source !== 'decision').map((r) => r.entityId)];
-  const out: Record<string, string> = {};
-  for (const id of ids) {
+const baselineIds = (item: ItemAnalysis) => [
+  issueId(item.key),
+  ...[...item.context.documents, ...item.context.frames, ...item.context.requirements].filter((r) => r.confidence >= 0.45 && r.source !== 'decision').map((r) => r.entityId),
+];
+
+/** Snapshot an item's context for an approval baseline: content hashes (history) and meaning hashes (drift reaction). */
+export function approvalBaseline(graph: ContextGraph, item: ItemAnalysis): Pick<Approval, 'contextHashes' | 'meaningHashes'> {
+  const contextHashes: Record<string, string> = {};
+  const meaningHashes: Record<string, string> = {};
+  for (const id of baselineIds(item)) {
     const e = graph.entities.get(id);
-    if (e) out[id] = e.contentHash;
+    if (!e) continue;
+    contextHashes[id] = e.contentHash;
+    meaningHashes[id] = e.meaningHash ?? e.contentHash;
   }
-  return out;
+  return { contextHashes, meaningHashes };
+}
+
+/**
+ * Artifacts whose meaning changed since approval (P5): changed claims,
+ * acceptance criteria or states, and artifacts added to or removed from the
+ * item's context. Approvals without meaning hashes compare content hashes.
+ */
+function changedSinceApproval(graph: ContextGraph, a: ItemAnalysis, ap: Approval): Evidence[] {
+  const base = ap.meaningHashes ?? ap.contextHashes;
+  const now = (e: { meaningHash?: string; contentHash: string }) => (ap.meaningHashes ? (e.meaningHash ?? e.contentHash) : e.contentHash);
+  const changed: Evidence[] = [];
+  for (const [entityId, h] of Object.entries(base)) {
+    const e = graph.entities.get(entityId);
+    if (!e) changed.push({ source: 'jira', entityId, title: `${entityId} (removed)` });
+    else if (now(e) !== h) changed.push({ source: e.source ?? 'jira', entityId, title: e.title, url: e.url });
+  }
+  if (ap.meaningHashes) {
+    for (const id of baselineIds(a)) {
+      const e = graph.entities.get(id);
+      if (e && !(id in base)) changed.push({ source: e.source ?? 'jira', entityId: id, title: `${e.title} (newly linked)`, url: e.url });
+    }
+  }
+  return changed;
 }
 
 // ---------------------------------------------------------------------------
@@ -304,7 +340,7 @@ async function runPool<T>(xs: T[], n: number, fn: (x: T) => Promise<void>) {
 
 function makeSnapshot(now: string, g: ContextGraph, ctxs: Map<string, ItemCtx>, items: Map<string, ItemAnalysis>): Snapshot {
   const entities: Snapshot['entities'] = {};
-  for (const e of g.entities.values()) if (e.kind !== 'domain' && e.kind !== 'decision') entities[e.id] = { hash: e.contentHash, title: e.title, source: e.source };
+  for (const e of g.entities.values()) if (e.kind !== 'domain' && e.kind !== 'decision') entities[e.id] = { hash: e.contentHash, meaning: e.meaningHash, title: e.title, source: e.source };
   const claims: Snapshot['claims'] = {};
   for (const c of ctxs.values()) {
     for (const cl of [...c.claims.spec, ...c.claims.docs, ...c.claims.design]) {
@@ -333,7 +369,9 @@ function diffSnapshots(prev: Snapshot, cur: Snapshot, items: Map<string, ItemAna
     if (!p) ev({ kind: 'added', entityId: id, entityTitle: e.title, source: e.source, summary: `New ${e.source ?? ''} artifact: ${e.title}`, impactedItems: impacted(id), severity: 'info' });
     else if (p.hash !== e.hash) {
       const imp = impacted(id);
-      ev({ kind: 'changed', entityId: id, entityTitle: e.title, source: e.source, summary: `${sourceLabel(e.source)} changed: ${e.title}`, impactedItems: imp, severity: wasSafe(imp) ? 'warning' : 'info' });
+      // P5: an edit that does not change the meaning is kept in history only.
+      const cosmetic = !!p.meaning && p.meaning === e.meaning;
+      ev({ kind: 'changed', entityId: id, entityTitle: e.title, source: e.source, summary: `${sourceLabel(e.source)} changed${cosmetic ? ' (wording only)' : ''}: ${e.title}`, impactedItems: imp, severity: !cosmetic && wasSafe(imp) ? 'warning' : 'info' });
     }
   }
   for (const [id, p] of Object.entries(prev.entities)) {
@@ -374,6 +412,7 @@ function counts(list: ItemAnalysis[]): AnalysisResult['counts'] {
   const open = list.flatMap((a) => a.findings.filter((f) => f.status === 'open'));
   return {
     epics: list.filter((a) => a.type === 'epic').length,
+    features: list.filter((a) => a.type === 'feature').length,
     stories: list.filter((a) => a.type === 'story').length,
     bugs: list.filter((a) => a.type === 'bug').length,
     tasks: list.filter((a) => a.type === 'task').length,

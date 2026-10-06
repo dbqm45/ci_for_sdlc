@@ -5,3 +5,7 @@ tools/
 *.log
 .env
 .DS_Store
+
+# Claude Code hooks: runtime logs and Python bytecode
+.claude/logs/
+__pycache__/

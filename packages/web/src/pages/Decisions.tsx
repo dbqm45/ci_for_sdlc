@@ -32,7 +32,7 @@ export function Decisions() {
         <Stat label="Critical" value={m.critical} tone="bad" sub="block implementation" />
         <Stat label="Important" value={m.important} tone="warn" sub="cause rework" />
         <Stat label="Minor" value={m.minor} sub="incl. unanswered adversarial questions" />
-        <Stat label="Decisions recorded" value={log.length} tone="ok" />
+        <Stat label="Decisions in force" value={log.filter((d) => d.status === 'active').length} tone="ok" />
       </div>
       <div className="row wrap">
         <button className={`btn sm ${!topic ? 'primary' : ''}`} onClick={() => setTopic(undefined)}>All topics</button>
@@ -66,17 +66,21 @@ export function Decisions() {
           <tbody>
             {log.length === 0 && <tr><td colSpan={6} className="empty">No decisions yet.</td></tr>}
             {[...log].reverse().map((d) => (
-              <tr key={d.id}>
+              <tr key={d.id} style={d.status !== 'active' ? { opacity: 0.55 } : undefined}>
                 <td className="small muted">{new Date(d.decidedAt).toLocaleString()}</td>
                 <td><a href={`#/item/${d.itemKey}`} className="key">{d.itemKey}</a></td>
                 <td className="small">{d.question}</td>
                 <td>
                   <strong>{d.answer}</strong>
                   {d.effect !== 'resolve' && <span className="badge" style={{ marginLeft: 6 }}>{d.effect.replace('_', ' ')}</span>}
+                  {d.version > 1 && <span className="badge" style={{ marginLeft: 6 }}>v{d.version}</span>}
+                  {d.status !== 'active' && <span className="badge" style={{ marginLeft: 6 }}>{d.status}</span>}
                   {d.note && <div className="small muted">{d.note}</div>}
+                  {d.changeReason && <div className="small muted">Changed because: {d.changeReason}</div>}
+                  {d.status === 'withdrawn' && <div className="small muted">Withdrawn by {d.withdrawnBy}{d.withdrawReason ? `: ${d.withdrawReason}` : ''}</div>}
                 </td>
                 <td className="small">{d.decidedBy}</td>
-                <td><button className="btn ghost sm" onClick={async () => (await api.reopen(d.id), refresh())}>Re-open</button></td>
+                <td>{d.status === 'active' && <button className="btn ghost sm" onClick={async () => (await api.reopen(d.id)) && refresh()}>Re-open</button>}</td>
               </tr>
             ))}
           </tbody>

@@ -13,7 +13,7 @@ export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision';
 // Normalized source contexts (output of connectors + normalizer)
 // ---------------------------------------------------------------------------
 
-export type IssueType = 'epic' | 'story' | 'task' | 'subtask' | 'bug';
+export type IssueType = 'epic' | 'feature' | 'story' | 'task' | 'subtask' | 'bug';
 
 export interface IssueLink {
   /** e.g. "blocks", "relates to", "is caused by", "duplicates" */
@@ -107,8 +107,10 @@ export interface Entity {
   updatedAt?: string;
   /** Plain text used for semantic matching. */
   text: string;
-  /** Hash of the normalized content — used for drift detection. */
+  /** Hash of the normalized content — any edit changes it (history). */
   contentHash: string;
+  /** Hash of what the artifact says (claims, acceptance criteria, states) — drives the drift reaction (P5). */
+  meaningHash?: string;
 }
 
 export type RelationType =
@@ -247,6 +249,12 @@ export interface Finding {
   origin: 'rule' | 'ai' | 'drift';
   /** Set when a human decision resolved the finding. */
   resolution?: { decisionId: string; summary: string };
+  /** AI finding that would block but waits for a human to confirm it (policy `require_confirmation`). */
+  needsConfirmation?: boolean;
+  /** Set by scoring: the open finding makes the item NOT READY under the current policy. */
+  blocks?: boolean;
+  /** Set when a human confirmed an AI finding; it stays open and counts at full severity. */
+  confirmation?: { decisionId: string; by: string; at: string };
 }
 
 export interface Decision {
@@ -260,9 +268,27 @@ export interface Decision {
   note?: string;
   decidedBy: string;
   decidedAt: string;
-  /** What the decision does to the finding. */
-  effect: 'resolve' | 'accept_risk' | 'dismiss';
+  /** What the decision does to the finding. `confirm` keeps it open and confirms an AI finding. */
+  effect: 'resolve' | 'accept_risk' | 'dismiss' | 'confirm';
+  /**
+   * Decisions are immutable. A change creates a new version that supersedes
+   * the previous one; removal is a withdrawal. Decisions stored before
+   * versioning are read as active version 1.
+   */
+  version: number;
+  status: DecisionStatus;
+  /** Id of the version this one replaced. */
+  supersedes?: string;
+  /** Why the previous version was changed (required when superseding an active decision). */
+  changeReason?: string;
+  supersededBy?: string;
+  supersededAt?: string;
+  withdrawnBy?: string;
+  withdrawnAt?: string;
+  withdrawReason?: string;
 }
+
+export type DecisionStatus = 'active' | 'superseded' | 'withdrawn';
 
 // ---------------------------------------------------------------------------
 // State machine / journeys / coverage
@@ -332,7 +358,10 @@ export interface ItemAnalysis {
   type: IssueType;
   title: string;
   url?: string;
+  /** The epic, also when the item belongs to it through a feature. */
   epicKey?: string;
+  /** Set for stories under a feature (P1). */
+  featureKey?: string;
   domain?: { name: string; confidence: number; alternatives: { name: string; confidence: number }[] };
   health: number;
   healthStatus: HealthStatus;
@@ -370,6 +399,15 @@ export interface Approval {
   approvedBy: string;
   /** Content hashes of the item and every entity in its context at approval time. */
   contextHashes: Record<string, string>;
+  /** Set when the item was approved despite blocking issues. */
+  forced?: true;
+  /** Required justification of a forced approval. */
+  reason?: string;
+  /**
+   * Meaning fingerprints at approval time (P5). Approvals stored before this
+   * existed fall back to `contextHashes`, so any edit counts as drift.
+   */
+  meaningHashes?: Record<string, string>;
 }
 
 export interface ChecklistGroup {
@@ -441,6 +479,7 @@ export interface AnalysisResult {
   items: ItemAnalysis[];
   counts: {
     epics: number;
+    features: number;
     stories: number;
     bugs: number;
     tasks: number;
@@ -454,5 +493,7 @@ export interface AnalysisResult {
   topRisks: { key: string; title: string; reason: string; severity: Severity }[];
   domains: { name: string; items: number; critical: number; needsAttention: number }[];
   drift: DriftEvent[];
+  /** Approvals the drift reaction `invalidate` revoked in this run; the server removes them. */
+  invalidatedApprovals?: string[];
   ai: { enabled: boolean; provider?: string; model?: string; errors: string[] };
 }

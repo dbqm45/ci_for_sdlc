@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
+import { putSettings } from './helpers.js';
 
 let ctx: Awaited<ReturnType<typeof buildApp>>;
 const dir = mkdtempSync(join(tmpdir(), 'ci-test-'));
@@ -62,8 +63,8 @@ describe('API', () => {
   });
 
   it('updates settings and validates AI review prerequisites', async () => {
-    const res = await json('PUT', '/api/settings', { schedule: { mode: 'interval', intervalMinutes: 30 } });
-    expect(res.body.settings.schedule.mode).toBe('interval');
+    const res = await putSettings(ctx.app, { schedule: { mode: 'interval', intervalMinutes: 30 } });
+    expect(res.json().settings.schedule.mode).toBe('interval');
     expect((await json('POST', '/api/items/PAY-125/ai-review')).status).toBe(400);
   });
 

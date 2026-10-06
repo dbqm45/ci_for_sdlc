@@ -1,29 +1,57 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
-import { timingSafeEqual } from 'node:crypto';
-import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, hash, impactAnalysis, type Decision } from '@ci/core';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, impactAnalysis, recordDecision, withdrawDecision, type Decision, type IssueType, type NewDecision } from '@ci/core';
 import { Engine } from './engine.js';
+import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
+import { MUTATION, approveBody, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
 import { deepMerge, Store, type Settings } from './store.js';
+
+/** Weak validator for optimistic concurrency on settings (API-07). */
+const etagOf = (s: Settings) => `"${createHash('sha256').update(JSON.stringify(s)).digest('hex').slice(0, 20)}"`;
+
+/** Only leaf work items are approved; feature and epic readiness is derived from their stories. */
+const APPROVABLE = new Set(['story', 'bug']);
 
 export interface AppOptions {
   dataDir: string;
   webDir?: string;
   logger?: boolean;
+  /** Defaults to CI_ADMIN_TOKEN. */
+  adminToken?: string;
+  /** Defaults to CI_ALLOWED_HOSTS (comma-separated). */
+  allowedHosts?: string[];
+  /** Defaults to CI_ALLOWED_ORIGINS (comma-separated). */
+  allowedOrigins?: string[];
 }
 
 export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store }> {
   const store = new Store(opts.dataDir);
   await store.init();
   const engine = new Engine(store);
-  const app = Fastify({ logger: opts.logger ?? false });
+  // Strict bodies: unknown properties and wrong types are rejected, not silently dropped or coerced.
+  const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } } });
+  const env = guardConfigFromEnv();
+  const guard: GuardConfig = { adminToken: opts.adminToken ?? env.adminToken, allowedHosts: opts.allowedHosts ?? env.allowedHosts, allowedOrigins: opts.allowedOrigins ?? env.allowedOrigins };
+
+  await app.register(fastifySwagger, {
+    openapi: {
+      openapi: '3.0.3',
+      info: { title: 'Continuous Intelligence for the SDLC', version: '0.1.0', description: 'State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state.' },
+      components: { securitySchemes: { adminToken: { type: 'http', scheme: 'bearer', description: 'CI_ADMIN_TOKEN' } } },
+    },
+  });
+  app.addSchema(problem);
+  registerProblemHandler(app);
+  registerGuards(app, guard);
 
   const ensure = async () => engine.state.result ?? (await engine.analyze('initial'));
-  const actor = (body: { by?: string; decidedBy?: string } | undefined) => (body?.by || body?.decidedBy || 'anonymous').slice(0, 80);
+  /** Who acted and how they were authorized, for audit entries. */
+  const who = (req: FastifyRequest, body?: { by?: string; decidedBy?: string } | null) => ({ actor: actorOf(req, body), via: req.principal ?? undefined });
 
-  app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
-    reply.status(err.statusCode ?? 500).send({ error: err.message });
-  });
+  app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
   // ------------------------------------------------------------------ analysis
   app.get('/api/health', async () => ({ ok: true, running: engine.state.running, lastError: engine.state.lastError }));
@@ -33,12 +61,12 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     return { ...result, running: engine.state.running, lastReason: engine.state.lastReason };
   });
 
-  app.post('/api/analyze', async () => engine.analyze('manual'));
+  app.post('/api/analyze', { schema: { summary: 'Run an analysis now', ...MUTATION } }, async () => engine.analyze('manual'));
 
-  app.get<{ Params: { key: string } }>('/api/items/:key', async (req, reply) => {
+  app.get<{ Params: { key: string } }>('/api/items/:key', { schema: { params: itemKeyParams, response: errors(404, 422) } }, async (req) => {
     const result = await ensure();
     const item = result.items.find((i) => i.key === req.params.key);
-    if (!item) return reply.status(404).send({ error: 'Not found' });
+    if (!item) throw httpError(404, `No work item ${req.params.key}`);
     const [decisions, approvals] = await Promise.all([store.decisions(), store.approvals()]);
     const req0 = engine.state.context?.requirements.find((r) => r.key === item.key);
     const children = result.items.filter((i) => i.epicKey === item.key || engine.state.context?.requirements.find((r) => r.key === i.key)?.parentKey === item.key);
@@ -46,17 +74,18 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       item,
       source: req0,
       children: children.map((c) => ({ key: c.key, type: c.type, title: c.title, health: c.health, healthStatus: c.healthStatus, readiness: c.readiness })),
-      decisions: decisions.filter((d) => d.itemKey === item.key),
+      decisions: decisions.filter((d) => d.itemKey === item.key && d.status === 'active'),
+      decisionHistory: decisions.filter((d) => d.itemKey === item.key && d.status !== 'active'),
       approval: approvals.find((a) => a.itemKey === item.key),
       drift: (await store.driftLog()).filter((d) => d.impactedItems.includes(item.key)).slice(-30).reverse(),
     };
   });
 
-  app.get<{ Params: { key: string } }>('/api/items/:key/graph', async (req, reply) => {
+  app.get<{ Params: { key: string } }>('/api/items/:key/graph', { schema: { params: itemKeyParams, response: errors(404, 422) } }, async (req) => {
     await ensure();
     const g = engine.state.graph!;
     const center = `jira:${req.params.key}`;
-    if (!g.entities.has(center)) return reply.status(404).send({ error: 'Not found' });
+    if (!g.entities.has(center)) throw httpError(404, `No work item ${req.params.key}`);
     const hood = g.neighbourhood(center, 1);
     const ids = new Set(hood.keys());
     return {
@@ -69,36 +98,49 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     };
   });
 
-  app.post<{ Params: { key: string } }>('/api/items/:key/ai-review', async (req) => {
+  app.post<{ Params: { key: string } }>('/api/items/:key/ai-review', { schema: { params: itemKeyParams, response: errors(400, 422), ...MUTATION } }, async (req) => {
     const s = await store.settings();
-    if (s.ai.provider === 'none') throw Object.assign(new Error('No AI provider configured. Choose one in Settings → AI Provider.'), { statusCode: 400 });
+    if (s.ai.provider === 'none') throw httpError(400, 'No AI provider configured. Choose one in Settings → AI Provider.');
     const result = await engine.analyze(`AI review of ${req.params.key}`, { aiKeys: [req.params.key] });
     return { item: result.items.find((i) => i.key === req.params.key), errors: result.ai.errors };
   });
 
-  app.post<{ Params: { key: string }; Body: { by?: string; force?: boolean } }>('/api/items/:key/approve', async (req) => {
+  app.post<{ Params: { key: string }; Body: { by?: string; force?: boolean; reason?: string } }>(
+    '/api/items/:key/approve',
+    { schema: { summary: 'Approve a story as ready for implementation', params: itemKeyParams, body: approveBody, response: errors(400, 404, 409, 422), ...MUTATION } },
+    async (req) => {
     const result = await ensure();
     const item = result.items.find((i) => i.key === req.params.key);
-    if (!item) throw Object.assign(new Error('Not found'), { statusCode: 404 });
-    if (item.readiness === 'not_ready' && !req.body?.force) throw Object.assign(new Error(`${item.key} has blocking issues and cannot be approved.`), { statusCode: 409 });
-    await engine.approve(item.key, actor(req.body));
+    if (!item) throw httpError(404, `No work item ${req.params.key}`);
+    if (!APPROVABLE.has(item.type)) throw httpError(409, `${item.key} is a ${item.type}; its readiness is derived from its stories and cannot be approved directly.`);
+    let forced: { reason: string } | undefined;
+    // Drift alone (P4 review_required) is cleared by re-approving; anything else blocking needs a forced approval.
+    if (item.readiness === 'not_ready' && item.findings.some((f) => f.blocks && f.origin !== 'drift')) {
+      if (!req.body?.force) throw httpError(409, `${item.key} has blocking issues and cannot be approved.`);
+      const reason = req.body.reason?.trim();
+      if (!reason) throw httpError(400, 'A forced approval requires a reason.');
+      forced = { reason: reason.slice(0, 2000) };
+    }
+    await engine.approve(item.key, who(req, req.body), forced);
     return engine.analyze(`approval of ${item.key}`);
-  });
+    },
+  );
 
-  app.delete<{ Params: { key: string } }>('/api/items/:key/approve', async (req) => {
-    await store.saveApprovals((await store.approvals()).filter((a) => a.itemKey !== req.params.key));
-    await store.audit({ at: new Date().toISOString(), kind: 'approval_removed', actor: 'user', summary: `Approval of ${req.params.key} withdrawn` });
+  app.delete<{ Params: { key: string }; Body: { by?: string; reason?: string } | null }>('/api/items/:key/approve', { schema: { params: itemKeyParams, body: withdrawBody, response: errors(422), ...MUTATION } }, async (req) => {
+    const reason = req.body?.reason?.trim().slice(0, 2000);
+    await store.updateApprovals((all) => all.filter((a) => a.itemKey !== req.params.key));
+    await store.audit({ at: new Date().toISOString(), kind: 'approval_removed', ...who(req, req.body), summary: `Approval of ${req.params.key} withdrawn${reason ? ` — ${reason}` : ''}` });
     return engine.analyze(`approval withdrawn for ${req.params.key}`);
   });
 
   // ------------------------------------------------------------------ decisions
   app.get('/api/decisions', async () => store.decisions());
 
-  app.post<{ Body: Omit<Decision, 'id' | 'decidedAt'> }>('/api/decisions', async (req) => {
+  app.post<{ Body: Partial<NewDecision> & { by?: string; reason?: string } }>('/api/decisions', { schema: { summary: 'Answer a question or confirm a finding', body: decisionBody, response: errors(400, 422), ...MUTATION } }, async (req) => {
     const b = req.body;
-    if (!b?.questionId || !b.itemKey || !b.answer?.trim()) throw Object.assign(new Error('questionId, itemKey and answer are required'), { statusCode: 400 });
-    const decision: Decision = {
-      id: hash(`${b.questionId}|${Date.now()}`),
+    const by = who(req, b);
+    if (!b?.questionId || !b.itemKey || !b.answer?.trim()) throw httpError(400, 'questionId, itemKey and answer are required');
+    const input: NewDecision = {
       questionId: b.questionId,
       findingId: b.findingId ?? b.questionId,
       itemKey: b.itemKey,
@@ -106,31 +148,43 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       question: (b.question ?? '').slice(0, 500),
       answer: b.answer.trim().slice(0, 500),
       note: b.note?.trim().slice(0, 2000) || undefined,
-      decidedBy: actor(b),
+      decidedBy: by.actor,
       decidedAt: new Date().toISOString(),
-      effect: b.effect === 'accept_risk' || b.effect === 'dismiss' ? b.effect : 'resolve',
+      effect: (['accept_risk', 'dismiss', 'confirm'] as const).find((e) => e === b.effect) ?? 'resolve',
+      changeReason: (b.reason ?? b.changeReason)?.trim().slice(0, 2000),
     };
-    const all = (await store.decisions()).filter((d) => d.questionId !== decision.questionId);
-    all.push(decision);
-    await store.saveDecisions(all);
-    await store.audit({ at: decision.decidedAt, kind: 'decision', actor: decision.decidedBy, summary: `${decision.itemKey}: "${decision.question}" → ${decision.answer} (${decision.effect})` });
+    let decision!: Decision;
+    await store.updateDecisions((all) => {
+      const r = recordDecision(all, input);
+      decision = r.decision;
+      return r.all;
+    });
+    const change = decision.supersedes && decision.changeReason ? ` [v${decision.version}, replaces previous answer: ${decision.changeReason}]` : decision.version > 1 ? ` [v${decision.version}]` : '';
+    await store.audit({ at: decision.decidedAt, kind: 'decision', ...by, summary: `${decision.itemKey}: "${decision.question}" → ${decision.answer} (${decision.effect})${change}` });
     const result = await engine.analyze(`decision on ${decision.itemKey}`);
     return { decision, item: result.items.find((i) => i.key === decision.itemKey) };
   });
 
-  app.delete<{ Params: { id: string } }>('/api/decisions/:id', async (req) => {
-    const all = await store.decisions();
-    const d = all.find((x) => x.id === req.params.id);
-    await store.saveDecisions(all.filter((x) => x.id !== req.params.id));
-    if (d) await store.audit({ at: new Date().toISOString(), kind: 'decision_removed', actor: 'user', summary: `Decision re-opened: ${d.itemKey} "${d.question}"` });
-    return engine.analyze('decision re-opened');
+  /** Decisions are never deleted: DELETE withdraws the active version and re-opens its finding. */
+  app.delete<{ Params: { id: string }; Body: { by?: string; reason?: string } | null }>('/api/decisions/:id', { schema: { params: idParams, body: withdrawBody, response: errors(404, 422), ...MUTATION } }, async (req) => {
+    const at = new Date().toISOString();
+    const { actor: by, via } = who(req, req.body);
+    let d: Decision | undefined;
+    await store.updateDecisions((all) => {
+      const r = withdrawDecision(all, req.params.id, by, at, req.body?.reason?.slice(0, 2000));
+      d = r.decision;
+      return r.all;
+    });
+    if (!d) throw httpError(404, 'No active decision with this id');
+    await store.audit({ at, kind: 'decision_withdrawn', actor: by, via, summary: `Decision withdrawn: ${d.itemKey} "${d.question}" (was: ${d.answer})${d.withdrawReason ? ` — ${d.withdrawReason}` : ''}` });
+    return engine.analyze('decision withdrawn');
   });
 
   // ------------------------------------------------------------------ impact, drift, audit, rules
-  app.get<{ Querystring: { q?: string } }>('/api/impact', async (req) => {
+  app.get<{ Querystring: { q?: string } }>('/api/impact', { schema: { querystring: impactQuery, response: errors(400, 422) } }, async (req) => {
     const result = await ensure();
     const q = (req.query.q ?? '').trim();
-    if (!q) throw Object.assign(new Error('q is required'), { statusCode: 400 });
+    if (!q) throw httpError(400, 'q is required');
     return impactAnalysis(engine.state.graph!, result, q);
   });
 
@@ -140,8 +194,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   app.get('/api/rules', async () => RULES.map(({ id, name, description, appliesTo }) => ({ id, name, description, appliesTo })));
 
   // ------------------------------------------------------------------ settings
-  app.get('/api/settings', async () => {
+  app.get('/api/settings', async (_req, reply) => {
     const s = await store.settings();
+    reply.header('etag', etagOf(s));
     return {
       settings: s,
       secrets: {
@@ -159,18 +214,37 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     };
   });
 
-  app.put<{ Body: Partial<Settings> }>('/api/settings', async (req) => {
+  app.put<{ Body: Partial<Settings> }>(
+    '/api/settings',
+    {
+      schema: {
+        summary: 'Update settings (partial). Requires If-Match with the ETag from GET /api/settings.',
+        headers: { type: 'object', properties: { 'if-match': { type: 'string' } } },
+        body: settingsBody,
+        response: errors(400, 412, 422, 428),
+        ...MUTATION,
+      },
+    },
+    async (req, reply) => {
     const current = await store.settings();
+    const ifMatch = req.headers['if-match'];
+    if (!ifMatch) throw httpError(428, 'Send If-Match with the ETag from GET /api/settings, so concurrent edits are not lost.');
+    if (ifMatch !== '*' && ifMatch !== etagOf(current)) throw httpError(412, 'Settings were changed by someone else. Reload them and apply your change again.');
+    const typeMap = req.body?.integrations?.jira?.issueTypeMap;
     const next = deepMerge(current, req.body ?? {});
+    // A mapping is replaced as a whole, so removing a Jira type from it works.
+    if (typeMap) next.integrations.jira.issueTypeMap = Object.fromEntries(Object.entries(typeMap).map(([k, v]) => [k.trim(), v]));
     if (next.ai.provider !== 'none' && !next.ai.model) next.ai.model = DEFAULT_MODELS[next.ai.provider];
-    if (next.security.encryptStoredContext && !process.env.CI_ENCRYPTION_KEY) throw Object.assign(new Error('Set CI_ENCRYPTION_KEY on the server before enabling encryption at rest.'), { statusCode: 400 });
+    if (next.security.encryptStoredContext && !process.env.CI_ENCRYPTION_KEY) throw httpError(400, 'Set CI_ENCRYPTION_KEY on the server before enabling encryption at rest.');
     await store.saveSettings(next);
-    await store.audit({ at: new Date().toISOString(), kind: 'settings', actor: 'admin', summary: 'Settings updated', details: req.body });
+    await store.audit({ at: new Date().toISOString(), kind: 'settings', ...who(req), summary: 'Settings updated', details: req.body });
     await engine.reschedule();
+    reply.header('etag', etagOf(await store.settings()));
     return { settings: next };
-  });
+    },
+  );
 
-  app.post('/api/settings/test-connections', async () => {
+  app.post('/api/settings/test-connections', { schema: MUTATION }, async () => {
     const s = await store.settings();
     const out: Record<string, string> = {};
     try {
@@ -186,12 +260,13 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
 
   // ------------------------------------------------------------------ demo
   app.get('/api/demo/scenarios', async () => DEMO_SCENARIOS.map(({ id, title, description }) => ({ id, title, description })));
-  app.post<{ Params: { id: string } }>('/api/demo/scenarios/:id', async (req) => {
-    if ((await store.settings()).mode !== 'demo') throw Object.assign(new Error('Demo scenarios are only available in demo mode'), { statusCode: 400 });
+  app.post<{ Params: { id: string } }>('/api/demo/scenarios/:id', { schema: { params: idParams, response: errors(400, 404, 422), ...MUTATION } }, async (req) => {
+    if ((await store.settings()).mode !== 'demo') throw httpError(400, 'Demo scenarios are only available in demo mode');
+    if (!DEMO_SCENARIOS.some((x) => x.id === req.params.id)) throw httpError(404, `No demo scenario ${req.params.id}`);
     await engine.applyDemoScenario(req.params.id);
     return engine.analyze(`change: ${req.params.id}`);
   });
-  app.post('/api/demo/reset', async () => {
+  app.post('/api/demo/reset', { schema: MUTATION }, async () => {
     await engine.resetDemo();
     return engine.analyze('demo reset');
   });
@@ -200,10 +275,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   app.post<{ Params: { source: string } }>('/api/webhooks/:source', async (req, reply) => {
     const secret = process.env.CI_WEBHOOK_SECRET;
     const given = String(req.headers['x-ci-webhook-secret'] ?? (req.query as Record<string, string>)?.secret ?? '');
-    if (secret && (given.length !== secret.length || !timingSafeEqual(Buffer.from(given), Buffer.from(secret)))) return reply.status(401).send({ error: 'Invalid webhook secret' });
+    if (secret && (given.length !== secret.length || !timingSafeEqual(Buffer.from(given), Buffer.from(secret)))) throw httpError(401, 'Invalid webhook secret');
     const s = await store.settings();
     const enabled = { jira: s.schedule.onJiraChange, confluence: s.schedule.onConfluenceChange, figma: s.schedule.onFigmaChange }[req.params.source];
-    if (enabled === undefined) return reply.status(404).send({ error: 'Unknown source' });
+    if (enabled === undefined) throw httpError(404, 'Unknown source');
     await store.audit({ at: new Date().toISOString(), kind: 'webhook', actor: req.params.source, summary: `Change notification from ${req.params.source}${enabled ? '' : ' (ignored by settings)'}` });
     if (enabled) void engine.analyze(`${req.params.source} change`).catch(() => undefined);
     return reply.status(202).send({ accepted: enabled });
@@ -228,8 +303,11 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   // ------------------------------------------------------------------ web UI
   if (opts.webDir && existsSync(opts.webDir)) {
     await app.register(fastifyStatic, { root: opts.webDir });
-    app.setNotFoundHandler((req, reply) => (req.url.startsWith('/api/') ? reply.status(404).send({ error: 'Not found' }) : reply.sendFile('index.html')));
-  } else if (opts.webDir) {
+    app.setNotFoundHandler((req, reply) => (req.url.startsWith('/api/') ? notFound(req, reply) : reply.sendFile('index.html')));
+  } else {
+    app.setNotFoundHandler(notFound);
+  }
+  if (opts.webDir && !existsSync(opts.webDir)) {
     app.get('/', (_req, reply) =>
       reply
         .type('text/html')

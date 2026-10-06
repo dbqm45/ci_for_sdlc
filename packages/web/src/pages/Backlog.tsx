@@ -5,7 +5,7 @@ import { Bar, DIMENSION_LABELS, HealthNumber, StatusBadge, healthTone } from '..
 export function Backlog() {
   const { analysis, navigate } = useApp();
   const [filter, setFilter] = useState<'all' | 'critical' | 'needs_attention' | 'healthy'>('all');
-  const [type, setType] = useState<'all' | 'epic' | 'story' | 'bug'>('all');
+  const [type, setType] = useState<'all' | 'epic' | 'feature' | 'story' | 'bug'>('all');
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string>();
 
@@ -33,6 +33,7 @@ export function Backlog() {
         <select className="input" style={{ width: 160 }} value={type} onChange={(e) => setType(e.target.value as typeof type)}>
           <option value="all">All types</option>
           <option value="epic">Epics</option>
+          <option value="feature">Features</option>
           <option value="story">Stories</option>
           <option value="bug">Bugs</option>
         </select>

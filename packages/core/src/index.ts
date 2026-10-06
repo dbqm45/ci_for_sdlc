@@ -1,5 +1,6 @@
 export * from './model.js';
 export * from './policy.js';
+export * from './decisions.js';
 export * from './graph.js';
 export * from './project.js';
 export * from './impact.js';
@@ -10,5 +11,6 @@ export { STATE_LABELS, JOURNEY_LABELS, TRAIT_LABELS } from './analysis/vocabular
 export * from './ai/types.js';
 export * from './ai/providers.js';
 export { demoProject, DEMO_SCENARIOS } from './connectors/demo.js';
-export { fetchJira, fetchConfluence, adfToText, splitSections, type JiraConfig, type ConfluenceConfig } from './connectors/atlassian.js';
+export * from './hierarchy.js';
+export { fetchJira, fetchConfluence, jiraIssueToRequirement, adfToText, splitSections, type JiraConfig, type ConfluenceConfig } from './connectors/atlassian.js';
 export { fetchFigma, framesFromDocument, type FigmaConfig } from './connectors/figma.js';

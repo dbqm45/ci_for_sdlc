@@ -86,6 +86,9 @@ Wszystko poza sekretami ustawiasz w UI (*Settings*). Sekrety — zmienne środow
 | `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `CUSTOM_AI_API_KEY` | pozostali dostawcy (OpenAI-compatible) |
 | `CI_ENCRYPTION_KEY` | szyfrowanie stanu at-rest |
 | `CI_WEBHOOK_SECRET` | zabezpieczenie `/api/webhooks/{jira,confluence,figma}` (nagłówek `x-ci-webhook-secret`) |
+| `CI_ADMIN_TOKEN` | token administratora; gdy ustawiony, każda zmiana przez API wymaga `Authorization: Bearer <token>` (UI zapyta o niego raz na sesję). Bez tokenu zmiany przyjmowane są tylko z tej samej maszyny (loopback) |
+| `CI_ALLOWED_HOSTS` | dodatkowe wartości nagłówka `Host` (po przecinku, np. `ci.firma.local:4317`), gdy serwer jest dostępny pod inną nazwą niż `localhost` — ochrona przed DNS rebinding |
+| `CI_ALLOWED_ORIGINS` | dodatkowe originy przeglądarki, które mogą zmieniać dane (po przecinku, np. `https://ci.firma.pl`) — ochrona przed CSRF |
 | `CI_DATA_DIR`, `PORT`, `HOST` | katalog danych (domyślnie `.ci-data/`), port (4317), host (127.0.0.1) |
 
 Tryb live: *Settings → Workspace → Mode: Live*, włącz integracje, podaj URL-e / klucze projektu / spaces / file keys, *Test connections*, *Save & re-analyze*.
@@ -121,6 +124,14 @@ Szczegóły i mapowanie koncepcji produktu na kod: [`docs/ARCHITECTURE.md`](docs
 | GET / PUT | `/api/settings` | ustawienia |
 | POST | `/api/webhooks/:source` | powiadomienie o zmianie (jira / confluence / figma) |
 | GET | `/api/events` | Server-Sent Events (`analysis`, `status`) |
+| GET | `/api/openapi.json` | kontrakt API (OpenAPI 3) |
+
+Zasady kontraktu:
+
+- **Błędy** zwracane są jako `application/problem+json` (RFC 9457): `{type, title, status, detail, instance}`; błędy walidacji to `422` z listą `errors: [{field, message}]`. Odpowiedzi `5xx` nie ujawniają szczegółów — przyczyna jest w logu serwera.
+- **Walidacja**: ciała żądań mają schematy JSON i odrzucają nieznane pola.
+- **Ustawienia**: `GET /api/settings` zwraca `ETag`; `PUT` wymaga nagłówka `If-Match` (`428` bez niego, `412` gdy ktoś zmienił ustawienia w międzyczasie).
+- **Kto działa**: nagłówek `X-CI-Actor` (nazwa wyświetlana, URL-encoded) trafia do audytu razem ze sposobem autoryzacji (`via`: `admin_token` albo `loopback`).
 
 ## Roadmap
 

@@ -5,6 +5,7 @@ import type {
   DimensionScore,
   Finding,
   HealthStatus,
+  IssueType,
   ItemAnalysis,
   ReadinessStatus,
   RequirementItem,
@@ -12,6 +13,8 @@ import type {
 } from '../model.js';
 import { DIMENSIONS } from '../model.js';
 import { hash } from '../text.js';
+import { workItemsUnder } from '../hierarchy.js';
+import { aiFindingsAction, driftReactionOf, type SeverityAction } from '../policy.js';
 import { evJira, itemContext, questionOptions, type AnalysisEnv, type ItemCtx } from './context.js';
 import { RULES, taskCoverage, type FindingDraft } from './rules.js';
 import { challenges, journeyCoverage, stateCoverage } from './states.js';
@@ -59,7 +62,7 @@ export function analyzeItem(env: AnalysisEnv, r: RequirementItem): { analysis: I
     type: r.type,
     title: r.title,
     url: r.url,
-    epicKey: r.epicKey,
+    ...hierarchyOf(env, r),
     domain: env.built.domains.get(r.key),
     health: 100,
     healthStatus: 'healthy',
@@ -84,16 +87,38 @@ export function applyDecisions(env: AnalysisEnv, a: ItemAnalysis) {
   for (const f of a.findings) {
     const dec = f.question ? env.decisionsByQuestion.get(f.question.id) : undefined;
     if (!dec) continue;
+    if (dec.effect === 'confirm') {
+      f.confirmation = { decisionId: dec.id, by: dec.decidedBy, at: dec.decidedAt };
+      continue;
+    }
     f.status = dec.effect === 'resolve' ? 'resolved' : dec.effect === 'accept_risk' ? 'accepted_risk' : 'dismissed';
     f.resolution = { decisionId: dec.id, summary: `${dec.answer}${dec.note ? ` — ${dec.note}` : ''}` };
   }
 }
 
+/**
+ * Effective policy action for a finding: AI findings that would block follow
+ * `policy.aiFindings` (P2); drift after approval follows `policy.driftReaction` (P4).
+ */
+function actionFor(env: AnalysisEnv, f: Finding): SeverityAction {
+  const base = env.policy.actions[f.severity];
+  f.needsConfirmation = undefined;
+  if (f.origin === 'drift') return driftReactionOf(env.policy) === 'review_required' ? 'block' : base === 'record' ? 'record' : 'notify';
+  if (f.origin !== 'ai' || base !== 'block') return base;
+  const mode = aiFindingsAction(env.policy);
+  if (mode === 'block') return 'block';
+  if (mode === 'notify') return 'notify';
+  if (f.confirmation) return 'block';
+  if (f.status === 'open') f.needsConfirmation = true;
+  return 'notify';
+}
+
 /** Compute dimension scores, health, readiness and the checklist. */
 export function scoreItem(env: AnalysisEnv, a: ItemAnalysis, ctx?: ItemCtx) {
   a.findings.sort((x, y) => SEVERITY_ORDER[x.severity] - SEVERITY_ORDER[y.severity] || (x.status === 'open' ? -1 : 1));
+  const action = new Map(a.findings.map((f) => [f, actionFor(env, f)]));
   const open = a.findings.filter((f) => f.status === 'open');
-  const counted = open.filter((f) => env.policy.actions[f.severity] !== 'record');
+  const counted = open.filter((f) => action.get(f) !== 'record');
 
   a.dimensions = DIMENSIONS.map((dimension): DimensionScore => {
     const fs = counted.filter((f) => f.dimension === dimension);
@@ -110,12 +135,13 @@ export function scoreItem(env: AnalysisEnv, a: ItemAnalysis, ctx?: ItemCtx) {
       score = Math.min(score, Math.round((designed / req) * 100) + 10);
     }
     score = Math.max(0, Math.min(100, Math.round(score)));
-    const blocking = fs.some((f) => env.policy.actions[f.severity] === 'block');
+    const blocking = fs.some((f) => action.get(f) === 'block');
     return { dimension, score, status: blocking || score < 60 ? 'fail' : score < 85 ? 'warn' : 'ok', notes };
   });
 
-  const blocking = open.filter((f) => env.policy.actions[f.severity] === 'block');
-  const notify = open.filter((f) => env.policy.actions[f.severity] === 'notify');
+  const blocking = open.filter((f) => action.get(f) === 'block');
+  for (const f of a.findings) f.blocks = blocking.includes(f) || undefined;
+  const notify = open.filter((f) => action.get(f) === 'notify');
   const weights: Record<Dimension, number> = { requirements: 1.3, design: 1, documentation: 0.8, architecture: 1.2, userJourneys: 1, errorHandling: 1.1, dependencies: 0.6 };
   const total = a.dimensions.reduce((s, d) => s + weights[d.dimension], 0);
   let health = Math.round(a.dimensions.reduce((s, d) => s + d.score * weights[d.dimension], 0) / total);
@@ -267,11 +293,11 @@ export function crossItemPass(env: AnalysisEnv, items: Map<string, ItemAnalysis>
     }
   }
 
-  // Epic analysis: rollup + cross-story checks
+  // Epic and feature analysis (P1): rollup + cross-story checks
   for (const a of items.values()) {
-    if (a.type !== 'epic') continue;
+    if (!isContainer(a.type)) continue;
     const r = env.reqByKey.get(a.key)!;
-    const stories = (env.childrenOf.get(a.key) ?? []).filter((s) => s.type === 'story').map((s) => items.get(s.key)!).filter(Boolean);
+    const stories = storiesOf(env, items, a.key);
     if (!stories.length) continue;
     const withDesign = stories.filter((s) => s.context.frames.some((f) => f.confidence >= 0.45));
     const withDocs = stories.filter((s) => s.context.documents.some((f) => f.confidence >= 0.45));
@@ -338,11 +364,21 @@ export function crossItemPass(env: AnalysisEnv, items: Map<string, ItemAnalysis>
   }
 }
 
-/** Epic dimensions blend the epic's own findings with the average of its stories. */
+const isContainer = (t: IssueType) => t === 'epic' || t === 'feature';
+const storiesOf = (env: AnalysisEnv, items: Map<string, ItemAnalysis>, key: string) => workItemsUnder(env.childrenOf, key).map((s) => items.get(s.key)!).filter(Boolean);
+
+/** Epic of an item (directly or through its feature) and its feature (P1). */
+function hierarchyOf(env: AnalysisEnv, r: RequirementItem): Pick<ItemAnalysis, 'epicKey' | 'featureKey'> {
+  const parent = r.parentKey ? env.reqByKey.get(r.parentKey) : undefined;
+  const feature = parent?.type === 'feature' ? parent : undefined;
+  return { epicKey: r.epicKey ?? feature?.epicKey, ...(feature && { featureKey: feature.key }) };
+}
+
+/** Epic and feature dimensions blend their own findings with the average of their stories. */
 export function blendEpicScores(items: Map<string, ItemAnalysis>, env: AnalysisEnv) {
   for (const a of items.values()) {
-    if (a.type !== 'epic' || !a.rollup) continue;
-    const stories = (env.childrenOf.get(a.key) ?? []).filter((s) => s.type === 'story').map((s) => items.get(s.key)!).filter(Boolean);
+    if (!isContainer(a.type) || !a.rollup) continue;
+    const stories = storiesOf(env, items, a.key);
     for (const d of a.dimensions) {
       const avg = stories.reduce((s, x) => s + (x.dimensions.find((y) => y.dimension === d.dimension)?.score ?? 100), 0) / stories.length;
       d.score = Math.round(Math.min(d.score, (d.score + avg) / 2));
@@ -350,7 +386,7 @@ export function blendEpicScores(items: Map<string, ItemAnalysis>, env: AnalysisE
     }
     const childAvg = stories.reduce((s, x) => s + x.health, 0) / stories.length;
     a.health = Math.round(Math.min(a.health, (a.health + childAvg) / 2));
-    // An epic is only as ready as its stories.
+    // An epic or feature is only as ready as its stories.
     const notReady = stories.filter((s) => s.readiness !== 'ready');
     if (notReady.length && a.readiness === 'ready') {
       a.readiness = 'needs_attention';
@@ -358,6 +394,9 @@ export function blendEpicScores(items: Map<string, ItemAnalysis>, env: AnalysisE
       a.health = Math.min(a.health, 84);
     }
     if (notReady.length) a.blockingIssues.push(`${notReady.length} of ${stories.length} stories not ready (${notReady.map((s) => s.key).join(', ')})`);
+    // P7: drift on an approved story is visible on the epic.
+    const review = stories.filter((s) => s.findings.some((f) => f.origin === 'drift' && f.status === 'open'));
+    if (review.length) a.blockingIssues.push(`Changed since approval, review needed: ${review.map((s) => s.key).join(', ')}`);
   }
 }
 

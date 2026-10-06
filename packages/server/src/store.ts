@@ -2,13 +2,15 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_POLICY, type AiProviderConfig, type AnalysisPolicy, type Approval, type Decision, type DriftEvent, type ProjectContext, type SemanticOutput, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, normalizeDecision, type AiProviderConfig, type AnalysisPolicy, type Approval, type Decision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Snapshot } from '@ci/core';
+import type { Principal } from './http.js';
+import { pruneToSchema, settingsBody } from './schemas.js';
 
 export interface Settings {
   mode: 'demo' | 'live';
   project: { key: string; name: string };
   integrations: {
-    jira: { enabled: boolean; baseUrl: string; email: string; projectKey: string; acceptanceCriteriaField?: string; jqlFilter?: string };
+    jira: { enabled: boolean; baseUrl: string; email: string; projectKey: string; acceptanceCriteriaField?: string; jqlFilter?: string; issueTypeMap?: Record<string, IssueType> };
     confluence: { enabled: boolean; baseUrl: string; email: string; spaceKeys: string[] };
     figma: { enabled: boolean; fileKeys: string[] };
   };
@@ -31,6 +33,9 @@ export interface Settings {
   };
   policy: AnalysisPolicy;
 }
+
+/** Shown in Settings (P1); unmapped Jira types still fall back to the core defaults and then to story. */
+export const DEFAULT_JIRA_ISSUE_TYPES: Record<string, IssueType> = { Epic: 'epic', Feature: 'feature', Story: 'story' };
 
 export const DEFAULT_SETTINGS: Settings = {
   mode: 'demo',
@@ -56,8 +61,10 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export interface AuditEntry {
   at: string;
-  kind: 'ai_call' | 'decision' | 'decision_removed' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change';
+  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change';
+  /** A display name; `via` is how the change was authorized (admin token or a loopback client). */
   actor: string;
+  via?: Principal;
   summary: string;
   details?: unknown;
 }
@@ -72,16 +79,48 @@ export interface HistoryPoint {
   decisionDebt: number;
 }
 
+/** A state file exists but cannot be read, parsed or decrypted. */
+export class StoreReadError extends Error {
+  readonly statusCode = 500;
+  constructor(readonly file: string, cause: string) {
+    super(`Cannot read ${file}: ${cause}. The file was left untouched; fix it (or CI_ENCRYPTION_KEY) and retry.`);
+    this.name = 'StoreReadError';
+  }
+}
+
 /**
  * File-based persistence (local-first). Sensitive state (context snapshot,
  * decisions, AI cache) can be encrypted at rest with AES-256-GCM using
  * CI_ENCRYPTION_KEY.
+ *
+ * Fail-closed: a missing file yields the default value, but a file that exists
+ * and cannot be read, parsed or decrypted throws StoreReadError instead of
+ * being treated as empty (which would let the next write erase it). Only the
+ * AI cache, which can always be rebuilt, falls back silently.
+ *
+ * Writes are serialized through one queue, and read-modify-write goes through
+ * the update* methods so concurrent requests cannot overwrite each other.
  */
 export class Store {
+  private queue: Promise<unknown> = Promise.resolve();
+
   constructor(readonly dir: string) {}
 
   async init() {
     await mkdir(this.dir, { recursive: true });
+    await this.migrateSettings();
+  }
+
+  /** Rewrites settings.json from an older version without unknown or invalid fields (e.g. old secrets). */
+  private async migrateSettings() {
+    if (!existsSync(join(this.dir, 'settings.json'))) return;
+    const raw = await this.readJson<unknown>('settings.json', {});
+    const pruned = pruneToSchema(raw, settingsBody) ?? {};
+    const removed = removedPaths(raw, pruned);
+    if (!removed.length) return;
+    await this.write('settings.json', pruned);
+    // Paths only: a removed field may hold an old secret.
+    await this.audit({ at: new Date().toISOString(), kind: 'settings', actor: 'system', summary: 'Settings from an older version cleaned up on start', details: { removed } });
   }
 
   private key(): Buffer | undefined {
@@ -89,93 +128,136 @@ export class Store {
     return k ? createHash('sha256').update(k).digest() : undefined;
   }
 
+  /** Runs `fn` after every previously queued write has finished. */
+  private serialized<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(fn, fn);
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
   private async readJson<T>(name: string, fallback: T): Promise<T> {
     const p = join(this.dir, name);
-    if (!existsSync(p)) return fallback;
-    const raw = await readFile(p, 'utf8');
+    let raw: string;
+    try {
+      raw = await readFile(p, 'utf8');
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return fallback;
+      throw new StoreReadError(name, (e as Error).message);
+    }
     try {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.__enc) {
         const key = this.key();
-        if (!key) throw new Error(`${name} is encrypted but CI_ENCRYPTION_KEY is not set`);
+        if (!key) throw new Error('the file is encrypted but CI_ENCRYPTION_KEY is not set');
         const d = createDecipheriv('aes-256-gcm', key, Buffer.from(parsed.iv, 'base64'));
         d.setAuthTag(Buffer.from(parsed.tag, 'base64'));
         return JSON.parse(Buffer.concat([d.update(Buffer.from(parsed.data, 'base64')), d.final()]).toString('utf8')) as T;
       }
       return parsed as T;
     } catch (e) {
-      console.warn(`[store] could not read ${name}: ${(e as Error).message}`);
-      return fallback;
+      throw new StoreReadError(name, (e as Error).message);
     }
   }
 
   private async writeJson(name: string, value: unknown, encrypt = false) {
     let body = JSON.stringify(value, null, 2);
-    const key = encrypt ? this.key() : undefined;
-    if (key) {
+    if (encrypt) {
+      const key = this.key();
+      if (!key) throw new Error(`Refusing to write ${name} unencrypted: encryption at rest is on but CI_ENCRYPTION_KEY is not set`);
       const iv = randomBytes(12);
       const c = createCipheriv('aes-256-gcm', key, iv);
       const data = Buffer.concat([c.update(body, 'utf8'), c.final()]);
       body = JSON.stringify({ __enc: 1, iv: iv.toString('base64'), tag: c.getAuthTag().toString('base64'), data: data.toString('base64') });
     }
     const p = join(this.dir, name);
-    await writeFile(`${p}.tmp`, body);
-    await rename(`${p}.tmp`, p);
+    const tmp = `${p}.${randomBytes(6).toString('hex')}.tmp`;
+    await writeFile(tmp, body);
+    await rename(tmp, p);
+  }
+
+  private write(name: string, value: unknown, encrypt = false) {
+    return this.serialized(() => this.writeJson(name, value, encrypt));
+  }
+
+  /** Read-modify-write under the write queue; `fn` may mutate and/or return the new value. */
+  private update<T>(name: string, fallback: T, fn: (current: T) => T | void, encrypted: boolean) {
+    return this.serialized(async () => {
+      const current = await this.readJson<T>(name, fallback);
+      const next = (fn(current) ?? current) as T;
+      await this.writeJson(name, next, encrypted && (await this.encrypt));
+      return next;
+    });
   }
 
   async settings(): Promise<Settings> {
-    const s = await this.readJson<Partial<Settings>>('settings.json', {});
-    return deepMerge(structuredClone(DEFAULT_SETTINGS), s) as Settings;
+    const s = (pruneToSchema(await this.readJson<unknown>('settings.json', {}), settingsBody) ?? {}) as Partial<Settings>;
+    const merged = deepMerge(structuredClone(DEFAULT_SETTINGS), s) as Settings;
+    // Kept out of DEFAULT_SETTINGS so a saved mapping replaces it instead of being merged with it.
+    merged.integrations.jira.issueTypeMap ??= { ...DEFAULT_JIRA_ISSUE_TYPES };
+    return merged;
   }
   saveSettings(s: Settings) {
-    return this.writeJson('settings.json', s);
+    return this.write('settings.json', s);
   }
 
   private get encrypt() {
     return this.settings().then((s) => s.security.encryptStoredContext);
   }
 
-  decisions() {
-    return this.readJson<Decision[]>('decisions.json', []);
+  /** All decision versions, including superseded and withdrawn ones. */
+  async decisions() {
+    return (await this.readJson<Decision[]>('decisions.json', [])).map(normalizeDecision);
   }
-  async saveDecisions(d: Decision[]) {
-    return this.writeJson('decisions.json', d, await this.encrypt);
+  updateDecisions(fn: (all: Decision[]) => Decision[] | void) {
+    return this.update<Decision[]>('decisions.json', [], (all) => {
+      const list = all.map(normalizeDecision);
+      return fn(list) ?? list;
+    }, true);
   }
   approvals() {
     return this.readJson<Approval[]>('approvals.json', []);
   }
-  async saveApprovals(a: Approval[]) {
-    return this.writeJson('approvals.json', a, await this.encrypt);
+  updateApprovals(fn: (all: Approval[]) => Approval[] | void) {
+    return this.update<Approval[]>('approvals.json', [], fn, true);
   }
   snapshot() {
     return this.readJson<Snapshot | null>('snapshot.json', null);
   }
   async saveSnapshot(s: Snapshot) {
-    return this.writeJson('snapshot.json', s, await this.encrypt);
+    return this.write('snapshot.json', s, await this.encrypt);
   }
   demoContext() {
     return this.readJson<ProjectContext | null>('demo-context.json', null);
   }
   saveDemoContext(c: ProjectContext | null) {
-    return this.writeJson('demo-context.json', c);
+    return this.write('demo-context.json', c);
+  }
+  updateDemoContext(fn: (c: ProjectContext | null) => ProjectContext | null | void) {
+    return this.update<ProjectContext | null>('demo-context.json', null, fn, false);
   }
   async aiCache(): Promise<Map<string, SemanticOutput>> {
-    return new Map(Object.entries(await this.readJson<Record<string, SemanticOutput>>('ai-cache.json', {})));
+    try {
+      return new Map(Object.entries(await this.readJson<Record<string, SemanticOutput>>('ai-cache.json', {})));
+    } catch (e) {
+      // A cache can always be rebuilt; losing it only costs extra AI calls.
+      console.warn(`[store] ${(e as Error).message} Starting with an empty AI cache.`);
+      return new Map();
+    }
   }
   async saveAiCache(m: Map<string, SemanticOutput>) {
-    return this.writeJson('ai-cache.json', Object.fromEntries([...m].slice(-2000)), await this.encrypt);
+    return this.write('ai-cache.json', Object.fromEntries([...m].slice(-2000)), await this.encrypt);
   }
   driftLog() {
     return this.readJson<DriftEvent[]>('drift.json', []);
   }
-  saveDriftLog(d: DriftEvent[]) {
-    return this.writeJson('drift.json', d.slice(-1000));
+  appendDriftLog(events: DriftEvent[]) {
+    return this.update<DriftEvent[]>('drift.json', [], (d) => [...d, ...events].slice(-1000), false);
   }
   history() {
     return this.readJson<HistoryPoint[]>('history.json', []);
   }
-  saveHistory(h: HistoryPoint[]) {
-    return this.writeJson('history.json', h.slice(-200));
+  appendHistory(point: HistoryPoint) {
+    return this.update<HistoryPoint[]>('history.json', [], (h) => [...h, point].slice(-200), false);
   }
 
   async audit(e: AuditEntry) {
@@ -189,8 +271,21 @@ export class Store {
   }
 }
 
+/** Dotted paths present in `before` but missing from `after` (a changed leaf counts as removed). */
+export function removedPaths(before: unknown, after: unknown, prefix = ''): string[] {
+  const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  if (!isObj(before)) return JSON.stringify(before) === JSON.stringify(after) ? [] : [prefix || '(root)'];
+  if (!isObj(after)) return [prefix || '(root)'];
+  return Object.keys(before).flatMap((k) => {
+    const path = prefix ? `${prefix}.${k}` : k;
+    return k in after ? removedPaths(before[k], after[k], path) : [path];
+  });
+}
+
 export function deepMerge<T extends Record<string, any>>(base: T, patch: Record<string, any>): T {
   for (const [k, v] of Object.entries(patch ?? {})) {
+    // JSON.parse turns "__proto__" into an own key; merging it would pollute Object.prototype.
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
     if (v && typeof v === 'object' && !Array.isArray(v) && base[k] && typeof base[k] === 'object' && !Array.isArray(base[k])) deepMerge(base[k], v);
     else if (v !== undefined) (base as any)[k] = v;
   }

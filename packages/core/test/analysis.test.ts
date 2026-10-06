@@ -18,6 +18,8 @@ const decision = (p: Partial<Decision> & Pick<Decision, 'questionId' | 'findingI
   question: 'Q',
   decidedBy: 'tester',
   decidedAt: '2026-10-01T00:00:00.000Z',
+  version: 1,
+  status: 'active',
   effect: 'resolve',
   ...p,
 });
@@ -138,7 +140,7 @@ describe('continuous drift detection', () => {
   it('reports changed claims and impact on approved items', async () => {
     const ctx = demoProject();
     const first = await analyzeProject(ctx);
-    const approval = { itemKey: 'PAY-123', approvedAt: '2026-10-01T00:00:00Z', approvedBy: 'po', contextHashes: approvalBaseline(first.graph, item(first, 'PAY-123')) };
+    const approval = { itemKey: 'PAY-123', approvedAt: '2026-10-01T00:00:00Z', approvedBy: 'po', ...approvalBaseline(first.graph, item(first, 'PAY-123')) };
     DEMO_SCENARIOS.find((s) => s.id === 'timeout-change')!.apply(ctx);
     const second = await analyzeProject(ctx, { previous: first.snapshot, approvals: [approval] });
 
