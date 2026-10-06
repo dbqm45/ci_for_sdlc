@@ -1,9 +1,8 @@
 {
   "$schema": "../../node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "testRunner": "vitest",
-  "vitest": { "configFile": "vitest.config.ts" },
-  "coverageAnalysis": "perTest",
-  "ignoreStatic": true,
+  "testRunner": "command",
+  "commandRunner": { "command": "npx vitest run --no-isolate --maxWorkers=1" },
+  "coverageAnalysis": "off",
   "mutate": [
     "src/policy.ts",
     "src/decisions.ts",

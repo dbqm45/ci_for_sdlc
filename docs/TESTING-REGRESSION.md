@@ -63,9 +63,10 @@ przejrzyj ją jak zmianę publicznego interfejsu (web, klienci, README → API),
 i commitnij plik razem ze zmianą kodu. Test biegnie w ramach zwykłych testów jednostkowych, więc jest częścią bramki PR.
 
 ### Testy mutacyjne (`packages/core/stryker.config.json`)
-Stryker 10 z runnerem Vitest mutuje moduły, od których zależy decyzja bramki: polityka, decyzje, analiza wpływu,
-hierarchia, strażniki, odcisk zmian (drift) i stany UI. Mutanty statyczne (tablice stałych) są pomijane (`ignoreStatic`),
-bo kosztują 99% czasu. Wynik jest wskaźnikiem jakości testów, nie celem: przeżyty mutant to brakujący przypadek testowy.
+Stryker 10 mutuje moduły, od których zależy decyzja bramki: polityka, decyzje, analiza wpływu, hierarchia, strażniki,
+odcisk zmian (drift) i stany UI. Runner `command` uruchamia dla każdego mutanta `vitest run --no-isolate --maxWorkers=1`.
+Runner `@stryker-mutator/vitest-runner` 10 z Vitest 5 nie aktywuje mutantów i zgłasza fałszywe 0% — nie wracaj do niego
+bez sprawdzenia wyniku na jednym module (`npx stryker run --mutate src/guards.ts`). Wynik jest wskaźnikiem jakości testów, nie celem: przeżyty mutant to brakujący przypadek testowy.
 Próg `break` jest ustawiony tuż pod zmierzonym wynikiem, żeby wynik nie spadał niezauważony.
 
 Pierwszy pomiar (749 mutantów, ok. 8 min): **28,6%**, próg `break: 25`. Najsłabiej: `analysis/states.ts` (13,6%),

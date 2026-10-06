@@ -23,8 +23,10 @@ jobs:
           node-version: 22
       # Runtime dependencies (what ships in the image) must be free of high and critical advisories.
       - run: npm audit --omit=dev --audit-level=high
-      # Development tools (vitest, playwright, …) never ship in the image: reported as a warning, not a gate.
-      # Known today: vitest 3 pulls tinypool/@vitest/mocker advisories, fixed only by the major bump to vitest 5.
-      - name: npm audit (dev dependencies, report only)
+      # Development tools (vitest, playwright, stryker, …) never ship in the image, but run in CI with its token:
+      # high and critical advisories block, moderate ones are only reported.
+      - name: npm audit (all dependencies, high and critical)
+        run: npm audit --audit-level=high
+      - name: npm audit (all dependencies, report only)
         continue-on-error: true
         run: npm audit --audit-level=moderate
