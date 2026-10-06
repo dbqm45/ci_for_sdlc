@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Decision, Finding, Question } from '@ci/core';
-import { api, currentUser } from '../api';
+import { api, currentUser, errMsg } from '../api';
 import { CATEGORY_LABELS, DIMENSION_LABELS, SeverityBadge, Source } from './ui';
 
 /** Finding → Explanation → Evidence → Question → Decision */
@@ -74,7 +74,7 @@ function ConfirmButton({ finding, onChanged }: { finding: Finding; onChanged: ()
       await api.decide({ questionId: q.id, findingId: finding.id, itemKey: finding.itemKey, topic: q.topic, question: q.text, answer: 'AI finding confirmed', decidedBy: currentUser(), effect: 'confirm' });
       onChanged();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errMsg(e));
     }
   };
   return (
@@ -120,7 +120,7 @@ export function QuestionBox({
       await api.decide({ questionId: question.id, findingId, itemKey, topic: question.topic, question: question.text, answer: ans, note: note || undefined, decidedBy: currentUser(), effect });
       onDecided();
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -137,8 +137,8 @@ export function QuestionBox({
           </button>
         ))}
       </div>
-      {isOther && <input className="input" autoFocus placeholder="Describe what should happen…" value={other} onChange={(e) => setOther(e.target.value)} />}
-      {selected && <textarea className="input" placeholder="Note / rationale (optional) — becomes part of the specification" value={note} onChange={(e) => setNote(e.target.value)} />}
+      {isOther && <input className="input" autoFocus maxLength={500} placeholder="Describe what should happen…" value={other} onChange={(e) => setOther(e.target.value)} />}
+      {selected && <textarea className="input" maxLength={2000} placeholder="Note / rationale (optional) — becomes part of the specification" value={note} onChange={(e) => setNote(e.target.value)} />}
       <div className="row wrap">
         <button className="btn primary sm" disabled={!answer || busy} onClick={() => submit('resolve')}>
           Record decision

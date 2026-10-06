@@ -1,4 +1,5 @@
 import type { DesignFrame } from '../model.js';
+import { isRecord, records, str } from '../guards.js';
 
 /**
  * Figma connector (REST API, personal access token or OAuth token).
@@ -22,6 +23,26 @@ interface FigmaNode {
   interactions?: { actions?: { destinationId?: string }[] }[];
 }
 
+/** Validates an untrusted Figma API node tree; nodes without id, name or type are dropped with their subtree. */
+function toFigmaNode(v: Record<string, unknown>): FigmaNode | undefined {
+  const id = str(v.id);
+  const name = str(v.name);
+  const type = str(v.type);
+  if (id === undefined || name === undefined || type === undefined) return undefined;
+  return {
+    id,
+    name,
+    type,
+    characters: str(v.characters),
+    transitionNodeID: str(v.transitionNodeID),
+    interactions: records(v.interactions).map((i) => ({ actions: records(i.actions).map((a) => ({ destinationId: str(a.destinationId) })) })),
+    children: records(v.children).flatMap((c) => toFigmaNode(c) ?? []),
+  };
+}
+
+/** The document root has no meaningful id, so only its pages are validated. */
+const toFigmaDocument = (v: unknown): FigmaNode => ({ id: '', name: '', type: 'DOCUMENT', children: isRecord(v) ? records(v.children).flatMap((c) => toFigmaNode(c) ?? []) : [] });
+
 const FRAME_TYPES = new Set(['FRAME', 'COMPONENT', 'COMPONENT_SET', 'INSTANCE']);
 
 export async function fetchFigma(cfg: FigmaConfig): Promise<DesignFrame[]> {
@@ -29,13 +50,15 @@ export async function fetchFigma(cfg: FigmaConfig): Promise<DesignFrame[]> {
   for (const key of cfg.fileKeys) {
     const res = await fetch(`https://api.figma.com/v1/files/${encodeURIComponent(key)}`, { headers: { 'X-Figma-Token': cfg.token } });
     if (!res.ok) throw new Error(`Figma file ${key} → HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    const file = (await res.json()) as { name: string; lastModified: string; document: FigmaNode };
-    frames.push(...framesFromDocument(key, file.name, file.lastModified, file.document, cfg.maxTextsPerFrame ?? 40));
+    const file: unknown = await res.json();
+    if (!isRecord(file) || !isRecord(file.document)) throw new Error(`Figma file ${key} → unexpected response`);
+    frames.push(...framesFromDocument(key, str(file.name) ?? key, str(file.lastModified) ?? new Date().toISOString(), file.document, cfg.maxTextsPerFrame ?? 40));
   }
   return frames;
 }
 
-export function framesFromDocument(fileKey: string, fileName: string, lastModified: string, doc: FigmaNode, maxTexts = 40): DesignFrame[] {
+export function framesFromDocument(fileKey: string, fileName: string, lastModified: string, raw: unknown, maxTexts = 40): DesignFrame[] {
+  const doc = toFigmaDocument(raw);
   const out: DesignFrame[] = [];
   for (const page of doc.children ?? []) {
     if (page.type !== 'CANVAS') continue;

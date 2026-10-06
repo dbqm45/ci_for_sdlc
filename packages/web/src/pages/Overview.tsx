@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../App';
-import { api, type HistoryPoint } from '../api';
+import { api, type HistoryPoint, errMsg } from '../api';
 import { Bar, Card, HealthNumber, SeverityBadge, Source, Stat, StatusBadge, ago } from '../components/ui';
 
 export function Overview() {
@@ -31,7 +31,7 @@ export function Overview() {
       toast(`Change applied — ${r.drift.length} drift events detected`);
       navigate('/drift');
     } catch (e) {
-      toast((e as Error).message);
+      toast(errMsg(e));
     } finally {
       setBusy(undefined);
     }

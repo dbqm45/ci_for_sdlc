@@ -49,7 +49,7 @@ const EXTRACTORS: Extractor[] = [
       const c = /(?:does not|doesn't|do not|no) respon\w*\s*within\s*(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|secs?|seconds?|min|minutes?)\b/i.exec(s);
       const d = /(?:TIMEOUT|timeout)\w*\s*[=:]\s*(\d+)\s*(ms)?/.exec(s);
       const m = a ?? b ?? c;
-      if (m) return [toSeconds(Number(m[1]), m[2]), 's'];
+      if (m) return [toSeconds(Number(m[1]), m[2]!), 's'];
       if (d) return [d[2] ? toSeconds(Number(d[1]), 'ms') : Number(d[1]), 's'];
       return undefined;
     },
@@ -63,7 +63,7 @@ const EXTRACTORS: Extractor[] = [
         /(?:up to|max(?:imum)?(?: of)?|at most|limit(?:ed)? (?:of|to)|no more than)\s*(\d+|one|two|three|four|five)\s*(?:\w+\s){0,2}?(?:retries|retry attempts|attempts|times|tries)/i.exec(s) ??
         /(\d+|one|two|three|four|five)\s*(?:retries|retry attempts)\b/i.exec(s) ??
         /retry limit (?:of |is |= ?)?(\d+)/i.exec(s);
-      return m ? [wordNum(m[1])] : undefined;
+      return m ? [wordNum(m[1]!)] : undefined;
     },
   },
   {
@@ -86,14 +86,14 @@ const EXTRACTORS: Extractor[] = [
     attribute: 'session_lifetime',
     match: (s) => {
       const m = /session[^.\d]{0,40}?(\d+)\s*(min|minutes?|h|hours?)\b/i.exec(s);
-      return m && /expir|lifetime|time[- ]?out|valid/i.test(s) ? [toSeconds(Number(m[1]), m[2]) / 60, 'min'] : undefined;
+      return m && /expir|lifetime|time[- ]?out|valid/i.test(s) ? [toSeconds(Number(m[1]), m[2]!) / 60, 'min'] : undefined;
     },
   },
   {
     attribute: 'max_items',
     match: (s) => {
       const m = /(?:max(?:imum)?(?: of)?|up to|at most|no more than|limit(?:ed)? to)\s*(\d+)\s*(?:saved\s+)?(cards|payment methods|methods|items|addresses)/i.exec(s);
-      return m ? [Number(m[1]), m[2].toLowerCase()] : undefined;
+      return m ? [Number(m[1]), m[2]!.toLowerCase()] : undefined;
     },
   },
   {
@@ -102,7 +102,7 @@ const EXTRACTORS: Extractor[] = [
       if (!/upload|file|attachment/i.test(s)) return undefined;
       const m = /(\d+(?:\.\d+)?)\s*(KB|MB|GB)\b/i.exec(s);
       if (!m) return undefined;
-      const mult = { kb: 1 / 1024, mb: 1, gb: 1024 }[m[2].toLowerCase() as 'kb' | 'mb' | 'gb'];
+      const mult = { kb: 1 / 1024, mb: 1, gb: 1024 }[m[2]!.toLowerCase() as 'kb' | 'mb' | 'gb'];
       return [Number(m[1]) * mult, 'MB'];
     },
   },
@@ -181,7 +181,7 @@ export function findConflicts(claims: Claim[]): ClaimConflict[] {
     const values = [...new Set(cs.map((c) => formatClaimValue(c)))];
     const entities = new Set(cs.map((c) => c.evidence.entityId));
     if (values.length > 1 && entities.size > 1) {
-      const [subject, attribute] = k.split('|');
+      const [subject = '', attribute = ''] = k.split('|');
       out.push({ subject, attribute: attribute as ClaimAttribute, claims: cs, values });
     }
   }

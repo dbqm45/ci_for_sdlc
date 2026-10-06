@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import type { ContextRef, ItemAnalysis } from '@ci/core';
 import { useApp } from '../App';
-import { api, currentUser, type GraphData, type ItemDetail } from '../api';
+import { api, currentUser, type GraphData, type ItemDetail, errMsg } from '../api';
 import { FindingCard, QuestionBox } from '../components/FindingCard';
 import { GraphView } from '../components/GraphView';
 import { Bar, Card, DIMENSION_LABELS, HealthNumber, JOURNEY_LABELS, ReadinessBadge, STATE_LABELS, SeverityBadge, Source, Spinner, StatusBadge, ago } from '../components/ui';
@@ -20,7 +20,7 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
     try {
       setD(await api.item(itemKey));
     } catch (e) {
-      setErr((e as Error).message);
+      setErr(errMsg(e));
     }
   }, [itemKey]);
   useEffect(() => void load(), [load, version]);
@@ -53,7 +53,7 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
       toast(`${a.key} approved — drift will be monitored from now on`);
       await changed();
     } catch (e) {
-      toast((e as Error).message);
+      toast(errMsg(e));
     }
   };
   const aiReview = async () => {
@@ -63,7 +63,7 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
       toast(r.errors.length ? `AI review finished with errors: ${r.errors[0]}` : 'AI review complete');
       await changed();
     } catch (e) {
-      toast((e as Error).message);
+      toast(errMsg(e));
     } finally {
       setAiBusy(false);
     }

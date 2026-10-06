@@ -1,12 +1,17 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { AnthropicBedrockMantle } from '@anthropic-ai/bedrock-sdk';
-import { OUTPUT_SCHEMA, SYSTEM_PROMPT, renderUserPrompt, type SemanticAnalyzer, type SemanticInput, type SemanticOutput } from './types.js';
+import { OUTPUT_SCHEMA, SYSTEM_PROMPT, renderUserPrompt, type SemanticAnalyzer, type SemanticChallenge, type SemanticFinding, type SemanticInput, type SemanticOutput } from './types.js';
+import { isRecord, isStringArray, oneOf } from '../guards.js';
 
 /**
  * Organization-selectable AI provider. Secrets (API keys) are never part of
  * the persisted config — they come from the environment of the server.
  */
-export type AiProviderKind = 'none' | 'anthropic' | 'bedrock' | 'openai' | 'azure-openai' | 'custom';
+export const AI_PROVIDERS = ['none', 'anthropic', 'bedrock', 'openai', 'azure-openai', 'custom'] as const;
+export type AiProviderKind = (typeof AI_PROVIDERS)[number];
+
+export const AI_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type AiEffort = (typeof AI_EFFORTS)[number];
 
 export interface AiProviderConfig {
   provider: AiProviderKind;
@@ -14,7 +19,7 @@ export interface AiProviderConfig {
   /** Only used by OpenAI-compatible providers; current Claude models do not accept sampling params. */
   temperature?: number;
   /** Claude effort level (low…max). */
-  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  effort?: AiEffort;
   /** Bedrock region. */
   region?: string;
   /** OpenAI-compatible base URL (custom endpoint / Azure resource endpoint). */
@@ -126,6 +131,32 @@ export function parseOutput(text: string): SemanticOutput {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start < 0 || end < start) throw new Error('AI response did not contain JSON');
-  const parsed = JSON.parse(text.slice(start, end + 1)) as Partial<SemanticOutput>;
-  return { findings: Array.isArray(parsed.findings) ? parsed.findings : [], challenges: Array.isArray(parsed.challenges) ? parsed.challenges : [] };
+  const parsed: unknown = JSON.parse(text.slice(start, end + 1));
+  if (!isRecord(parsed)) return { findings: [], challenges: [] };
+  // Strict structured output is not available on every provider; items off the schema are dropped.
+  return {
+    findings: Array.isArray(parsed.findings) ? parsed.findings.filter(isSemanticFinding) : [],
+    challenges: Array.isArray(parsed.challenges) ? parsed.challenges.filter(isSemanticChallenge) : [],
+  };
 }
+
+const FINDING_PROPS = OUTPUT_SCHEMA.properties.findings.items.properties;
+
+const isQuestion = (v: unknown): v is NonNullable<SemanticFinding['question']> => isRecord(v) && typeof v.text === 'string' && isStringArray(v.options) && typeof v.topic === 'string';
+
+function isSemanticFinding(v: unknown): v is SemanticFinding {
+  return (
+    isRecord(v) &&
+    oneOf(FINDING_PROPS.category.enum, v.category) &&
+    oneOf(FINDING_PROPS.severity.enum, v.severity) &&
+    oneOf(FINDING_PROPS.dimension.enum, v.dimension) &&
+    typeof v.title === 'string' &&
+    typeof v.explanation === 'string' &&
+    Array.isArray(v.evidence) &&
+    v.evidence.every((e) => isRecord(e) && typeof e.ref === 'string' && typeof e.quote === 'string') &&
+    (v.question === undefined || isQuestion(v.question))
+  );
+}
+
+const isSemanticChallenge = (v: unknown): v is SemanticChallenge =>
+  isRecord(v) && typeof v.question === 'string' && typeof v.rationale === 'string' && isStringArray(v.options) && typeof v.topic === 'string';

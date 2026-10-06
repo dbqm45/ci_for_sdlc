@@ -1,5 +1,6 @@
 import type { DocumentItem, IssueType, RequirementItem } from '../model.js';
 import { resolveIssueType } from '../hierarchy.js';
+import { isRecord, records, str, strings } from '../guards.js';
 import { htmlToText } from '../text.js';
 
 /**
@@ -32,18 +33,33 @@ export interface ConfluenceConfig {
 
 const auth = (email: string, token: string) => `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`;
 
-async function getJson<T>(url: string, headers: Record<string, string>): Promise<T> {
+/** GETs JSON and hands it to `parse`, which turns the untrusted body into a typed value (or throws). */
+async function getJson<T>(url: string, headers: Record<string, string>, parse: (body: unknown) => T): Promise<T> {
   const res = await fetch(url, { headers: { Accept: 'application/json', ...headers } });
   if (!res.ok) throw new Error(`GET ${url} → HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  return (await res.json()) as T;
+  const body: unknown = await res.json();
+  return parse(body);
 }
+
+const expectRecord = (url: string) => (body: unknown) => {
+  if (!isRecord(body)) throw new Error(`GET ${url} → unexpected response`);
+  return body;
+};
+
+const pathOf = (url: string) => url.split('?')[0] ?? url;
 
 // ---------------------------------------------------------------------------- Jira
 
 export interface JiraIssue {
   key: string;
-  fields: Record<string, any>;
+  /** Raw Jira fields; read through the guards, never trusted as typed. */
+  fields: Record<string, unknown>;
 }
+
+const toJiraIssue = (v: Record<string, unknown>): JiraIssue[] => {
+  const key = str(v.key);
+  return key ? [{ key, fields: isRecord(v.fields) ? v.fields : {} }] : [];
+};
 
 export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
   const base = cfg.baseUrl.replace(/\/$/, '');
@@ -54,9 +70,10 @@ export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
   let next: string | undefined;
   do {
     const url = `${base}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&fields=${fields}&maxResults=100${next ? `&nextPageToken=${encodeURIComponent(next)}` : ''}`;
-    const page = await getJson<{ issues: JiraIssue[]; nextPageToken?: string; isLast?: boolean }>(url, headers);
-    issues.push(...page.issues);
-    next = page.isLast === false || page.nextPageToken ? page.nextPageToken : undefined;
+    const page = await getJson(url, headers, expectRecord(pathOf(url)));
+    issues.push(...records(page.issues).flatMap(toJiraIssue));
+    const token = str(page.nextPageToken);
+    next = page.isLast === false || token ? token : undefined;
   } while (next && issues.length < (cfg.maxIssues ?? 2000));
 
   const items = issues.map((i) => jiraIssueToRequirement(i, base, cfg));
@@ -64,8 +81,8 @@ export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
   // Remote links (Confluence pages / Figma frames) for stories, bugs and epics.
   await pool(items.filter((i) => i.type !== 'task' && i.type !== 'subtask'), 4, async (item) => {
     try {
-      const links = await getJson<{ object?: { url?: string } }[]>(`${base}/rest/api/3/issue/${item.key}/remotelink`, headers);
-      item.remoteLinks.push(...links.map((l) => l.object?.url).filter((u): u is string => !!u));
+      const links = await getJson(`${base}/rest/api/3/issue/${item.key}/remotelink`, headers, records);
+      item.remoteLinks.push(...links.flatMap((l) => (isRecord(l.object) && str(l.object.url)) || []));
     } catch {
       /* remote links are optional */
     }
@@ -76,28 +93,33 @@ export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
 export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: Pick<JiraConfig, 'acceptanceCriteriaField' | 'issueTypeMap'> = {}): RequirementItem {
   const f = i.fields;
   const acField = cfg.acceptanceCriteriaField;
-  const type: IssueType = resolveIssueType(f.issuetype?.name ?? 'Story', { subtask: f.issuetype?.subtask }, cfg.issueTypeMap);
+  const issuetype = isRecord(f.issuetype) ? f.issuetype : {};
+  const type: IssueType = resolveIssueType(str(issuetype.name) ?? 'Story', { subtask: issuetype.subtask === true }, cfg.issueTypeMap);
   const description = adfToText(f.description);
   const sections = splitSections(description);
-  const acRaw = acField && f[acField] ? (typeof f[acField] === 'string' ? f[acField] : adfToText(f[acField])) : sections.get('acceptance criteria') ?? '';
-  const parent = f.parent as { key: string; fields?: { issuetype?: { name?: string } } } | undefined;
-  const parentIsEpic = !!parent && resolveIssueType(parent.fields?.issuetype?.name ?? '', {}, cfg.issueTypeMap) === 'epic';
+  const acRaw = acField && f[acField] ? adfToText(f[acField]) : sections.get('acceptance criteria') ?? '';
+  const parentKey = isRecord(f.parent) ? str(f.parent.key) : undefined;
+  const parentFields = isRecord(f.parent) && isRecord(f.parent.fields) ? f.parent.fields : {};
+  const parentTypeName = isRecord(parentFields.issuetype) ? str(parentFields.issuetype.name) : undefined;
+  const parentIsEpic = !!parentKey && resolveIssueType(parentTypeName ?? '', {}, cfg.issueTypeMap) === 'epic';
+  const link = (issue: unknown, type: string | undefined) => (isRecord(issue) && str(issue.key) ? [{ type: type ?? 'relates to', key: str(issue.key)! }] : []);
 
   return {
     key: i.key,
     type,
-    title: f.summary ?? i.key,
+    title: str(f.summary) ?? i.key,
     description: sections.get('__body') ?? description,
     acceptanceCriteria: bullets(acRaw),
     businessRules: bullets(sections.get('business rules') ?? ''),
-    status: f.status?.name ?? 'Unknown',
-    epicKey: parentIsEpic ? parent?.key : undefined,
-    parentKey: !parentIsEpic ? parent?.key : undefined,
-    labels: f.labels ?? [],
-    components: (f.components ?? []).map((c: { name: string }) => c.name),
-    links: (f.issuelinks ?? []).flatMap((l: any) =>
-      l.outwardIssue ? [{ type: l.type?.outward ?? 'relates to', key: l.outwardIssue.key }] : l.inwardIssue ? [{ type: l.type?.inward ?? 'relates to', key: l.inwardIssue.key }] : [],
-    ),
+    status: (isRecord(f.status) && str(f.status.name)) || 'Unknown',
+    epicKey: parentIsEpic ? parentKey : undefined,
+    parentKey: !parentIsEpic ? parentKey : undefined,
+    labels: strings(f.labels),
+    components: records(f.components).flatMap((c) => str(c.name) ?? []),
+    links: records(f.issuelinks).flatMap((l) => {
+      const t = isRecord(l.type) ? l.type : {};
+      return l.outwardIssue ? link(l.outwardIssue, str(t.outward)) : link(l.inwardIssue, str(t.inward));
+    }),
     remoteLinks: [],
     bug:
       type === 'bug'
@@ -108,20 +130,19 @@ export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: Pick<Jir
             environment: sections.get('environment'),
           }
         : undefined,
-    updatedAt: f.updated ?? new Date().toISOString(),
+    updatedAt: str(f.updated) ?? new Date().toISOString(),
     url: `${base}/browse/${i.key}`,
   };
 }
 
-/** Atlassian Document Format → plain text (headings and bullets preserved as lines). */
-export function adfToText(node: any): string {
-  if (!node) return '';
+/** Atlassian Document Format → plain text (headings and bullets preserved as lines). Malformed nodes are skipped. */
+export function adfToText(node: unknown): string {
   if (typeof node === 'string') return node;
-  const walk = (n: any): string => {
-    if (!n) return '';
-    if (n.type === 'text') return n.text ?? '';
+  if (!isRecord(node)) return '';
+  const walk = (n: Record<string, unknown>): string => {
+    if (n.type === 'text') return str(n.text) ?? '';
     if (n.type === 'hardBreak') return '\n';
-    const inner = (n.content ?? []).map(walk).join('');
+    const inner = records(n.content).map(walk).join('');
     switch (n.type) {
       case 'paragraph':
         return inner + '\n';
@@ -149,7 +170,7 @@ export function splitSections(text: string): Map<string, string> {
   for (const line of lines) {
     const m = known.exec(line.trim());
     if (m) {
-      current = m[1].toLowerCase().replace('behaviour', 'behavior');
+      current = m[1]!.toLowerCase().replace('behaviour', 'behavior');
       buf[current] = m[2] ? [m[2]] : [];
       continue;
     }
@@ -175,30 +196,37 @@ export async function fetchConfluence(cfg: ConfluenceConfig): Promise<DocumentIt
   const headers = { Authorization: auth(cfg.email, cfg.apiToken) };
   const docs: DocumentItem[] = [];
   for (const spaceKey of cfg.spaceKeys) {
-    const spaces = await getJson<{ results: { id: string; key: string }[] }>(`${base}/wiki/api/v2/spaces?keys=${encodeURIComponent(spaceKey)}`, headers);
-    const space = spaces.results[0];
-    if (!space) continue;
-    let url: string | undefined = `${base}/wiki/api/v2/spaces/${space.id}/pages?body-format=storage&limit=100`;
+    const spacesUrl = `${base}/wiki/api/v2/spaces?keys=${encodeURIComponent(spaceKey)}`;
+    const spaces = await getJson(spacesUrl, headers, expectRecord(pathOf(spacesUrl)));
+    const spaceId = records(spaces.results).map((s) => s.id).find((id) => typeof id === 'string' || typeof id === 'number');
+    if (spaceId === undefined) continue;
+    let url: string | undefined = `${base}/wiki/api/v2/spaces/${spaceId}/pages?body-format=storage&limit=100`;
     while (url && docs.length < (cfg.maxPages ?? 1000)) {
-      const res: { results: any[]; _links?: { next?: string } } = await getJson(url, headers);
-      for (const p of res.results) {
+      const res: Record<string, unknown> = await getJson(url, headers, expectRecord(pathOf(url)));
+      for (const p of records(res.results)) {
+        const id = typeof p.id === 'string' || typeof p.id === 'number' ? String(p.id) : undefined;
+        if (!id) continue;
+        const storage = isRecord(p.body) && isRecord(p.body.storage) ? p.body.storage : {};
+        const webui = isRecord(p._links) ? str(p._links.webui) : undefined;
         docs.push({
-          id: String(p.id),
-          title: p.title,
+          id,
+          title: str(p.title) ?? id,
           space: spaceKey,
-          body: htmlToText(p.body?.storage?.value ?? ''),
+          body: htmlToText(str(storage.value) ?? ''),
           labels: [],
-          updatedAt: p.version?.createdAt ?? new Date().toISOString(),
-          url: p._links?.webui ? `${base}/wiki${p._links.webui}` : undefined,
+          updatedAt: (isRecord(p.version) && str(p.version.createdAt)) || new Date().toISOString(),
+          url: webui ? `${base}/wiki${webui}` : undefined,
         });
       }
-      url = res._links?.next ? `${base}${res._links.next}` : undefined;
+      const next: string | undefined = isRecord(res._links) ? str(res._links.next) : undefined;
+      url = next ? `${base}${next}` : undefined;
     }
   }
   await pool(docs, 4, async (d) => {
     try {
-      const res = await getJson<{ results: { name: string }[] }>(`${base}/wiki/api/v2/pages/${d.id}/labels`, headers);
-      d.labels = res.results.map((l) => l.name);
+      const labelsUrl = `${base}/wiki/api/v2/pages/${d.id}/labels`;
+      const res = await getJson(labelsUrl, headers, expectRecord(labelsUrl));
+      d.labels = records(res.results).flatMap((l) => str(l.name) ?? []);
     } catch {
       /* labels are optional */
     }
@@ -209,6 +237,6 @@ export async function fetchConfluence(cfg: ConfluenceConfig): Promise<DocumentIt
 export async function pool<T>(xs: T[], n: number, fn: (x: T) => Promise<void>) {
   let i = 0;
   await Promise.all(Array.from({ length: Math.min(n, xs.length) }, async () => {
-    while (i < xs.length) await fn(xs[i++]);
+    while (i < xs.length) await fn(xs[i++] as T);
   }));
 }

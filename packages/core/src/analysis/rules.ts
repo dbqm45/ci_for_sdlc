@@ -263,7 +263,7 @@ export const RULES: Rule[] = [
           severity: 'critical',
           dimension: 'architecture',
           title: 'Idempotency strategy missing',
-          explanation: repeated.length
+          explanation: repeated[0]
             ? `Retry may create a duplicate payment: "${repeated[0].evidence.title}" states that repeated requests are accepted, and no idempotency mechanism is defined in the requirements or decisions.`
             : 'Retry may create a duplicate payment: the feature allows repeating a payment request and no idempotency mechanism was identified in Jira, Confluence or recorded decisions.',
           evidence: [evJira(c.r, STATE_PATTERNS.retry), ...repeated.map((x) => x.evidence), ...firstMatching(c, /payment|retry/i)].slice(0, 4),
@@ -305,15 +305,17 @@ export const RULES: Rule[] = [
     run: (c) => {
       const wantsSync = c.claims.spec.filter((x) => x.attribute === 'processing_mode' && x.value === 'sync');
       const isAsync = c.claims.docs.filter((x) => x.attribute === 'processing_mode' && x.value === 'async');
-      if (!wantsSync.length || !isAsync.length) return [];
+      const [want] = wantsSync;
+      const [doc] = isAsync;
+      if (!want || !doc) return [];
       return [
         {
           category: 'CONFLICT',
           severity: 'critical',
           dimension: 'architecture',
           title: 'Requirement expects immediate result, API is asynchronous',
-          explanation: `The story expects an immediate final result ("${wantsSync[0].text}"), but "${isAsync[0].evidence.title}" describes asynchronous processing.`,
-          evidence: [wantsSync[0].evidence, ...isAsync.slice(0, 2).map((x) => x.evidence)],
+          explanation: `The story expects an immediate final result ("${want.text}"), but "${doc.evidence.title}" describes asynchronous processing.`,
+          evidence: [want.evidence, ...isAsync.slice(0, 2).map((x) => x.evidence)],
           question: { text: 'Should the UI wait for the final result, poll for status, or display a processing state?', options: ['Wait for final result (make API synchronous)', 'Poll for status', 'Display processing state and notify later'], topic: 'async behavior' },
         },
       ];
@@ -457,7 +459,7 @@ export const RULES: Rule[] = [
                 options: ['Sources will be updated to match the decision', 'Decision must be revisited'],
                 topic: 'documentation',
               }
-            : { text: `Which ${attr} is correct for ${conflict.subject}?`, options: [...byValue].map(([v, cs]) => `${v} (as in ${cs[0].evidence.title})`), topic: `${conflict.subject} ${attr}` },
+            : { text: `Which ${attr} is correct for ${conflict.subject}?`, options: [...byValue].map(([v, cs]) => `${v} (as in ${cs[0]!.evidence.title})`), topic: `${conflict.subject} ${attr}` },
         });
       }
       return out;

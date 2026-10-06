@@ -2,6 +2,8 @@ import type { SemanticAnalyzer, SemanticInput, SemanticOutput } from './ai/types
 import { analyzeItem, applyDecisions, blendEpicScores, crossItemPass, findingFromDraft, scoreItem } from './analysis/analyze.js';
 import { formatClaimValue } from './analysis/claims.js';
 import { createEnv, evJira, questionOptions, type ItemCtx } from './analysis/context.js';
+import { designCoveragePercent } from './analysis/states.js';
+import { errorMessage } from './errors.js';
 import { buildContextGraph, issueId, type ContextGraph } from './graph.js';
 import type {
   AnalysisResult,
@@ -100,7 +102,7 @@ export async function analyzeProject(ctx: ProjectContext, opts: AnalyzeOptions =
       try {
         await semanticPass(a, ctxs.get(a.key)!, env.decisionsByQuestion, opts.ai!, now);
       } catch (e) {
-        aiErrors.push(`${a.key}: ${(e as Error).message}`);
+        aiErrors.push(`${a.key}: ${errorMessage(e)}`);
       }
     });
   }
@@ -251,7 +253,7 @@ async function semanticPass(a: ItemAnalysis, c: ItemCtx, decided: Map<string, De
   try {
     out = cached ?? (await ai.analyzer.analyze(input));
   } catch (e) {
-    ai.onAudit?.({ at: now, itemKey: r.key, provider: ai.analyzer.provider, model: ai.analyzer.model, sources: sources.map((s) => ({ ref: s.ref, entityId: s.entityId, title: s.title, chars: s.content.length })), inputHash, cached: false, findings: 0, discarded: 0, challenges: 0, error: (e as Error).message });
+    ai.onAudit?.({ at: now, itemKey: r.key, provider: ai.analyzer.provider, model: ai.analyzer.model, sources: sources.map((s) => ({ ref: s.ref, entityId: s.entityId, title: s.title, chars: s.content.length })), inputHash, cached: false, findings: 0, discarded: 0, challenges: 0, error: errorMessage(e) });
     throw e;
   }
   if (!cached) ai.cache.set(inputHash, out);
@@ -331,7 +333,7 @@ async function runPool<T>(xs: T[], n: number, fn: (x: T) => Promise<void>) {
   let i = 0;
   await Promise.all(
     Array.from({ length: Math.min(n, xs.length) }, async () => {
-      while (i < xs.length) await fn(xs[i++]);
+      while (i < xs.length) await fn(xs[i++] as T);
     }),
   );
 }
@@ -381,7 +383,7 @@ function diffSnapshots(prev: Snapshot, cur: Snapshot, items: Map<string, ItemAna
     const p = prev.claims[k];
     if (p && p.value !== c.value) {
       const imp = impacted(c.entityId);
-      const [, subject, attribute] = k.split('|');
+      const [, subject = '', attribute = ''] = k.split('|');
       ev({ kind: 'claim_changed', entityId: c.entityId, entityTitle: c.title, summary: `${subject} ${attribute.replace('_', ' ')} changed from ${p.value} to ${c.value} in "${c.title}"`, impactedItems: imp, severity: wasSafe(imp) ? 'critical' : 'warning' });
     }
   }
@@ -427,8 +429,7 @@ function counts(list: ItemAnalysis[]): AnalysisResult['counts'] {
 function metrics(list: ItemAnalysis[], drift: DriftEvent[]): ProjectMetrics {
   const stories = list.filter((a) => a.type === 'story');
   const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 100);
-  const ui = stories.filter((s) => s.states);
-  const designCoverage = avg(ui.map((s) => (s.states!.inDesign.length ? Math.round(((s.states!.required.length - s.states!.missingInDesign.length) / s.states!.required.length) * 100) : 0)));
+  const designCoverage = avg(stories.flatMap((s) => (s.states ? [designCoveragePercent(s.states)] : [])));
   const docIssues = list.filter((a) => a.findings.some((f) => f.status === 'open' && (f.category === 'CONFLICT' || f.category === 'OUTDATED'))).length;
   const debt = { critical: 0, important: 0, minor: 0, topics: new Map<string, number>() };
   for (const a of list) {

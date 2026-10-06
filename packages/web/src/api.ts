@@ -1,4 +1,4 @@
-import type { AnalysisResult, Approval, Decision, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem } from '@ci/core';
+import type { AnalysisResult, Approval, Decision, DeepPartial, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem, Settings } from '@ci/core';
 
 export type { AnalysisResult, ItemAnalysis, Decision, DriftEvent, ImpactReport };
 
@@ -54,18 +54,39 @@ const saveToken = (t: string) => {
   }
 };
 
-/** ETag of the settings last read, sent back as If-Match so concurrent edits are not lost. */
-let settingsEtag = '';
-
 /** RFC 9457 problem details returned by the API. */
-interface Problem {
+export interface Problem {
   title?: string;
   status?: number;
   detail?: string;
   errors?: { field: string; message: string }[];
 }
 
-async function req<T>(method: string, url: string, body?: unknown, headers: Record<string, string> = {}, retried = false): Promise<T> {
+/** A non-2xx response; `status` lets callers react (e.g. reload after 412). */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly problem: Problem,
+  ) {
+    super(problem.detail ?? problem.title ?? `HTTP ${status}`);
+    this.name = 'ApiError';
+  }
+}
+
+/** A readable message for anything caught. */
+export const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/** Settings as read, with the ETag to send back as If-Match so concurrent edits are not lost. */
+export interface SettingsResponse {
+  settings: Settings;
+  etag: string;
+}
+
+async function req<T>(method: string, url: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
+  return (await send(method, url, body, headers)).json as T;
+}
+
+async function send(method: string, url: string, body?: unknown, headers: Record<string, string> = {}, retried = false): Promise<{ json: unknown; res: Response }> {
   const token = readToken();
   const res = await fetch(url, {
     method,
@@ -77,22 +98,25 @@ async function req<T>(method: string, url: string, body?: unknown, headers: Reco
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (url === '/api/settings' && res.headers.get('etag')) settingsEtag = res.headers.get('etag')!;
-  const json = await res.json().catch(() => ({}));
+  const json: unknown = await res.json().catch(() => ({}));
   if (res.status === 401 && res.headers.get('www-authenticate') && !retried) {
     // The server has CI_ADMIN_TOKEN set: ask once per browser session; the token is never written to disk.
     const t = window.prompt(`${(json as Problem).detail ?? 'This change requires the admin token.'}\nAdmin token:`);
     if (t?.trim()) {
       saveToken(t.trim());
-      return req<T>(method, url, body, headers, true);
+      return send(method, url, body, headers, true);
     }
   }
   if (res.status === 401 && retried) saveToken('');
-  if (!res.ok) {
-    const p = json as Problem & { error?: string };
-    throw new Error(p.detail ?? p.error ?? p.title ?? `HTTP ${res.status}`);
-  }
-  return json as T;
+  if (!res.ok) throw new ApiError(res.status, toProblem(json));
+  return { json, res };
+}
+
+function toProblem(json: unknown): Problem {
+  if (!json || typeof json !== 'object') return {};
+  const o = json as Record<string, unknown>;
+  const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  return { title: text(o.title), status: typeof o.status === 'number' ? o.status : undefined, detail: text(o.detail) ?? text(o.error), errors: Array.isArray(o.errors) ? (o.errors as Problem['errors']) : undefined };
 }
 
 export const api = {
@@ -116,8 +140,15 @@ export const api = {
   history: () => req<HistoryPoint[]>('GET', '/api/history'),
   audit: () => req<AuditEntry[]>('GET', '/api/audit'),
   rules: () => req<{ id: string; name: string; description: string; appliesTo: string[] }[]>('GET', '/api/rules'),
-  settings: () => req<{ settings: any; secrets: Record<string, boolean>; defaultModels: Record<string, string> }>('GET', '/api/settings'),
-  saveSettings: (patch: unknown) => req<{ settings: any }>('PUT', '/api/settings', patch, settingsEtag ? { 'if-match': settingsEtag } : {}),
+  settings: async () => {
+    const { json, res } = await send('GET', '/api/settings');
+    return { ...(json as { settings: Settings; secrets: Record<string, boolean>; defaultModels: Record<string, string> }), etag: res.headers.get('etag') ?? '' };
+  },
+  /** `etag` is the one returned with the settings being edited; a 412 means someone else saved in between. */
+  saveSettings: async (patch: DeepPartial<Settings>, etag: string): Promise<SettingsResponse> => {
+    const { json, res } = await send('PUT', '/api/settings', patch, etag ? { 'if-match': etag } : {});
+    return { settings: (json as { settings: Settings }).settings, etag: res.headers.get('etag') ?? '' };
+  },
   testConnections: () => req<Record<string, string>>('POST', '/api/settings/test-connections'),
   scenarios: () => req<{ id: string; title: string; description: string }[]>('GET', '/api/demo/scenarios'),
   applyScenario: (id: string) => req<AnalysisResult>('POST', `/api/demo/scenarios/${id}`),

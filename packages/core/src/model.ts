@@ -13,7 +13,8 @@ export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision';
 // Normalized source contexts (output of connectors + normalizer)
 // ---------------------------------------------------------------------------
 
-export type IssueType = 'epic' | 'feature' | 'story' | 'task' | 'subtask' | 'bug';
+export const ISSUE_TYPES = ['epic', 'feature', 'story', 'task', 'subtask', 'bug'] as const;
+export type IssueType = (typeof ISSUE_TYPES)[number];
 
 export interface IssueLink {
   /** e.g. "blocks", "relates to", "is caused by", "duplicates" */
@@ -257,36 +258,65 @@ export interface Finding {
   confirmation?: { decisionId: string; by: string; at: string };
 }
 
-export interface Decision {
-  id: string;
-  questionId: string;
-  findingId: string;
-  itemKey: string;
-  topic: string;
-  question: string;
-  answer: string;
-  note?: string;
-  decidedBy: string;
-  decidedAt: string;
+interface DecisionBase {
+  readonly id: string;
+  readonly questionId: string;
+  readonly findingId: string;
+  readonly itemKey: string;
+  readonly topic: string;
+  readonly question: string;
+  readonly answer: string;
+  readonly note?: string;
+  readonly decidedBy: string;
+  readonly decidedAt: string;
   /** What the decision does to the finding. `confirm` keeps it open and confirms an AI finding. */
-  effect: 'resolve' | 'accept_risk' | 'dismiss' | 'confirm';
+  readonly effect: DecisionEffect;
   /**
    * Decisions are immutable. A change creates a new version that supersedes
-   * the previous one; removal is a withdrawal. Decisions stored before
-   * versioning are read as active version 1.
+   * the previous one; removal is a withdrawal.
    */
-  version: number;
-  status: DecisionStatus;
+  readonly version: number;
   /** Id of the version this one replaced. */
-  supersedes?: string;
+  readonly supersedes?: string;
   /** Why the previous version was changed (required when superseding an active decision). */
-  changeReason?: string;
+  readonly changeReason?: string;
+}
+
+export interface ActiveDecision extends DecisionBase {
+  readonly status: 'active';
+}
+
+export interface SupersededDecision extends DecisionBase {
+  readonly status: 'superseded';
+  readonly supersededBy: string;
+  readonly supersededAt: string;
+}
+
+export interface WithdrawnDecision extends DecisionBase {
+  readonly status: 'withdrawn';
+  readonly withdrawnBy: string;
+  readonly withdrawnAt: string;
+  readonly withdrawReason?: string;
+}
+
+export type Decision = ActiveDecision | SupersededDecision | WithdrawnDecision;
+
+/**
+ * A decision as found in decisions.json. Versions written before versioning
+ * lack `version` and `status`; normalizeDecision is the only way to a Decision.
+ */
+export type StoredDecision = Omit<DecisionBase, 'version'> & {
+  version?: number;
+  status?: DecisionStatus;
   supersededBy?: string;
   supersededAt?: string;
   withdrawnBy?: string;
   withdrawnAt?: string;
   withdrawReason?: string;
-}
+};
+
+export const DECISION_EFFECTS = ['resolve', 'accept_risk', 'dismiss', 'confirm'] as const;
+export type DecisionEffect = (typeof DECISION_EFFECTS)[number];
 
 export type DecisionStatus = 'active' | 'superseded' | 'withdrawn';
 

@@ -184,7 +184,7 @@ export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = [
     }
     const sup = /superseded by[:\s]+["“]?([^"”\n.]+)/i.exec(d.body);
     if (sup) {
-      const target = ctx.documents.find((x) => x.id !== d.id && x.title.toLowerCase().includes(sup[1].trim().toLowerCase()));
+      const target = ctx.documents.find((x) => x.id !== d.id && x.title.toLowerCase().includes(sup[1]!.trim().toLowerCase()));
       if (target) g.addRelation({ from: docId(target.id), to: docId(d.id), type: 'supersedes', confidence: 0.95, via: 'explicit', reason: `"${d.title}" says it is superseded` });
     }
   }
@@ -339,9 +339,10 @@ function detectDomains(ctx: ProjectContext, g: ContextGraph, tfidf: TfIdf, vecto
     const scored = raw
       .map((x) => ({ name: x.name, confidence: round(Math.min(0.99, (x.s / total) * 0.6 + x.s * 0.6)) }))
       .sort((a, b) => b.confidence - a.confidence);
-    if (!scored.length || scored[0].confidence < 0.15) continue;
-    result.set(r.key, { name: scored[0].name, confidence: scored[0].confidence, alternatives: scored.slice(1, 3).filter((x) => x.confidence >= 0.1) });
-    g.addRelation({ from: issueId(r.key), to: domainId(scored[0].name), type: 'in_domain', confidence: scored[0].confidence, via: r.components.includes(scored[0].name) ? 'explicit' : 'semantic', reason: 'Domain detection' });
+    const best = scored[0];
+    if (!best || best.confidence < 0.15) continue;
+    result.set(r.key, { name: best.name, confidence: best.confidence, alternatives: scored.slice(1, 3).filter((x) => x.confidence >= 0.1) });
+    g.addRelation({ from: issueId(r.key), to: domainId(best.name), type: 'in_domain', confidence: best.confidence, via: r.components.includes(best.name) ? 'explicit' : 'semantic', reason: 'Domain detection' });
   }
   return result;
 }

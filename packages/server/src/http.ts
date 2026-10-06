@@ -30,7 +30,7 @@ export const guardConfigFromEnv = (env = process.env): GuardConfig => ({
 /** An error the problem handler renders with its status, detail and headers. */
 export const httpError = (statusCode: number, detail: string, headers?: Record<string, string>) => Object.assign(new Error(detail), { statusCode, headers });
 
-const hostnameOf = (host: string) => (host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':')[0]).toLowerCase();
+const hostnameOf = (host: string) => (host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : (host.split(':')[0] ?? host)).toLowerCase();
 const isLoopbackName = (name: string) => name === 'localhost' || name.endsWith('.localhost') || name === '[::1]' || /^127(\.\d{1,3}){3}$/.test(name);
 const isLoopbackIp = (ip: string) => ip === '::1' || /^(::ffff:)?127(\.\d{1,3}){3}$/.test(ip);
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

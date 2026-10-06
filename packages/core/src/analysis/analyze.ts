@@ -17,7 +17,7 @@ import { workItemsUnder } from '../hierarchy.js';
 import { aiFindingsAction, driftReactionOf, type SeverityAction } from '../policy.js';
 import { evJira, itemContext, questionOptions, type AnalysisEnv, type ItemCtx } from './context.js';
 import { RULES, taskCoverage, type FindingDraft } from './rules.js';
-import { challenges, journeyCoverage, stateCoverage } from './states.js';
+import { challenges, designCoveragePercent, journeyCoverage, stateCoverage } from './states.js';
 import { STATE_LABELS, TRAIT_LABELS } from './vocabulary.js';
 
 const SEVERITY_PENALTY: Record<Severity, number> = { critical: 45, warning: 18, info: 4 };
@@ -129,11 +129,7 @@ export function scoreItem(env: AnalysisEnv, a: ItemAnalysis, ctx?: ItemCtx) {
       const missing = a.journeys.journeys.filter((j) => !j.covered).length;
       if (missing) notes.push(`${missing} expected journey(s) not defined`);
     }
-    if (dimension === 'design' && a.states && a.states.inDesign.length) {
-      const req = a.states.required.length;
-      const designed = req - a.states.missingInDesign.length;
-      score = Math.min(score, Math.round((designed / req) * 100) + 10);
-    }
+    if (dimension === 'design' && a.states && a.states.inDesign.length) score = Math.min(score, designCoveragePercent(a.states) + 10);
     score = Math.max(0, Math.min(100, Math.round(score)));
     const blocking = fs.some((f) => action.get(f) === 'block');
     return { dimension, score, status: blocking || score < 60 ? 'fail' : score < 85 ? 'warn' : 'ok', notes };
@@ -329,7 +325,7 @@ export function crossItemPass(env: AnalysisEnv, items: Map<string, ItemAnalysis>
     }
     for (const [k, vals] of bySig) {
       if (vals.size < 2) continue;
-      const [subject, attribute] = k.split('|');
+      const [subject = '', attribute = ''] = k.split('|');
       const cs = storyClaims.filter((x) => x.subject === subject && x.attribute === attribute);
       const label = attribute.replace('_', ' ');
       highlights.push(`${subject} ${label} is inconsistent across stories`);

@@ -66,6 +66,14 @@ describe('with CI_ADMIN_TOKEN', () => {
     expect((await call({ method: 'POST', url: '/api/webhooks/jira', payload: {} })).status).toBe(202);
   });
 
+  it('treats prototype keys as unknown webhook sources', async () => {
+    await start({ adminToken: token });
+    for (const source of ['constructor', 'toString', '__proto__']) {
+      expect((await call({ method: 'POST', url: `/api/webhooks/${source}`, payload: {} })).status).toBe(404);
+    }
+    expect((await ctx!.store.auditLog()).filter((a) => a.kind === 'webhook')).toHaveLength(0);
+  });
+
   it('records who acted and that the admin token was used', async () => {
     await start({ adminToken: token });
     await call({ method: 'DELETE', url: '/api/items/PAY-123/approve', headers: { authorization: `Bearer ${token}`, 'x-ci-actor': encodeURIComponent('Łucja') } });
@@ -187,8 +195,8 @@ describe('settings.json from an older version', () => {
     await startWithLegacy();
     const entries = (await ctx!.store.auditLog()).filter((a) => a.kind === 'settings');
     expect(entries).toHaveLength(1);
-    expect(entries[0].actor).toBe('system');
-    expect(entries[0].details).toEqual({
+    expect(entries[0]?.actor).toBe('system');
+    expect(entries[0]?.details).toEqual({
       removed: expect.arrayContaining(['integrations.jira.apiToken', 'integrations.jira.issueTypeMap.Saga', 'integrations.slack', 'schedule.mode', 'removedSection']),
     });
     expect(JSON.stringify(entries[0])).not.toContain('old-secret');

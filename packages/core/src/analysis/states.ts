@@ -44,6 +44,14 @@ export function requiredStates(c: ItemCtx): { state: UiState; because: string }[
   return req;
 }
 
+/** Share of required states the design shows (0 when the design shows none; 100 when nothing is required). */
+export function designCoveragePercent(s: StateCoverage): number {
+  if (!s.inDesign.length) return 0;
+  const required = s.required.length;
+  if (!required) return 100;
+  return Math.round(((required - s.missingInDesign.length) / required) * 100);
+}
+
 export function stateCoverage(c: ItemCtx): StateCoverage {
   const required = requiredStates(c);
   const inRequirements = statesIn(c.specText);

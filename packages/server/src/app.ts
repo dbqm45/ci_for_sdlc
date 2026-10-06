@@ -3,7 +3,7 @@ import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, impactAnalysis, recordDecision, withdrawDecision, type Decision, type IssueType, type NewDecision } from '@ci/core';
+import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
 import { Engine } from './engine.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { MUTATION, approveBody, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
@@ -134,9 +134,24 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   });
 
   // ------------------------------------------------------------------ decisions
+  /** What `decisionBody` accepts; the server sets the rest. */
+  interface DecisionBody {
+    questionId: string;
+    itemKey: string;
+    answer: string;
+    findingId?: string;
+    topic?: string;
+    question?: string;
+    note?: string;
+    decidedBy?: string;
+    by?: string;
+    effect?: DecisionEffect;
+    reason?: string;
+    changeReason?: string;
+  }
   app.get('/api/decisions', async () => store.decisions());
 
-  app.post<{ Body: Partial<NewDecision> & { by?: string; reason?: string } }>('/api/decisions', { schema: { summary: 'Answer a question or confirm a finding', body: decisionBody, response: errors(400, 422), ...MUTATION } }, async (req) => {
+  app.post<{ Body: DecisionBody }>('/api/decisions', { schema: { summary: 'Answer a question or confirm a finding', body: decisionBody, response: errors(400, 422), ...MUTATION } }, async (req) => {
     const b = req.body;
     const by = who(req, b);
     if (!b?.questionId || !b.itemKey || !b.answer?.trim()) throw httpError(400, 'questionId, itemKey and answer are required');
@@ -146,14 +161,14 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       itemKey: b.itemKey,
       topic: (b.topic ?? 'general').slice(0, 80),
       question: (b.question ?? '').slice(0, 500),
-      answer: b.answer.trim().slice(0, 500),
-      note: b.note?.trim().slice(0, 2000) || undefined,
+      answer: b.answer.trim(),
+      note: b.note?.trim() || undefined,
       decidedBy: by.actor,
       decidedAt: new Date().toISOString(),
-      effect: (['accept_risk', 'dismiss', 'confirm'] as const).find((e) => e === b.effect) ?? 'resolve',
-      changeReason: (b.reason ?? b.changeReason)?.trim().slice(0, 2000),
+      effect: b.effect ?? 'resolve',
+      changeReason: (b.reason ?? b.changeReason)?.trim(),
     };
-    let decision!: Decision;
+    let decision!: ActiveDecision;
     await store.updateDecisions((all) => {
       const r = recordDecision(all, input);
       decision = r.decision;
@@ -169,7 +184,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   app.delete<{ Params: { id: string }; Body: { by?: string; reason?: string } | null }>('/api/decisions/:id', { schema: { params: idParams, body: withdrawBody, response: errors(404, 422), ...MUTATION } }, async (req) => {
     const at = new Date().toISOString();
     const { actor: by, via } = who(req, req.body);
-    let d: Decision | undefined;
+    let d: WithdrawnDecision | undefined;
     await store.updateDecisions((all) => {
       const r = withdrawDecision(all, req.params.id, by, at, req.body?.reason?.slice(0, 2000));
       d = r.decision;
@@ -253,7 +268,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       if (s.integrations.confluence.enabled) out.confluence = `OK — ${ctx.documents.length} pages`;
       if (s.integrations.figma.enabled) out.figma = `OK — ${ctx.frames.length} frames`;
     } catch (e) {
-      out.error = (e as Error).message;
+      out.error = errorMessage(e);
     }
     return out;
   });
@@ -277,8 +292,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     const given = String(req.headers['x-ci-webhook-secret'] ?? (req.query as Record<string, string>)?.secret ?? '');
     if (secret && (given.length !== secret.length || !timingSafeEqual(Buffer.from(given), Buffer.from(secret)))) throw httpError(401, 'Invalid webhook secret');
     const s = await store.settings();
-    const enabled = { jira: s.schedule.onJiraChange, confluence: s.schedule.onConfluenceChange, figma: s.schedule.onFigmaChange }[req.params.source];
-    if (enabled === undefined) throw httpError(404, 'Unknown source');
+    const sources: Record<string, boolean> = { jira: s.schedule.onJiraChange, confluence: s.schedule.onConfluenceChange, figma: s.schedule.onFigmaChange };
+    if (!Object.hasOwn(sources, req.params.source)) throw httpError(404, 'Unknown source');
+    const enabled = sources[req.params.source];
     await store.audit({ at: new Date().toISOString(), kind: 'webhook', actor: req.params.source, summary: `Change notification from ${req.params.source}${enabled ? '' : ' (ignored by settings)'}` });
     if (enabled) void engine.analyze(`${req.params.source} change`).catch(() => undefined);
     return reply.status(202).send({ accepted: enabled });

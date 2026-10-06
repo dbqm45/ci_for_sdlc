@@ -7,12 +7,12 @@ import {
   extractClaims,
   findConflicts,
   impactAnalysis,
-  type Decision,
+  type ActiveDecision,
   type SemanticAnalyzer,
 } from '../src/index.js';
 
 const item = (r: Awaited<ReturnType<typeof analyzeProject>>, key: string) => r.result.items.find((i) => i.key === key)!;
-const decision = (p: Partial<Decision> & Pick<Decision, 'questionId' | 'findingId' | 'itemKey' | 'answer'>): Decision => ({
+const decision = (p: Partial<ActiveDecision> & Pick<ActiveDecision, 'questionId' | 'findingId' | 'itemKey' | 'answer'>): ActiveDecision => ({
   id: p.questionId,
   topic: 'test',
   question: 'Q',
@@ -103,7 +103,7 @@ describe('demo project analysis', async () => {
   it('computes project metrics', () => {
     expect(run.result.counts.stories).toBe(10);
     expect(run.result.metrics.decisionDebt.critical).toBeGreaterThan(0);
-    expect(run.result.topRisks[0].severity).toBe('critical');
+    expect(run.result.topRisks[0]?.severity).toBe('critical');
   });
 
   it('answers impact analysis queries (UC-11)', () => {
