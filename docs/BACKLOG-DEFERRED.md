@@ -32,3 +32,11 @@ Lista propozycji, które świadomie odłożono, żeby o nich nie zapomnieć. Ka�
 - **`201 Created` + `Location`** dla nowej decyzji (API-02); dziś `200` z treścią.
 - **Prawdziwa tożsamość użytkownika** (SSO/OIDC, konto zamiast nazwy z nagłówka `X-CI-Actor`). Dziś audyt zapisuje nazwę wyświetlaną i sposób autoryzacji (`via`).
 - **Rotacja tokenu administratora** bez restartu i kilka tokenów (np. osobny dla CI) — dziś jeden `CI_ADMIN_TOKEN` ze zmiennej środowiskowej.
+
+## Po przeglądzie TypeScript (2026-10-06)
+
+- **Typy z jednego źródła:** TypeBox albo `json-schema-to-ts` z type providerem Fastify, żeby typy żądań wynikały ze schematów zamiast być pisane osobno.
+- **Schematy odpowiedzi `200` w OpenAPI** dla wszystkich tras (dziś głównie wejścia i błędy).
+- **`400` zamiast `422` dla błędów walidacji** (albo odwrotnie, ale jednolicie). To zmiana łamiąca kontrakt, więc razem z `/api/v1`.
+- **`exactOptionalPropertyTypes`** w `tsconfig`. Wymaga przejrzenia wszystkich pól opcjonalnych (`undefined` a brak pola).
+- **Runner testów dla `packages/web`** (np. Vitest z Testing Library). Dziś web ma tylko typecheck i build; m.in. przepływ `412` przy zapisie ustawień nie ma testu automatycznego.
