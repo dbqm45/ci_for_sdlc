@@ -493,7 +493,7 @@ function ContextTab({ a }: { a: ItemAnalysis }) {
         Context discovery: explicit links from the source systems plus semantically discovered artifacts. Items below 45% confidence are shown but not used as evidence.
       </p>
       {graph && <GraphView data={graph} />}
-      <div className="grid g3">
+      <div className="grid">
         {group('Jira', a.context.requirements)}
         {group('Confluence', a.context.documents)}
         {group('Figma', a.context.frames)}
