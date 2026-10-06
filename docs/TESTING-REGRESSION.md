@@ -66,11 +66,14 @@ i commitnij plik razem ze zmianą kodu. Test biegnie w ramach zwykłych testów 
 Stryker 10 mutuje moduły, od których zależy decyzja bramki: polityka, decyzje, analiza wpływu, hierarchia, strażniki,
 odcisk zmian (drift) i stany UI. Runner `command` uruchamia dla każdego mutanta `vitest run --no-isolate --maxWorkers=1`.
 Runner `@stryker-mutator/vitest-runner` 10 z Vitest 5 nie aktywuje mutantów i zgłasza fałszywe 0% — nie wracaj do niego
-bez sprawdzenia wyniku na jednym module (`npx stryker run --mutate src/guards.ts`). Wynik jest wskaźnikiem jakości testów, nie celem: przeżyty mutant to brakujący przypadek testowy.
+bez sprawdzenia wyniku na jednym module (`npx stryker run --mutate src/guards.ts`).
+Wynik jest wskaźnikiem jakości testów, nie celem: przeżyty mutant to brakujący przypadek testowy.
 Próg `break` jest ustawiony tuż pod zmierzonym wynikiem, żeby wynik nie spadał niezauważony.
 
-Pierwszy pomiar (749 mutantów, ok. 8 min): **28,6%**, próg `break: 25`. Najsłabiej: `analysis/states.ts` (13,6%),
-`impact.ts` (18,7%), `analysis/fingerprint.ts` (26,1%); najlepiej `guards.ts` (74,4%) i `hierarchy.ts` (71,4%).
+Pomiar po przejściu na Vitest 5 (946 mutantów, w tym statyczne; ok. 14 min na 4 rdzeniach): **32,5%**, próg
+`break: 30`. Najsłabiej: `impact.ts` (21,2%), `analysis/states.ts` (21,3%), `analysis/fingerprint.ts` (37,5%);
+najlepiej `guards.ts` (77,8%) i `hierarchy.ts` (68,6%). Poprzedni pomiar (28,6%, Vitest 3, bez mutantów statycznych) nie
+jest wprost porównywalny.
 Każdy dopisany test, który zabija przeżyte mutanty, uzasadnia podniesienie progu.
 
 ## Niestabilne testy i kwarantanna
