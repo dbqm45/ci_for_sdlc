@@ -7,7 +7,7 @@ test.beforeEach(async ({ request }) => {
   await resetWorkspace(request);
 });
 
-test('ITM-01: approving a ready story freezes the baseline, is audited and can be withdrawn', async ({ page }) => {
+test('ITM-01: approving a ready story freezes the baseline, is audited and can be withdrawn', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/#/item/PAY-123');
   await expect(page.getByText('🟢 READY FOR IMPLEMENTATION')).toBeVisible();
   await page.getByRole('button', { name: 'Approve for implementation' }).click();

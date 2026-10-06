@@ -64,8 +64,22 @@ Każdy obszar aplikacji ma własny plik w `e2e/` (ścieżki podobne są zgrupowa
 | `impact.spec.ts` | IMP | analiza wpływu z przykładu i z identyfikatora |
 | `settings.spec.ts` | SET | test połączeń, reguły polityki, nazwa decydenta, równoczesna edycja |
 | `audit.spec.ts` | AUD | wpis zatwierdzenia, filtr rodzaju, szczegóły zmiany ustawień |
+| `accessibility.spec.ts` | A11Y | axe (WCAG 2 A/AA) na każdej stronie, migawki drzewa dostępności |
+| `visual.spec.ts` | VIS | zrzuty ekranu kluczowych stron (tylko w nocnym przebiegu, patrz niżej) |
 
 Testy dzielą jeden serwer, więc biegną po kolei; `e2e/support/helpers.ts` przed każdym testem przywraca czysty stan przez API.
+
+### Testy regresji
+
+Jedna kopia testów, zestawy wybierane tagami. Pełny opis, procedura wzorców wizualnych i polityka kwarantanny: [`docs/TESTING-REGRESSION.md`](docs/TESTING-REGRESSION.md).
+
+| Zestaw | Kiedy | Polecenie |
+|---|---|---|
+| smoke (`@smoke`) | każdy push i PR (`ci.yml`) | `npm run test:e2e:smoke` |
+| PR | każdy push i PR (`ci.yml`) | typecheck, `npm run test:coverage` (z testem kontraktu API), `npm run test:e2e` (z `@a11y`) |
+| nocny | codziennie 02:17 UTC (`regression-nightly.yml`) | e2e na Chromium, Firefox i WebKit ×2 bez tolerancji dla flaky, `npm run test:visual`, `npm run test:mutation` |
+
+Pozostałe polecenia: `npm run test:a11y`, `npm run test:contract` (`test:contract:update` akceptuje zmianę API).
 
 ### Co zobaczysz w demo
 

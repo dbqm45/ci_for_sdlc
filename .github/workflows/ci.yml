@@ -22,10 +22,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # Unit tests with coverage; includes the API contract test (packages/server/contracts/openapi.json).
       - run: npm run test:coverage
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      # Critical paths first (@smoke), so a broken build fails in about a minute.
+      - name: E2E smoke
+        run: npm run test:e2e:smoke
+      # Full e2e on Chromium, including accessibility (@a11y). Cross-browser and visual run nightly.
+      - name: E2E full
+        run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

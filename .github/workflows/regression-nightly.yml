@@ -1,0 +1,112 @@
+name: Regression (nightly)
+
+# The full regression suite: every browser, visual comparison and mutation testing.
+# Too slow for every pull request (README → Testy regresji, docs/TESTING-REGRESSION.md).
+on:
+  schedule:
+    - cron: '17 2 * * *' # 02:17 UTC
+  workflow_dispatch:
+    inputs:
+      update_snapshots:
+        description: 'Regenerate the visual baselines and upload them as an artifact (review, then commit them)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regression-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    if: ${{ !inputs.update_snapshots }}
+    name: E2E (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      E2E_BROWSERS: ${{ matrix.browser }}
+      # A test that passes only after a retry fails the run: flaky tests are defects.
+      E2E_FAIL_ON_FLAKY: '1'
+      # Quarantined tests run here, so their owners see whether the fix works.
+      E2E_INCLUDE_QUARANTINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      # Every test twice in a row: order and leftover-state problems show up as failures.
+      - run: npx playwright test --repeat-each=2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: playwright-report/
+          retention-days: 14
+
+  visual:
+    name: Visual
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Baselines are created and compared only in this image, so fonts and rendering always match.
+    # Keep the tag equal to the @playwright/test version in package-lock.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - name: Check for baselines
+        id: baselines
+        run: |
+          if [ -d e2e/__screenshots__ ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Skip without baselines
+        if: ${{ !inputs.update_snapshots && steps.baselines.outputs.present != 'true' }}
+        run: echo "::warning::No visual baselines in e2e/__screenshots__ — run this workflow manually with update_snapshots, review the artifact and commit it."
+      - name: Compare with baselines
+        if: ${{ !inputs.update_snapshots && steps.baselines.outputs.present == 'true' }}
+        run: npm run test:visual
+      - name: Regenerate baselines
+        if: ${{ inputs.update_snapshots }}
+        run: npm run test:visual -- --update-snapshots=all
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.update_snapshots }}
+        with:
+          name: visual-baselines
+          path: e2e/__screenshots__/
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  mutation:
+    if: ${{ !inputs.update_snapshots }}
+    name: Mutation (core)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mutation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-report
+          path: packages/core/reports/mutation/
+          retention-days: 14

@@ -16,7 +16,7 @@ test('SET-01: "Test connections" reports that the demo workspace has no integrat
   await expect(integrations.getByText('No integration enabled.')).toBeVisible();
 });
 
-test('SET-02: disabling a policy rule re-analyzes the backlog', async ({ page }) => {
+test('SET-02: disabling a policy rule re-analyzes the backlog', { tag: '@smoke' }, async ({ page }) => {
   await page.getByRole('checkbox', { name: /^Enable CON-001 / }).uncheck();
   await page.getByRole('button', { name: 'Save & re-analyze' }).click();
 
