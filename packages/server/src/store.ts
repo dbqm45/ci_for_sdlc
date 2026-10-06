@@ -2,13 +2,13 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_POLICY, normalizeDecision, type AiProviderConfig, type AnalysisPolicy, type Approval, type Decision, type DriftEvent, type ProjectContext, type SemanticOutput, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, normalizeDecision, type AiProviderConfig, type AnalysisPolicy, type Approval, type Decision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Snapshot } from '@ci/core';
 
 export interface Settings {
   mode: 'demo' | 'live';
   project: { key: string; name: string };
   integrations: {
-    jira: { enabled: boolean; baseUrl: string; email: string; projectKey: string; acceptanceCriteriaField?: string; jqlFilter?: string };
+    jira: { enabled: boolean; baseUrl: string; email: string; projectKey: string; acceptanceCriteriaField?: string; jqlFilter?: string; issueTypeMap?: Record<string, IssueType> };
     confluence: { enabled: boolean; baseUrl: string; email: string; spaceKeys: string[] };
     figma: { enabled: boolean; fileKeys: string[] };
   };
@@ -31,6 +31,9 @@ export interface Settings {
   };
   policy: AnalysisPolicy;
 }
+
+/** Shown in Settings (P1); unmapped Jira types still fall back to the core defaults and then to story. */
+export const DEFAULT_JIRA_ISSUE_TYPES: Record<string, IssueType> = { Epic: 'epic', Feature: 'feature', Story: 'story' };
 
 export const DEFAULT_SETTINGS: Settings = {
   mode: 'demo',
@@ -171,7 +174,10 @@ export class Store {
 
   async settings(): Promise<Settings> {
     const s = await this.readJson<Partial<Settings>>('settings.json', {});
-    return deepMerge(structuredClone(DEFAULT_SETTINGS), s) as Settings;
+    const merged = deepMerge(structuredClone(DEFAULT_SETTINGS), s) as Settings;
+    // Kept out of DEFAULT_SETTINGS so a saved mapping replaces it instead of being merged with it.
+    merged.integrations.jira.issueTypeMap ??= { ...DEFAULT_JIRA_ISSUE_TYPES };
+    return merged;
   }
   saveSettings(s: Settings) {
     return this.write('settings.json', s);

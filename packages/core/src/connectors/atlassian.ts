@@ -1,4 +1,5 @@
 import type { DocumentItem, IssueType, RequirementItem } from '../model.js';
+import { resolveIssueType } from '../hierarchy.js';
 import { htmlToText } from '../text.js';
 
 /**
@@ -17,6 +18,8 @@ export interface JiraConfig {
   /** Optional JQL appended to the project filter (e.g. "AND statusCategory != Done"). */
   jqlFilter?: string;
   maxIssues?: number;
+  /** Jira issue type name → hierarchy level (P1). Unmapped types use DEFAULT_ISSUE_TYPE_MAP, then become stories. */
+  issueTypeMap?: Record<string, string>;
 }
 
 export interface ConfluenceConfig {
@@ -37,7 +40,7 @@ async function getJson<T>(url: string, headers: Record<string, string>): Promise
 
 // ---------------------------------------------------------------------------- Jira
 
-interface JiraIssue {
+export interface JiraIssue {
   key: string;
   fields: Record<string, any>;
 }
@@ -56,7 +59,7 @@ export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
     next = page.isLast === false || page.nextPageToken ? page.nextPageToken : undefined;
   } while (next && issues.length < (cfg.maxIssues ?? 2000));
 
-  const items = issues.map((i) => toRequirement(i, base, cfg.acceptanceCriteriaField));
+  const items = issues.map((i) => jiraIssueToRequirement(i, base, cfg));
 
   // Remote links (Confluence pages / Figma frames) for stories, bugs and epics.
   await pool(items.filter((i) => i.type !== 'task' && i.type !== 'subtask'), 4, async (item) => {
@@ -70,15 +73,15 @@ export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
   return items;
 }
 
-function toRequirement(i: JiraIssue, base: string, acField?: string): RequirementItem {
+export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: Pick<JiraConfig, 'acceptanceCriteriaField' | 'issueTypeMap'> = {}): RequirementItem {
   const f = i.fields;
-  const typeName: string = (f.issuetype?.name ?? 'Story').toLowerCase();
-  const type: IssueType = f.issuetype?.subtask ? 'subtask' : typeName.includes('epic') ? 'epic' : typeName.includes('bug') ? 'bug' : typeName.includes('task') ? 'task' : 'story';
+  const acField = cfg.acceptanceCriteriaField;
+  const type: IssueType = resolveIssueType(f.issuetype?.name ?? 'Story', { subtask: f.issuetype?.subtask }, cfg.issueTypeMap);
   const description = adfToText(f.description);
   const sections = splitSections(description);
   const acRaw = acField && f[acField] ? (typeof f[acField] === 'string' ? f[acField] : adfToText(f[acField])) : sections.get('acceptance criteria') ?? '';
   const parent = f.parent as { key: string; fields?: { issuetype?: { name?: string } } } | undefined;
-  const parentIsEpic = parent?.fields?.issuetype?.name?.toLowerCase().includes('epic');
+  const parentIsEpic = !!parent && resolveIssueType(parent.fields?.issuetype?.name ?? '', {}, cfg.issueTypeMap) === 'epic';
 
   return {
     key: i.key,

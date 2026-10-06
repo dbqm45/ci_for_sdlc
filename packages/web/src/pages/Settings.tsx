@@ -104,6 +104,7 @@ export function Settings() {
             <Field label="Project key"><input className="input" placeholder="PAY" value={s.integrations.jira.projectKey} onChange={(e) => set('integrations.jira.projectKey', e.target.value)} /></Field>
             <Field label="Acceptance criteria field (optional)"><input className="input" placeholder="customfield_10035 — else parsed from description" value={s.integrations.jira.acceptanceCriteriaField ?? ''} onChange={(e) => set('integrations.jira.acceptanceCriteriaField', e.target.value || undefined)} /></Field>
             <Field label="Additional JQL (optional)"><input className="input" placeholder="AND statusCategory != Done" value={s.integrations.jira.jqlFilter ?? ''} onChange={(e) => set('integrations.jira.jqlFilter', e.target.value || undefined)} /></Field>
+            <IssueTypeMap value={s.integrations.jira.issueTypeMap ?? {}} onChange={(m) => set('integrations.jira.issueTypeMap', m)} />
           </Integration>
           <Integration title="Confluence" enabled={s.integrations.confluence.enabled} onToggle={(v) => set('integrations.confluence.enabled', v)} badges={secret('CONFLUENCE_API_TOKEN')}>
             <Field label="Site URL"><input className="input" placeholder="https://your-site.atlassian.net" value={s.integrations.confluence.baseUrl} onChange={(e) => set('integrations.confluence.baseUrl', e.target.value)} /></Field>
@@ -255,6 +256,39 @@ export function Settings() {
         </table>
       </Card>
     </div>
+  );
+}
+
+const LEVELS = [
+  ['epic', 'Epic'],
+  ['feature', 'Feature (readiness from its stories)'],
+  ['story', 'Story'],
+  ['bug', 'Bug'],
+  ['task', 'Task'],
+  ['subtask', 'Sub-task'],
+] as const;
+
+/** Jira issue type → hierarchy level. Unlisted types are stories; without a Feature type the hierarchy is epic → story. */
+function IssueTypeMap({ value, onChange }: { value: Record<string, string>; onChange: (m: Record<string, string>) => void }) {
+  const rows = Object.entries(value);
+  const update = (i: number, k: string, v: string) => onChange(Object.fromEntries(rows.map((r, j) => (j === i ? [k, v] : r))));
+  return (
+    <Field label="Issue type → hierarchy level (unlisted types are stories)">
+      <div className="col" style={{ gap: 6 }}>
+        {rows.map(([k, v], i) => (
+          <div className="row" key={i}>
+            <input className="input" placeholder="Jira issue type, e.g. Initiative" value={k} onChange={(e) => update(i, e.target.value, v)} />
+            <select className="input" value={v} onChange={(e) => update(i, k, e.target.value)}>
+              {LEVELS.map(([id, label]) => (
+                <option key={id} value={id}>{label}</option>
+              ))}
+            </select>
+            <button className="btn sm" onClick={() => onChange(Object.fromEntries(rows.filter((_, j) => j !== i)))} title="Remove mapping">✕</button>
+          </div>
+        ))}
+        <div><button className="btn sm" onClick={() => onChange({ ...value, '': 'story' })} disabled={'' in value}>+ Add issue type</button></div>
+      </div>
+    </Field>
   );
 }
 

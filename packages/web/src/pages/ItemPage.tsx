@@ -78,6 +78,11 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
             <a href={`#/item/${a.epicKey}`}>{a.epicKey}</a> /
           </>
         )}
+        {a.featureKey && (
+          <>
+            <a href={`#/item/${a.featureKey}`}>{a.featureKey}</a> /
+          </>
+        )}
         <span>{a.key}</span>
       </div>
 

@@ -412,6 +412,7 @@ function counts(list: ItemAnalysis[]): AnalysisResult['counts'] {
   const open = list.flatMap((a) => a.findings.filter((f) => f.status === 'open'));
   return {
     epics: list.filter((a) => a.type === 'epic').length,
+    features: list.filter((a) => a.type === 'feature').length,
     stories: list.filter((a) => a.type === 'story').length,
     bugs: list.filter((a) => a.type === 'bug').length,
     tasks: list.filter((a) => a.type === 'task').length,

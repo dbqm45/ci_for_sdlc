@@ -4,6 +4,7 @@ import { evDoc, evFrame, evJira, type ItemCtx } from './context.js';
 import { requiredStates, statesIn, designStates } from './states.js';
 import { OUTDATED_PATTERNS, STATE_LABELS, STATE_PATTERNS, VAGUE_TERMS } from './vocabulary.js';
 import { tokenize } from '../text.js';
+import { workItemsUnder } from '../hierarchy.js';
 
 /**
  * Deterministic rules — the "linter" half of Hybrid Intelligence.
@@ -401,7 +402,7 @@ export const RULES: Rule[] = [
     id: 'DOC-002',
     name: 'Outdated documentation',
     description: 'Documentation marked as deprecated / superseded, or superseded in the graph.',
-    appliesTo: ['story', 'epic', 'bug'],
+    appliesTo: ['story', 'epic', 'feature', 'bug'],
     run: (c) => {
       const out: FindingDraft[] = [];
       for (const d of c.docs) {
@@ -427,7 +428,7 @@ export const RULES: Rule[] = [
     id: 'CON-001',
     name: 'Cross-source conflicts',
     description: 'Two sources state different values for the same fact (timeout, retry limit, idempotency, …).',
-    appliesTo: ['story', 'epic', 'bug'],
+    appliesTo: ['story', 'epic', 'feature', 'bug'],
     run: (c) => {
       const out: FindingDraft[] = [];
       for (const conflict of findConflicts(c.claims.all)) {
@@ -565,8 +566,8 @@ export const RULES: Rule[] = [
   {
     id: 'EPIC-001',
     name: 'Epic business goal',
-    description: 'An epic must state its business goal and expected outcome.',
-    appliesTo: ['epic'],
+    description: 'An epic or feature must state its business goal and expected outcome.',
+    appliesTo: ['epic', 'feature'],
     run: (c) =>
       /\b(goal|objective|outcome|so that|in order to|success metric|kpi|we expect)\b/i.test(c.r.description)
         ? []
@@ -575,7 +576,7 @@ export const RULES: Rule[] = [
               category: 'GAP',
               severity: 'warning',
               dimension: 'requirements',
-              title: 'Epic has no business goal / expected outcome',
+              title: `${c.r.type === 'feature' ? 'Feature' : 'Epic'} has no business goal / expected outcome`,
               explanation: 'The epic description does not state the business goal or how success will be measured, so story scope cannot be checked against it.',
               evidence: [evJira(c.r)],
               question: { text: `What is the business goal and expected outcome of "${c.r.title}"?`, options: ['Product will add goal & success metric'], topic: 'scope' },
@@ -585,18 +586,18 @@ export const RULES: Rule[] = [
   {
     id: 'EPIC-002',
     name: 'Epic has stories',
-    description: 'An epic without stories has no defined scope.',
-    appliesTo: ['epic'],
+    description: 'An epic or feature without stories (directly or through features) has no defined scope.',
+    appliesTo: ['epic', 'feature'],
     run: (c) =>
-      (c.env.childrenOf.get(c.r.key) ?? []).some((x) => x.type === 'story')
+      workItemsUnder(c.env.childrenOf, c.r.key).length
         ? []
         : [
             {
               category: 'MISSING_COVERAGE',
               severity: 'warning',
               dimension: 'requirements',
-              title: 'Epic has no stories',
-              explanation: 'No stories belong to this epic, so its scope is not broken down into deliverable requirements.',
+              title: `${c.r.type === 'feature' ? 'Feature' : 'Epic'} has no stories`,
+              explanation: `No stories belong to this ${c.r.type}, so its scope is not broken down into deliverable requirements.`,
               evidence: [evJira(c.r)],
             },
           ],

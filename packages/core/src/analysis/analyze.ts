@@ -5,6 +5,7 @@ import type {
   DimensionScore,
   Finding,
   HealthStatus,
+  IssueType,
   ItemAnalysis,
   ReadinessStatus,
   RequirementItem,
@@ -12,6 +13,7 @@ import type {
 } from '../model.js';
 import { DIMENSIONS } from '../model.js';
 import { hash } from '../text.js';
+import { workItemsUnder } from '../hierarchy.js';
 import { aiFindingsAction, driftReactionOf, type SeverityAction } from '../policy.js';
 import { evJira, itemContext, questionOptions, type AnalysisEnv, type ItemCtx } from './context.js';
 import { RULES, taskCoverage, type FindingDraft } from './rules.js';
@@ -60,7 +62,7 @@ export function analyzeItem(env: AnalysisEnv, r: RequirementItem): { analysis: I
     type: r.type,
     title: r.title,
     url: r.url,
-    epicKey: r.epicKey,
+    ...hierarchyOf(env, r),
     domain: env.built.domains.get(r.key),
     health: 100,
     healthStatus: 'healthy',
@@ -291,11 +293,11 @@ export function crossItemPass(env: AnalysisEnv, items: Map<string, ItemAnalysis>
     }
   }
 
-  // Epic analysis: rollup + cross-story checks
+  // Epic and feature analysis (P1): rollup + cross-story checks
   for (const a of items.values()) {
-    if (a.type !== 'epic') continue;
+    if (!isContainer(a.type)) continue;
     const r = env.reqByKey.get(a.key)!;
-    const stories = (env.childrenOf.get(a.key) ?? []).filter((s) => s.type === 'story').map((s) => items.get(s.key)!).filter(Boolean);
+    const stories = storiesOf(env, items, a.key);
     if (!stories.length) continue;
     const withDesign = stories.filter((s) => s.context.frames.some((f) => f.confidence >= 0.45));
     const withDocs = stories.filter((s) => s.context.documents.some((f) => f.confidence >= 0.45));
@@ -362,11 +364,21 @@ export function crossItemPass(env: AnalysisEnv, items: Map<string, ItemAnalysis>
   }
 }
 
-/** Epic dimensions blend the epic's own findings with the average of its stories. */
+const isContainer = (t: IssueType) => t === 'epic' || t === 'feature';
+const storiesOf = (env: AnalysisEnv, items: Map<string, ItemAnalysis>, key: string) => workItemsUnder(env.childrenOf, key).map((s) => items.get(s.key)!).filter(Boolean);
+
+/** Epic of an item (directly or through its feature) and its feature (P1). */
+function hierarchyOf(env: AnalysisEnv, r: RequirementItem): Pick<ItemAnalysis, 'epicKey' | 'featureKey'> {
+  const parent = r.parentKey ? env.reqByKey.get(r.parentKey) : undefined;
+  const feature = parent?.type === 'feature' ? parent : undefined;
+  return { epicKey: r.epicKey ?? feature?.epicKey, ...(feature && { featureKey: feature.key }) };
+}
+
+/** Epic and feature dimensions blend their own findings with the average of their stories. */
 export function blendEpicScores(items: Map<string, ItemAnalysis>, env: AnalysisEnv) {
   for (const a of items.values()) {
-    if (a.type !== 'epic' || !a.rollup) continue;
-    const stories = (env.childrenOf.get(a.key) ?? []).filter((s) => s.type === 'story').map((s) => items.get(s.key)!).filter(Boolean);
+    if (!isContainer(a.type) || !a.rollup) continue;
+    const stories = storiesOf(env, items, a.key);
     for (const d of a.dimensions) {
       const avg = stories.reduce((s, x) => s + (x.dimensions.find((y) => y.dimension === d.dimension)?.score ?? 100), 0) / stories.length;
       d.score = Math.round(Math.min(d.score, (d.score + avg) / 2));
@@ -374,7 +386,7 @@ export function blendEpicScores(items: Map<string, ItemAnalysis>, env: AnalysisE
     }
     const childAvg = stories.reduce((s, x) => s + x.health, 0) / stories.length;
     a.health = Math.round(Math.min(a.health, (a.health + childAvg) / 2));
-    // An epic is only as ready as its stories.
+    // An epic or feature is only as ready as its stories.
     const notReady = stories.filter((s) => s.readiness !== 'ready');
     if (notReady.length && a.readiness === 'ready') {
       a.readiness = 'needs_attention';

@@ -13,7 +13,7 @@ export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision';
 // Normalized source contexts (output of connectors + normalizer)
 // ---------------------------------------------------------------------------
 
-export type IssueType = 'epic' | 'story' | 'task' | 'subtask' | 'bug';
+export type IssueType = 'epic' | 'feature' | 'story' | 'task' | 'subtask' | 'bug';
 
 export interface IssueLink {
   /** e.g. "blocks", "relates to", "is caused by", "duplicates" */
@@ -358,7 +358,10 @@ export interface ItemAnalysis {
   type: IssueType;
   title: string;
   url?: string;
+  /** The epic, also when the item belongs to it through a feature. */
   epicKey?: string;
+  /** Set for stories under a feature (P1). */
+  featureKey?: string;
   domain?: { name: string; confidence: number; alternatives: { name: string; confidence: number }[] };
   health: number;
   healthStatus: HealthStatus;
@@ -476,6 +479,7 @@ export interface AnalysisResult {
   items: ItemAnalysis[];
   counts: {
     epics: number;
+    features: number;
     stories: number;
     bugs: number;
     tasks: number;

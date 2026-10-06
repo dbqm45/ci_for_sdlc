@@ -2,9 +2,11 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
-import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, impactAnalysis, recordDecision, withdrawDecision, type Decision, type NewDecision } from '@ci/core';
+import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, impactAnalysis, recordDecision, withdrawDecision, type Decision, type IssueType, type NewDecision } from '@ci/core';
 import { Engine } from './engine.js';
 import { deepMerge, Store, type Settings } from './store.js';
+
+const ISSUE_LEVELS: IssueType[] = ['epic', 'feature', 'story', 'bug', 'task', 'subtask'];
 
 /** Only leaf work items are approved; feature and epic readiness is derived from their stories. */
 const APPROVABLE = new Set(['story', 'bug']);
@@ -184,7 +186,15 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
 
   app.put<{ Body: Partial<Settings> }>('/api/settings', async (req) => {
     const current = await store.settings();
+    const typeMap = req.body?.integrations?.jira?.issueTypeMap;
+    if (typeMap !== undefined) {
+      const bad = Object.entries(typeMap ?? {}).filter(([k, v]) => !k.trim() || !ISSUE_LEVELS.includes(v));
+      if (typeMap === null || typeof typeMap !== 'object' || bad.length)
+        throw Object.assign(new Error(`Invalid issue type mapping: ${bad.map(([k, v]) => `${k} → ${v}`).join(', ') || 'expected an object'}. Levels: ${ISSUE_LEVELS.join(', ')}.`), { statusCode: 400 });
+    }
     const next = deepMerge(current, req.body ?? {});
+    // A mapping is replaced as a whole, so removing a Jira type from it works.
+    if (typeMap) next.integrations.jira.issueTypeMap = Object.fromEntries(Object.entries(typeMap).map(([k, v]) => [k.trim(), v]));
     if (next.ai.provider !== 'none' && !next.ai.model) next.ai.model = DEFAULT_MODELS[next.ai.provider];
     if (next.security.encryptStoredContext && !process.env.CI_ENCRYPTION_KEY) throw Object.assign(new Error('Set CI_ENCRYPTION_KEY on the server before enabling encryption at rest.'), { statusCode: 400 });
     await store.saveSettings(next);
