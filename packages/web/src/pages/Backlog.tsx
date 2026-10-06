@@ -29,8 +29,8 @@ export function Backlog() {
         </div>
       </div>
       <div className="row wrap">
-        <input className="input" style={{ maxWidth: 280 }} placeholder="Search key, title, domain…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="input" style={{ width: 160 }} value={type} onChange={(e) => setType(e.target.value as typeof type)}>
+        <input className="input" style={{ maxWidth: 280 }} aria-label="Search" placeholder="Search key, title, domain…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className="input" style={{ width: 160 }} aria-label="Item type" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
           <option value="all">All types</option>
           <option value="epic">Epics</option>
           <option value="feature">Features</option>

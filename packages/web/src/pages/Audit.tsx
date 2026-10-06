@@ -19,7 +19,7 @@ export function Audit() {
           <h1>Audit log</h1>
           <p>Every AI call (with the exact sources sent), decision, approval, webhook and settings change.</p>
         </div>
-        <select className="input" style={{ width: 200 }} value={kind} onChange={(e) => setKind(e.target.value)}>
+        <select className="input" style={{ width: 200 }} aria-label="Event kind" value={kind} onChange={(e) => setKind(e.target.value)}>
           {kinds.map((k) => (
             <option key={k} value={k}>
               {k === 'all' ? 'All events' : k.replace('_', ' ')}
