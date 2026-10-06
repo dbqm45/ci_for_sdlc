@@ -8,7 +8,7 @@ test.beforeEach(async ({ request }) => {
   await resetWorkspace(request);
 });
 
-test('DRF-01: a change to an approved story is flagged as drift on that story', async ({ page, request }) => {
+test('DRF-01: a change to an approved story is flagged as drift on that story', { tag: '@smoke' }, async ({ page, request }) => {
   await approveViaApi(request, 'PAY-123');
   await page.goto('/');
 

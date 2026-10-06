@@ -8,7 +8,9 @@
     "start": "tsx src/index.ts",
     "analyze": "tsx src/cli.ts",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:contract": "vitest run test/openapi.contract.test.ts",
+    "test:contract:update": "vitest run test/openapi.contract.test.ts -u"
   },
   "dependencies": {
     "@ci/core": "*",
