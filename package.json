@@ -1,6 +1,6 @@
 {
   "name": "continuous-intelligence-sdlc",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Continuous Intelligence for Product & Software Definition — AI quality gate across Jira, Confluence and Figma",
   "workspaces": [
@@ -33,6 +33,10 @@
     "@playwright/test": "^1.63.0",
     "concurrently": "^10.0.5",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "qs": "^6.16.0",
+    "shell-quote": "^1.12.0"
   },
   "engines": {
     "node": ">=22.12"

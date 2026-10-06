@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Continuous Intelligence for the SDLC",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state."
   },
   "components": {
