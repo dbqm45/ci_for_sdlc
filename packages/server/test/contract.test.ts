@@ -28,3 +28,10 @@ describe('settings contract', () => {
     expect([d.answer.maxLength, d.note.maxLength, d.reason.maxLength, d.changeReason.maxLength]).toEqual([500, 2000, 2000, 2000]);
   });
 });
+
+describe('pruneToSchema', () => {
+  it('looks up only declared properties, not inherited ones', () => {
+    const schema = { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: { type: 'number' } } as const;
+    expect(pruneToSchema({ a: 'x', toString: 5, constructor: 'y' }, schema)).toEqual({ a: 'x', toString: 5 });
+  });
+});

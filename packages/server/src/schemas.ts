@@ -107,27 +107,47 @@ const problemRef = { $ref: 'Problem#' };
 export const errors = (...codes: number[]) => Object.fromEntries(codes.map((c) => [c, { ...problemRef, description: 'Problem details' }]));
 export const MUTATION = { security: [{ adminToken: [] }] };
 
+/** The subset of JSON Schema that pruneToSchema understands. */
+export interface JsonSchemaNode {
+  type?: string;
+  enum?: readonly unknown[];
+  properties?: Readonly<Record<string, JsonSchemaNode>>;
+  additionalProperties?: boolean | JsonSchemaNode;
+  propertyNames?: JsonSchemaNode;
+  maxProperties?: number;
+  items?: JsonSchemaNode;
+  maxItems?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  minimum?: number;
+  maximum?: number;
+}
+
 /**
  * Keeps only what `schema` accepts: unknown keys and invalid values are dropped
  * (returns undefined for an invalid value). Used to migrate settings saved by an
  * older version, so the UI can save them back without a 422.
  */
-export function pruneToSchema(value: unknown, schema: any): unknown {
+export function pruneToSchema(value: unknown, schema: JsonSchemaNode): unknown {
   if (schema.enum) return schema.enum.includes(value) ? value : undefined;
   switch (schema.type) {
     case 'object': {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
       const out: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(value)) {
-        const sub = schema.properties?.[k] ?? (typeof schema.additionalProperties === 'object' ? schema.additionalProperties : undefined);
+        const declared = schema.properties && Object.hasOwn(schema.properties, k) ? schema.properties[k] : undefined;
+        const sub = declared ?? (typeof schema.additionalProperties === 'object' ? schema.additionalProperties : undefined);
         if (!sub || (schema.propertyNames && pruneToSchema(k, { type: 'string', ...schema.propertyNames }) === undefined)) continue;
         const p = pruneToSchema(v, sub);
         if (p !== undefined) out[k] = p;
       }
       return schema.maxProperties && Object.keys(out).length > schema.maxProperties ? undefined : out;
     }
-    case 'array':
-      return Array.isArray(value) ? value.map((v) => pruneToSchema(v, schema.items)).filter((v) => v !== undefined).slice(0, schema.maxItems) : undefined;
+    case 'array': {
+      const items = schema.items;
+      return Array.isArray(value) && items ? value.map((v) => pruneToSchema(v, items)).filter((v) => v !== undefined).slice(0, schema.maxItems) : undefined;
+    }
     case 'string':
       return typeof value === 'string' && value.length <= (schema.maxLength ?? Infinity) && value.length >= (schema.minLength ?? 0) && (!schema.pattern || new RegExp(schema.pattern).test(value)) ? value : undefined;
     case 'boolean':

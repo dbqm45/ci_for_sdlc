@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { demoProject, type Decision } from '@ci/core';
-import { DEFAULT_SETTINGS, Store, StoreReadError, deepMerge } from '../src/store.js';
+import { DEFAULT_SETTINGS, Store, StoreReadError, deepMerge, removedPaths } from '../src/store.js';
 
 let dir: string;
 let store: Store;
@@ -111,5 +111,31 @@ describe('deepMerge', () => {
     deepMerge({ a: {} } as Record<string, any>, JSON.parse('{"__proto__":{"polluted":true},"a":{"constructor":{"x":1}}}'));
     expect(({} as any).polluted).toBeUndefined();
     expect((Object as any).x).toBeUndefined();
+  });
+});
+
+describe('removedPaths', () => {
+  it('does not treat inherited keys as present in the result', () => {
+    expect(removedPaths(JSON.parse('{"__proto__":{},"a":1}'), { a: 1 })).toEqual(['__proto__']);
+  });
+});
+
+describe('Store (untrusted file contents)', () => {
+  it('skips a corrupt audit line instead of failing the whole log', async () => {
+    await store.audit({ at: '2026-01-01T00:00:00Z', kind: 'analysis', actor: 'system', summary: 'first' });
+    writeFileSync(join(dir, 'audit.jsonl'), readFileSync(join(dir, 'audit.jsonl'), 'utf8') + '{broken\n"just a string"\n', 'utf8');
+    await store.audit({ at: '2026-01-01T00:00:01Z', kind: 'analysis', actor: 'system', summary: 'second' });
+    expect((await store.auditLog()).map((a) => a.summary)).toEqual(['second', 'first']);
+  });
+
+  it('rejects an encrypted envelope with missing fields as unreadable', async () => {
+    process.env.CI_ENCRYPTION_KEY = 'test-key';
+    writeFileSync(join(dir, 'decisions.json'), JSON.stringify({ __enc: 1, iv: 'AAAA' }));
+    await expect(store.decisions()).rejects.toThrow(/not a valid encrypted file/);
+  });
+
+  it('rejects a file whose top-level shape is wrong', async () => {
+    writeFileSync(join(dir, 'decisions.json'), JSON.stringify({ not: 'a list' }));
+    await expect(store.decisions()).rejects.toBeInstanceOf(StoreReadError);
   });
 });

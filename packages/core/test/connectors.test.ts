@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adfToText, framesFromDocument, splitSections } from '../src/index.js';
+import { adfToText, framesFromDocument, jiraIssueToRequirement, parseOutput, splitSections } from '../src/index.js';
 
 describe('jira helpers', () => {
   it('converts ADF and splits sections', () => {
@@ -41,5 +41,39 @@ describe('figma helpers', () => {
     expect(frames[0].texts).toEqual(['Payment failed']);
     expect(frames[0].transitions).toEqual(['2:4']);
     expect(frames[0].url).toContain('node-id=2-3');
+  });
+});
+
+describe('untrusted API payloads', () => {
+  it('ignores malformed ADF nodes', () => {
+    const adf = { type: 'doc', content: [null, 'x', { type: 'text', text: 5 }, { type: 'paragraph', content: 'oops' }, { type: 'paragraph', content: [{ type: 'text', text: 'ok' }] }] };
+    expect(adfToText(adf)).toBe('ok');
+    expect(adfToText(42)).toBe('');
+  });
+
+  it('maps Jira fields of the wrong type to safe defaults', () => {
+    const r = jiraIssueToRequirement({ key: 'X-1', fields: { summary: 5, labels: 'a', components: [null, { name: 'Pay' }, { name: 1 }], issuelinks: [null, { outwardIssue: { key: 'X-2' } }], status: 'Done' } }, 'https://j');
+    expect(r.title).toBe('X-1');
+    expect(r.labels).toEqual([]);
+    expect(r.components).toEqual(['Pay']);
+    expect(r.links).toEqual([{ type: 'relates to', key: 'X-2' }]);
+    expect(r.status).toBe('Unknown');
+  });
+
+  it('skips malformed Figma nodes', () => {
+    const doc = { type: 'DOCUMENT', children: [null, { id: '0:1', name: 'P', type: 'CANVAS', children: [{ id: '1:1', name: 'F', type: 'FRAME', children: 'bad' }, { type: 'FRAME' }] }] };
+    expect(framesFromDocument('K', 'File', '2026-01-01', doc).map((f) => f.name)).toEqual(['F']);
+  });
+
+  it('drops AI findings and challenges that do not match the output schema', () => {
+    const finding = { category: 'GAP', severity: 'warning', dimension: 'design', title: 't', explanation: 'e', evidence: [{ ref: 'S1', quote: 'q' }] };
+    const out = parseOutput(
+      JSON.stringify({
+        findings: [finding, { ...finding, severity: 'huge' }, { ...finding, evidence: 'S1' }, null, { ...finding, question: { text: 'q', options: 'a', topic: 't' } }],
+        challenges: [{ question: 'q', rationale: 'r', options: ['a'], topic: 't' }, { question: 1 }],
+      }),
+    );
+    expect(out.findings).toEqual([finding]);
+    expect(out.challenges).toHaveLength(1);
   });
 });
