@@ -3,7 +3,7 @@ import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, impactAnalysis, recordDecision, withdrawDecision, type Decision, type IssueType, type NewDecision } from '@ci/core';
+import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, impactAnalysis, recordDecision, withdrawDecision, type Decision, type DecisionEffect, type IssueType, type NewDecision } from '@ci/core';
 import { Engine } from './engine.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { MUTATION, approveBody, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
@@ -134,9 +134,24 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   });
 
   // ------------------------------------------------------------------ decisions
+  /** What `decisionBody` accepts; the server sets the rest. */
+  interface DecisionBody {
+    questionId: string;
+    itemKey: string;
+    answer: string;
+    findingId?: string;
+    topic?: string;
+    question?: string;
+    note?: string;
+    decidedBy?: string;
+    by?: string;
+    effect?: DecisionEffect;
+    reason?: string;
+    changeReason?: string;
+  }
   app.get('/api/decisions', async () => store.decisions());
 
-  app.post<{ Body: Partial<NewDecision> & { by?: string; reason?: string } }>('/api/decisions', { schema: { summary: 'Answer a question or confirm a finding', body: decisionBody, response: errors(400, 422), ...MUTATION } }, async (req) => {
+  app.post<{ Body: DecisionBody }>('/api/decisions', { schema: { summary: 'Answer a question or confirm a finding', body: decisionBody, response: errors(400, 422), ...MUTATION } }, async (req) => {
     const b = req.body;
     const by = who(req, b);
     if (!b?.questionId || !b.itemKey || !b.answer?.trim()) throw httpError(400, 'questionId, itemKey and answer are required');
@@ -146,12 +161,12 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       itemKey: b.itemKey,
       topic: (b.topic ?? 'general').slice(0, 80),
       question: (b.question ?? '').slice(0, 500),
-      answer: b.answer.trim().slice(0, 500),
-      note: b.note?.trim().slice(0, 2000) || undefined,
+      answer: b.answer.trim(),
+      note: b.note?.trim() || undefined,
       decidedBy: by.actor,
       decidedAt: new Date().toISOString(),
-      effect: (['accept_risk', 'dismiss', 'confirm'] as const).find((e) => e === b.effect) ?? 'resolve',
-      changeReason: (b.reason ?? b.changeReason)?.trim().slice(0, 2000),
+      effect: b.effect ?? 'resolve',
+      changeReason: (b.reason ?? b.changeReason)?.trim(),
     };
     let decision!: Decision;
     await store.updateDecisions((all) => {

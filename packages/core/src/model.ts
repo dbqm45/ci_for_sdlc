@@ -13,7 +13,8 @@ export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision';
 // Normalized source contexts (output of connectors + normalizer)
 // ---------------------------------------------------------------------------
 
-export type IssueType = 'epic' | 'feature' | 'story' | 'task' | 'subtask' | 'bug';
+export const ISSUE_TYPES = ['epic', 'feature', 'story', 'task', 'subtask', 'bug'] as const;
+export type IssueType = (typeof ISSUE_TYPES)[number];
 
 export interface IssueLink {
   /** e.g. "blocks", "relates to", "is caused by", "duplicates" */
@@ -269,7 +270,7 @@ export interface Decision {
   decidedBy: string;
   decidedAt: string;
   /** What the decision does to the finding. `confirm` keeps it open and confirms an AI finding. */
-  effect: 'resolve' | 'accept_risk' | 'dismiss' | 'confirm';
+  effect: DecisionEffect;
   /**
    * Decisions are immutable. A change creates a new version that supersedes
    * the previous one; removal is a withdrawal. Decisions stored before
@@ -287,6 +288,9 @@ export interface Decision {
   withdrawnAt?: string;
   withdrawReason?: string;
 }
+
+export const DECISION_EFFECTS = ['resolve', 'accept_risk', 'dismiss', 'confirm'] as const;
+export type DecisionEffect = (typeof DECISION_EFFECTS)[number];
 
 export type DecisionStatus = 'active' | 'superseded' | 'withdrawn';
 

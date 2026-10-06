@@ -1,4 +1,4 @@
-import type { AnalysisResult, Approval, Decision, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem } from '@ci/core';
+import type { AnalysisResult, Approval, Decision, DeepPartial, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem, Settings } from '@ci/core';
 
 export type { AnalysisResult, ItemAnalysis, Decision, DriftEvent, ImpactReport };
 
@@ -116,8 +116,8 @@ export const api = {
   history: () => req<HistoryPoint[]>('GET', '/api/history'),
   audit: () => req<AuditEntry[]>('GET', '/api/audit'),
   rules: () => req<{ id: string; name: string; description: string; appliesTo: string[] }[]>('GET', '/api/rules'),
-  settings: () => req<{ settings: any; secrets: Record<string, boolean>; defaultModels: Record<string, string> }>('GET', '/api/settings'),
-  saveSettings: (patch: unknown) => req<{ settings: any }>('PUT', '/api/settings', patch, settingsEtag ? { 'if-match': settingsEtag } : {}),
+  settings: () => req<{ settings: Settings; secrets: Record<string, boolean>; defaultModels: Record<string, string> }>('GET', '/api/settings'),
+  saveSettings: (patch: DeepPartial<Settings>) => req<{ settings: Settings }>('PUT', '/api/settings', patch, settingsEtag ? { 'if-match': settingsEtag } : {}),
   testConnections: () => req<Record<string, string>>('POST', '/api/settings/test-connections'),
   scenarios: () => req<{ id: string; title: string; description: string }[]>('GET', '/api/demo/scenarios'),
   applyScenario: (id: string) => req<AnalysisResult>('POST', `/api/demo/scenarios/${id}`),

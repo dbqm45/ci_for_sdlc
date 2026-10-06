@@ -1,10 +1,9 @@
-import type { IssueType, RequirementItem } from './model.js';
+import { ISSUE_TYPES, type IssueType, type RequirementItem } from './model.js';
 
 /** Jira issue type name (any case) → hierarchy level (P1). */
 export type IssueTypeMap = Record<string, IssueType>;
 
-const LEVELS: readonly IssueType[] = ['epic', 'feature', 'story', 'task', 'subtask', 'bug'];
-const isIssueType = (v: unknown): v is IssueType => (LEVELS as readonly unknown[]).includes(v);
+export const isIssueType = (v: unknown): v is IssueType => (ISSUE_TYPES as readonly unknown[]).includes(v);
 
 /** Used when the Jira project has no custom mapping. Without a Feature type the hierarchy stays epic → story. */
 export const DEFAULT_ISSUE_TYPE_MAP: IssueTypeMap = {

@@ -6,7 +6,11 @@ import { OUTPUT_SCHEMA, SYSTEM_PROMPT, renderUserPrompt, type SemanticAnalyzer, 
  * Organization-selectable AI provider. Secrets (API keys) are never part of
  * the persisted config — they come from the environment of the server.
  */
-export type AiProviderKind = 'none' | 'anthropic' | 'bedrock' | 'openai' | 'azure-openai' | 'custom';
+export const AI_PROVIDERS = ['none', 'anthropic', 'bedrock', 'openai', 'azure-openai', 'custom'] as const;
+export type AiProviderKind = (typeof AI_PROVIDERS)[number];
+
+export const AI_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type AiEffort = (typeof AI_EFFORTS)[number];
 
 export interface AiProviderConfig {
   provider: AiProviderKind;
@@ -14,7 +18,7 @@ export interface AiProviderConfig {
   /** Only used by OpenAI-compatible providers; current Claude models do not accept sampling params. */
   temperature?: number;
   /** Claude effort level (low…max). */
-  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  effort?: AiEffort;
   /** Bedrock region. */
   region?: string;
   /** OpenAI-compatible base URL (custom endpoint / Azure resource endpoint). */

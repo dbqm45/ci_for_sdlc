@@ -2,19 +2,19 @@
  * JSON Schemas for request validation and the OpenAPI document. Bodies reject
  * unknown properties; the server still trims and caps free text.
  */
+import { AI_EFFORTS, AI_FINDINGS_ACTIONS, AI_PROVIDERS, AI_RUN_ON, DECISION_EFFECTS, DRIFT_REACTIONS, ISSUE_TYPES, SCHEDULE_MODES, SETTINGS_MODES, SEVERITY_ACTIONS } from '@ci/core';
+
 const str = (maxLength: number, extra: object = {}) => ({ type: 'string', maxLength, ...extra }) as const;
 const bool = { type: 'boolean' } as const;
 const strings = { type: 'array', maxItems: 200, items: str(200) } as const;
-const obj = (properties: Record<string, object>, required: string[] = []) => ({ type: 'object', additionalProperties: false, properties, ...(required.length && { required }) }) as const;
-
-export const ISSUE_LEVELS = ['epic', 'feature', 'story', 'bug', 'task', 'subtask'] as const;
+const obj = <P extends Record<string, object>>(properties: P, required: string[] = []) => ({ type: 'object', additionalProperties: false, properties, ...(required.length && { required }) }) as const;
 
 export const itemKeyParams = obj({ key: str(64, { pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]*$' }) }, ['key']);
 export const idParams = obj({ id: str(128, { minLength: 1 }) }, ['id']);
 
 /** Settings are a partial update; the UI sends the whole object. */
 export const settingsBody = obj({
-  mode: { enum: ['demo', 'live'] },
+  mode: { enum: SETTINGS_MODES },
   project: obj({ key: str(40), name: str(200) }),
   integrations: obj({
     jira: obj({
@@ -24,20 +24,20 @@ export const settingsBody = obj({
       projectKey: str(40),
       acceptanceCriteriaField: str(100),
       jqlFilter: str(4000),
-      issueTypeMap: { type: 'object', maxProperties: 100, propertyNames: { minLength: 1, maxLength: 100, pattern: '\\S' }, additionalProperties: { enum: ISSUE_LEVELS } },
+      issueTypeMap: { type: 'object', maxProperties: 100, propertyNames: { minLength: 1, maxLength: 100, pattern: '\\S' }, additionalProperties: { enum: ISSUE_TYPES } },
     }),
     confluence: obj({ enabled: bool, baseUrl: str(500), email: str(320), spaceKeys: strings }),
     figma: obj({ enabled: bool, fileKeys: strings }),
   }),
   ai: obj({
-    provider: { enum: ['none', 'anthropic', 'bedrock', 'openai', 'azure-openai', 'custom'] },
+    provider: { enum: AI_PROVIDERS },
     model: str(200),
     temperature: { type: 'number', minimum: 0, maximum: 2 },
-    effort: { enum: ['low', 'medium', 'high', 'xhigh', 'max'] },
+    effort: { enum: AI_EFFORTS },
     region: str(50),
     baseUrl: str(500),
     apiVersion: str(50),
-    runOn: { enum: ['every_analysis', 'on_demand'] },
+    runOn: { enum: AI_RUN_ON },
   }),
   security: obj({
     organizationManagedAi: bool,
@@ -49,20 +49,21 @@ export const settingsBody = obj({
     recordEvidenceSources: bool,
   }),
   schedule: obj({
-    mode: { enum: ['on_demand', 'interval', 'continuous'] },
+    mode: { enum: SCHEDULE_MODES },
     intervalMinutes: { type: 'integer', minimum: 1, maximum: 10080 },
     onJiraChange: bool,
     onConfluenceChange: bool,
     onFigmaChange: bool,
   }),
   policy: obj({
-    actions: obj({ critical: { enum: ['block', 'notify', 'record'] }, warning: { enum: ['block', 'notify', 'record'] }, info: { enum: ['block', 'notify', 'record'] } }),
+    actions: obj({ critical: { enum: SEVERITY_ACTIONS }, warning: { enum: SEVERITY_ACTIONS }, info: { enum: SEVERITY_ACTIONS } }),
     disabledRules: strings,
-    aiFindings: { enum: ['block', 'require_confirmation', 'notify'] },
-    driftReaction: { enum: ['warn', 'review_required', 'invalidate'] },
+    aiFindings: { enum: AI_FINDINGS_ACTIONS },
+    driftReaction: { enum: DRIFT_REACTIONS },
   }),
 });
 
+/** Limits on what a person types match what is stored; topic and question echo server text and are truncated. */
 export const decisionBody = obj(
   {
     questionId: str(200, { minLength: 1 }),
@@ -70,13 +71,13 @@ export const decisionBody = obj(
     itemKey: str(64, { minLength: 1 }),
     topic: str(200),
     question: str(5000),
-    answer: str(5000),
-    note: str(5000),
+    answer: str(500),
+    note: str(2000),
     decidedBy: str(200),
     by: str(200),
-    effect: { enum: ['resolve', 'accept_risk', 'dismiss', 'confirm'] },
-    reason: str(5000),
-    changeReason: str(5000),
+    effect: { enum: DECISION_EFFECTS },
+    reason: str(2000),
+    changeReason: str(2000),
   },
   ['questionId', 'itemKey', 'answer'],
 );

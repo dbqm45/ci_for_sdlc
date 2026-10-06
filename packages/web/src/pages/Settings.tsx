@@ -1,9 +1,12 @@
+import type { AiEffort, AiProviderKind, Settings as SettingsData } from '@ci/core';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../App';
 import { api, currentUser, setCurrentUser } from '../api';
 import { Card, Spinner } from '../components/ui';
 
-const PROVIDERS = [
+const EFFORTS: readonly AiEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+const PROVIDERS: readonly { id: AiProviderKind; label: string; hint: string }[] = [
   { id: 'none', label: 'Deterministic rules only', hint: 'No data leaves this machine.' },
   { id: 'bedrock', label: 'Amazon Bedrock', hint: 'Claude inside your AWS account and policies. Uses the standard AWS credential chain.' },
   { id: 'anthropic', label: 'Anthropic', hint: 'Claude API. Key from ANTHROPIC_API_KEY.' },
@@ -15,7 +18,7 @@ const PROVIDERS = [
 export function Settings() {
   const { toast, refresh } = useApp();
   const [data, setData] = useState<Awaited<ReturnType<typeof api.settings>>>();
-  const [s, setS] = useState<any>();
+  const [s, setS] = useState<SettingsData>();
   const [rules, setRules] = useState<Awaited<ReturnType<typeof api.rules>>>([]);
   const [saving, setSaving] = useState(false);
   const [test, setTest] = useState<Record<string, string>>();
@@ -30,8 +33,8 @@ export function Settings() {
   const set = (path: string, value: unknown) => {
     const next = structuredClone(s);
     const keys = path.split('.');
-    let o = next;
-    for (const k of keys.slice(0, -1)) o = o[k];
+    let o = next as unknown as Record<string, unknown>;
+    for (const k of keys.slice(0, -1)) o = o[k] as Record<string, unknown>;
     o[keys.at(-1)!] = value;
     setS(next);
   };
@@ -121,7 +124,7 @@ export function Settings() {
         <div className="grid g3" style={{ marginBottom: 14 }}>
           {PROVIDERS.map((p) => (
             <label key={p.id} className={`card card-pad check`} style={{ alignItems: 'flex-start', borderColor: s.ai.provider === p.id ? 'var(--accent)' : undefined }}>
-              <input type="radio" name="provider" checked={s.ai.provider === p.id} onChange={() => (set('ai.provider', p.id), setS((x: any) => ({ ...x, ai: { ...x.ai, provider: p.id, model: data.defaultModels[p.id] ?? '' } })))} />
+              <input type="radio" name="provider" checked={s.ai.provider === p.id} onChange={() => (set('ai.provider', p.id), setS((x) => x && { ...x, ai: { ...x.ai, provider: p.id, model: data.defaultModels[p.id] ?? '' } }))} />
               <span className="col" style={{ gap: 2 }}>
                 <strong>{p.label}</strong>
                 <span className="small muted">{p.hint}</span>
@@ -135,7 +138,7 @@ export function Settings() {
             {(s.ai.provider === 'anthropic' || s.ai.provider === 'bedrock') && (
               <Field label="Effort">
                 <select className="input" value={s.ai.effort ?? 'high'} onChange={(e) => set('ai.effort', e.target.value)}>
-                  {['low', 'medium', 'high', 'xhigh', 'max'].map((x) => <option key={x}>{x}</option>)}
+                  {EFFORTS.map((x) => <option key={x}>{x}</option>)}
                 </select>
               </Field>
             )}

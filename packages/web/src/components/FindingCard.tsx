@@ -137,8 +137,8 @@ export function QuestionBox({
           </button>
         ))}
       </div>
-      {isOther && <input className="input" autoFocus placeholder="Describe what should happen…" value={other} onChange={(e) => setOther(e.target.value)} />}
-      {selected && <textarea className="input" placeholder="Note / rationale (optional) — becomes part of the specification" value={note} onChange={(e) => setNote(e.target.value)} />}
+      {isOther && <input className="input" autoFocus maxLength={500} placeholder="Describe what should happen…" value={other} onChange={(e) => setOther(e.target.value)} />}
+      {selected && <textarea className="input" maxLength={2000} placeholder="Note / rationale (optional) — becomes part of the specification" value={note} onChange={(e) => setNote(e.target.value)} />}
       <div className="row wrap">
         <button className="btn primary sm" disabled={!answer || busy} onClick={() => submit('resolve')}>
           Record decision

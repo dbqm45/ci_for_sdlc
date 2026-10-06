@@ -2,37 +2,11 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_POLICY, normalizeDecision, type AiProviderConfig, type AnalysisPolicy, type Approval, type Decision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, normalizeDecision, type Approval, type Decision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
 import type { Principal } from './http.js';
 import { pruneToSchema, settingsBody } from './schemas.js';
 
-export interface Settings {
-  mode: 'demo' | 'live';
-  project: { key: string; name: string };
-  integrations: {
-    jira: { enabled: boolean; baseUrl: string; email: string; projectKey: string; acceptanceCriteriaField?: string; jqlFilter?: string; issueTypeMap?: Record<string, IssueType> };
-    confluence: { enabled: boolean; baseUrl: string; email: string; spaceKeys: string[] };
-    figma: { enabled: boolean; fileKeys: string[] };
-  };
-  ai: AiProviderConfig & { runOn: 'every_analysis' | 'on_demand' };
-  security: {
-    organizationManagedAi: boolean;
-    redactPersonalData: boolean;
-    maxCharsPerSource: number;
-    localCacheOnly: boolean;
-    encryptStoredContext: boolean;
-    auditAiDecisions: boolean;
-    recordEvidenceSources: boolean;
-  };
-  schedule: {
-    mode: 'on_demand' | 'interval' | 'continuous';
-    intervalMinutes: number;
-    onJiraChange: boolean;
-    onConfluenceChange: boolean;
-    onFigmaChange: boolean;
-  };
-  policy: AnalysisPolicy;
-}
+export type { Settings };
 
 /** Shown in Settings (P1); unmapped Jira types still fall back to the core defaults and then to story. */
 export const DEFAULT_JIRA_ISSUE_TYPES: Record<string, IssueType> = { Epic: 'epic', Feature: 'feature', Story: 'story' };
