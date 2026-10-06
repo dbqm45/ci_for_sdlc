@@ -262,7 +262,25 @@ export interface Decision {
   decidedAt: string;
   /** What the decision does to the finding. */
   effect: 'resolve' | 'accept_risk' | 'dismiss';
+  /**
+   * Decisions are immutable. A change creates a new version that supersedes
+   * the previous one; removal is a withdrawal. Decisions stored before
+   * versioning are read as active version 1.
+   */
+  version: number;
+  status: DecisionStatus;
+  /** Id of the version this one replaced. */
+  supersedes?: string;
+  /** Why the previous version was changed (required when superseding an active decision). */
+  changeReason?: string;
+  supersededBy?: string;
+  supersededAt?: string;
+  withdrawnBy?: string;
+  withdrawnAt?: string;
+  withdrawReason?: string;
 }
+
+export type DecisionStatus = 'active' | 'superseded' | 'withdrawn';
 
 // ---------------------------------------------------------------------------
 // State machine / journeys / coverage

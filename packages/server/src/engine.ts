@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import {
   DEMO_SCENARIOS,
+  activeDecisions,
   analyzeProject,
   approvalBaseline,
   createSemanticAnalyzer,
@@ -72,7 +73,7 @@ export class Engine extends EventEmitter {
     this.emit('status', { running: true, reason });
     try {
       const settings = await this.store.settings();
-      const [context, decisions, approvals, previous] = await Promise.all([this.loadContext(settings), this.store.decisions(), this.store.approvals(), this.store.snapshot()]);
+      const [context, decisions, approvals, previous] = await Promise.all([this.loadContext(settings), this.store.decisions().then(activeDecisions), this.store.approvals(), this.store.snapshot()]);
 
       const analyzer = createSemanticAnalyzer(settings.ai, {
         anthropicApiKey: process.env.ANTHROPIC_API_KEY,

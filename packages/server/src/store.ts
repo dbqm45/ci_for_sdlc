@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_POLICY, type AiProviderConfig, type AnalysisPolicy, type Approval, type Decision, type DriftEvent, type ProjectContext, type SemanticOutput, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, normalizeDecision, type AiProviderConfig, type AnalysisPolicy, type Approval, type Decision, type DriftEvent, type ProjectContext, type SemanticOutput, type Snapshot } from '@ci/core';
 
 export interface Settings {
   mode: 'demo' | 'live';
@@ -56,7 +56,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export interface AuditEntry {
   at: string;
-  kind: 'ai_call' | 'decision' | 'decision_removed' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change';
+  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change';
   actor: string;
   summary: string;
   details?: unknown;
@@ -181,11 +181,15 @@ export class Store {
     return this.settings().then((s) => s.security.encryptStoredContext);
   }
 
-  decisions() {
-    return this.readJson<Decision[]>('decisions.json', []);
+  /** All decision versions, including superseded and withdrawn ones. */
+  async decisions() {
+    return (await this.readJson<Decision[]>('decisions.json', [])).map(normalizeDecision);
   }
   updateDecisions(fn: (all: Decision[]) => Decision[] | void) {
-    return this.update<Decision[]>('decisions.json', [], fn, true);
+    return this.update<Decision[]>('decisions.json', [], (all) => {
+      const list = all.map(normalizeDecision);
+      return fn(list) ?? list;
+    }, true);
   }
   approvals() {
     return this.readJson<Approval[]>('approvals.json', []);

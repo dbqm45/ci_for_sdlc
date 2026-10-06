@@ -18,6 +18,8 @@ const decision = (p: Partial<Decision> & Pick<Decision, 'questionId' | 'findingI
   question: 'Q',
   decidedBy: 'tester',
   decidedAt: '2026-10-01T00:00:00.000Z',
+  version: 1,
+  status: 'active',
   effect: 'resolve',
   ...p,
 });

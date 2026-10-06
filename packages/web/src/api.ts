@@ -1,4 +1,4 @@
-import type { AnalysisResult, Approval, Decision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem } from '@ci/core';
+import type { AnalysisResult, Approval, Decision, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem } from '@ci/core';
 
 export type { AnalysisResult, ItemAnalysis, Decision, DriftEvent, ImpactReport };
 
@@ -7,6 +7,8 @@ export interface ItemDetail {
   source?: RequirementItem;
   children: Pick<ItemAnalysis, 'key' | 'type' | 'title' | 'health' | 'healthStatus' | 'readiness'>[];
   decisions: Decision[];
+  /** Superseded and withdrawn versions. */
+  decisionHistory: Decision[];
   approval?: Approval;
   drift: DriftEvent[];
 }
@@ -54,8 +56,13 @@ export const api = {
   aiReview: (key: string) => req<{ item: ItemAnalysis; errors: string[] }>('POST', `/api/items/${encodeURIComponent(key)}/ai-review`),
   approve: (key: string, by: string, force?: { reason: string }) => req<AnalysisResult>('POST', `/api/items/${encodeURIComponent(key)}/approve`, { by, ...(force && { force: true, reason: force.reason }) }),
   unapprove: (key: string) => req<AnalysisResult>('DELETE', `/api/items/${encodeURIComponent(key)}/approve`),
-  decide: (d: Omit<Decision, 'id' | 'decidedAt'>) => req<{ decision: Decision; item: ItemAnalysis }>('POST', '/api/decisions', d),
-  reopen: (id: string) => req<AnalysisResult>('DELETE', `/api/decisions/${encodeURIComponent(id)}`),
+  decide: (d: Omit<NewDecision, 'decidedAt'> & { reason?: string }) => req<{ decision: Decision; item: ItemAnalysis }>('POST', '/api/decisions', d),
+  /** Withdraws the decision (it stays in history) and re-opens its finding. Returns undefined when the user cancels. */
+  reopen: async (id: string) => {
+    const reason = window.prompt('Why re-open this decision? (optional, recorded in the audit log)');
+    if (reason === null) return undefined;
+    return req<AnalysisResult>('DELETE', `/api/decisions/${encodeURIComponent(id)}`, { by: currentUser(), reason: reason.trim() || undefined });
+  },
   decisions: () => req<Decision[]>('GET', '/api/decisions'),
   impact: (q: string) => req<ImpactReport>('GET', `/api/impact?q=${encodeURIComponent(q)}`),
   drift: () => req<DriftEvent[]>('GET', '/api/drift'),

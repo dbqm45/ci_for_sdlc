@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
-import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, hash, impactAnalysis, type Decision } from '@ci/core';
+import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, impactAnalysis, recordDecision, withdrawDecision, type Decision, type NewDecision } from '@ci/core';
 import { Engine } from './engine.js';
 import { deepMerge, Store, type Settings } from './store.js';
 
@@ -49,7 +49,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       item,
       source: req0,
       children: children.map((c) => ({ key: c.key, type: c.type, title: c.title, health: c.health, healthStatus: c.healthStatus, readiness: c.readiness })),
-      decisions: decisions.filter((d) => d.itemKey === item.key),
+      decisions: decisions.filter((d) => d.itemKey === item.key && d.status === 'active'),
+      decisionHistory: decisions.filter((d) => d.itemKey === item.key && d.status !== 'active'),
       approval: approvals.find((a) => a.itemKey === item.key),
       drift: (await store.driftLog()).filter((d) => d.impactedItems.includes(item.key)).slice(-30).reverse(),
     };
@@ -104,11 +105,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   // ------------------------------------------------------------------ decisions
   app.get('/api/decisions', async () => store.decisions());
 
-  app.post<{ Body: Omit<Decision, 'id' | 'decidedAt'> }>('/api/decisions', async (req) => {
+  app.post<{ Body: Partial<NewDecision> & { by?: string; reason?: string } }>('/api/decisions', async (req) => {
     const b = req.body;
     if (!b?.questionId || !b.itemKey || !b.answer?.trim()) throw Object.assign(new Error('questionId, itemKey and answer are required'), { statusCode: 400 });
-    const decision: Decision = {
-      id: hash(`${b.questionId}|${Date.now()}`),
+    const input: NewDecision = {
       questionId: b.questionId,
       findingId: b.findingId ?? b.questionId,
       itemKey: b.itemKey,
@@ -119,21 +119,33 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       decidedBy: actor(b),
       decidedAt: new Date().toISOString(),
       effect: b.effect === 'accept_risk' || b.effect === 'dismiss' ? b.effect : 'resolve',
+      changeReason: (b.reason ?? b.changeReason)?.trim().slice(0, 2000),
     };
-    await store.updateDecisions((all) => [...all.filter((d) => d.questionId !== decision.questionId), decision]);
-    await store.audit({ at: decision.decidedAt, kind: 'decision', actor: decision.decidedBy, summary: `${decision.itemKey}: "${decision.question}" → ${decision.answer} (${decision.effect})` });
+    let decision!: Decision;
+    await store.updateDecisions((all) => {
+      const r = recordDecision(all, input);
+      decision = r.decision;
+      return r.all;
+    });
+    const change = decision.supersedes && decision.changeReason ? ` [v${decision.version}, replaces previous answer: ${decision.changeReason}]` : decision.version > 1 ? ` [v${decision.version}]` : '';
+    await store.audit({ at: decision.decidedAt, kind: 'decision', actor: decision.decidedBy, summary: `${decision.itemKey}: "${decision.question}" → ${decision.answer} (${decision.effect})${change}` });
     const result = await engine.analyze(`decision on ${decision.itemKey}`);
     return { decision, item: result.items.find((i) => i.key === decision.itemKey) };
   });
 
-  app.delete<{ Params: { id: string } }>('/api/decisions/:id', async (req) => {
+  /** Decisions are never deleted: DELETE withdraws the active version and re-opens its finding. */
+  app.delete<{ Params: { id: string }; Body: { by?: string; reason?: string } | undefined }>('/api/decisions/:id', async (req) => {
+    const at = new Date().toISOString();
+    const by = actor(req.body ?? undefined);
     let d: Decision | undefined;
     await store.updateDecisions((all) => {
-      d = all.find((x) => x.id === req.params.id);
-      return all.filter((x) => x.id !== req.params.id);
+      const r = withdrawDecision(all, req.params.id, by, at, req.body?.reason?.slice(0, 2000));
+      d = r.decision;
+      return r.all;
     });
-    if (d) await store.audit({ at: new Date().toISOString(), kind: 'decision_removed', actor: 'user', summary: `Decision re-opened: ${d.itemKey} "${d.question}"` });
-    return engine.analyze('decision re-opened');
+    if (!d) throw Object.assign(new Error('No active decision with this id'), { statusCode: 404 });
+    await store.audit({ at, kind: 'decision_withdrawn', actor: by, summary: `Decision withdrawn: ${d.itemKey} "${d.question}" (was: ${d.answer})${d.withdrawReason ? ` — ${d.withdrawReason}` : ''}` });
+    return engine.analyze('decision withdrawn');
   });
 
   // ------------------------------------------------------------------ impact, drift, audit, rules

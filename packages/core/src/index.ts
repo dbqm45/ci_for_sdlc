@@ -1,5 +1,6 @@
 export * from './model.js';
 export * from './policy.js';
+export * from './decisions.js';
 export * from './graph.js';
 export * from './project.js';
 export * from './impact.js';

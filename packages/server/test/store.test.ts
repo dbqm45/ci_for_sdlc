@@ -20,6 +20,8 @@ const decision = (id: string): Decision => ({
   decidedBy: 'test',
   decidedAt: new Date().toISOString(),
   effect: 'resolve',
+  version: 1,
+  status: 'active',
 });
 
 beforeEach(async () => {

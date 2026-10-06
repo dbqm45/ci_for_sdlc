@@ -50,7 +50,7 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
             <span className="small" style={{ color: 'var(--muted)' }}>
               {' '}
               — {decision.decidedBy}, {new Date(decision.decidedAt).toLocaleString()}{' '}
-              <button className="btn ghost sm" onClick={async () => (await api.reopen(decision.id), onChanged())}>
+              <button className="btn ghost sm" onClick={async () => (await api.reopen(decision.id)) && onChanged()}>
                 Re-open
               </button>
             </span>
