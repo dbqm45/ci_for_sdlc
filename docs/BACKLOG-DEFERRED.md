@@ -20,7 +20,16 @@ Lista propozycji, które świadomie odłożono, żeby o nich nie zapomnieć. Ka�
 ## API (szczegóły odłożone)
 
 - Paginacja list (ustalenia, decyzje, historia, audyt).
-- `ETag` / `If-Match` dla zapisu ustawień i decyzji (ochrona przed nadpisaniem).
+- `ETag` / `If-Match` dla decyzji (dla ustawień zrobione w kroku 2).
 - `202 Accepted` i zasób operacji dla długich analiz.
 - Wersjonowanie ścieżek `/api/v1`.
 - `Last-Event-ID` w SSE.
+
+## Po kroku 2 (bezpieczeństwo i kontrakt API)
+
+- **Pełne schematy odpowiedzi** dla wszystkich tras i typy klienta generowane z OpenAPI (dziś schematy mają głównie wejścia i błędy).
+- **Lint kontraktu w CI** (np. Spectral) i test, że `/api/openapi.json` nie zmienia się bez świadomej decyzji.
+- **`201 Created` + `Location`** dla nowej decyzji (API-02); dziś `200` z treścią.
+- **Prawdziwa tożsamość użytkownika** (SSO/OIDC, konto zamiast nazwy z nagłówka `X-CI-Actor`). Dziś audyt zapisuje nazwę wyświetlaną i sposób autoryzacji (`via`).
+- **Rotacja tokenu administratora** bez restartu i kilka tokenów (np. osobny dla CI) — dziś jeden `CI_ADMIN_TOKEN` ze zmiennej środowiskowej.
+- **Migracja starego `settings.json`**: plik z nieznanymi już polami da `422` przy zapisie z UI. Do rozważenia: oczyszczenie pliku przy starcie z wpisem do audytu.
