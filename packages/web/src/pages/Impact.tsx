@@ -33,7 +33,7 @@ export function Impact() {
         </div>
       </div>
       <form className="row" onSubmit={(e) => (e.preventDefault(), void run())}>
-        <input className="input" placeholder="Describe a planned change, or enter an entity id (jira:PAY-125)…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input" aria-label="Planned change" placeholder="Describe a planned change, or enter an entity id (jira:PAY-125)…" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn primary" disabled={busy}>
           {busy ? <Spinner /> : 'Analyze impact'}
         </button>

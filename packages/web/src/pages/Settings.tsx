@@ -253,7 +253,7 @@ export function Settings() {
               return (
                 <tr key={r.id}>
                   <td style={{ width: 30 }}>
-                    <input type="checkbox" checked={!off} onChange={() => set('policy.disabledRules', off ? s.policy.disabledRules.filter((x: string) => x !== r.id) : [...s.policy.disabledRules, r.id])} />
+                    <input type="checkbox" aria-label={`Enable ${r.id} ${r.name}`} checked={!off} onChange={() => set('policy.disabledRules', off ? s.policy.disabledRules.filter((x: string) => x !== r.id) : [...s.policy.disabledRules, r.id])} />
                   </td>
                   <td className="mono small" style={{ width: 90 }}>{r.id}</td>
                   <td>

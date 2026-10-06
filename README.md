@@ -51,6 +51,22 @@ npm run test:e2e
 
 Gdy Chromium jest już zainstalowany poza Playwrightem, wskaż go zmienną `PW_CHROMIUM_PATH`.
 
+Każdy obszar aplikacji ma własny plik w `e2e/` (ścieżki podobne są zgrupowane razem), a ID przypadku jest w nazwie testu:
+
+| Plik | ID | Ścieżki użytkownika |
+|---|---|---|
+| `navigation.spec.ts` | NAV | menu boczne, głębokie linki, nieznany element i adres, okruszki |
+| `overview.spec.ts` | OVR | stan projektu, „Analyze now”, ryzyka i epiki, reset demo |
+| `backlog.spec.ts` | BKL | wyszukiwanie, filtr typu i stanu, rozwinięcie wymiarów |
+| `item.spec.ts` | ITM | zatwierdzenie i wycofanie, zatwierdzenie wymuszone, epik, zakładki, „WHY?”, AI review, ponowne zatwierdzenie po driftcie |
+| `decisions.spec.ts` | DEC | odpowiedź (opcja, „Other”, akceptacja ryzyka, „Not applicable”), ponowne otwarcie, filtr tematów, „Challenge this feature” |
+| `drift.spec.ts` | DRF | wpływ zmiany na zatwierdzone elementy, filtr zdarzeń informacyjnych, regresja „DRIFT DETECTED” |
+| `impact.spec.ts` | IMP | analiza wpływu z przykładu i z identyfikatora |
+| `settings.spec.ts` | SET | test połączeń, reguły polityki, nazwa decydenta, równoczesna edycja |
+| `audit.spec.ts` | AUD | wpis zatwierdzenia, filtr rodzaju, szczegóły zmiany ustawień |
+
+Testy dzielą jeden serwer, więc biegną po kolei; `e2e/support/helpers.ts` przed każdym testem przywraca czysty stan przez API.
+
 ### Co zobaczysz w demo
 
 Workspace „Checkout” odtwarza przykłady z koncepcji produktu:
