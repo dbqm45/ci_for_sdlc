@@ -12,6 +12,21 @@ import { deepMerge, Store, type Settings } from './store.js';
 /** Weak validator for optimistic concurrency on settings (API-07). */
 const etagOf = (s: Settings) => `"${createHash('sha256').update(JSON.stringify(s)).digest('hex').slice(0, 20)}"`;
 
+/**
+ * Whether the AWS SDK default credential chain has a source to use for Bedrock: access keys, a shared profile or SSO,
+ * a Bedrock API key, or an IAM role (EKS web identity, ECS/Fargate/App Runner task role, EKS Pod Identity).
+ * An EC2 instance profile is only reachable through IMDS and is not detected here.
+ */
+export const awsCredentialsConfigured = (env: Record<string, string | undefined> = process.env) =>
+  [
+    'AWS_ACCESS_KEY_ID',
+    'AWS_PROFILE',
+    'AWS_BEARER_TOKEN_BEDROCK',
+    'AWS_WEB_IDENTITY_TOKEN_FILE',
+    'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI',
+    'AWS_CONTAINER_CREDENTIALS_FULL_URI',
+  ].some((name) => !!env[name]);
+
 /** Only leaf work items are approved; feature and epic readiness is derived from their stories. */
 const APPROVABLE = new Set(['story', 'bug']);
 
@@ -222,7 +237,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
         OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
         AZURE_OPENAI_API_KEY: !!process.env.AZURE_OPENAI_API_KEY,
         CUSTOM_AI_API_KEY: !!process.env.CUSTOM_AI_API_KEY,
-        AWS_CREDENTIALS: !!(process.env.AWS_ACCESS_KEY_ID || process.env.AWS_PROFILE || process.env.AWS_BEARER_TOKEN_BEDROCK),
+        AWS_CREDENTIALS: awsCredentialsConfigured(),
         CI_ENCRYPTION_KEY: !!process.env.CI_ENCRYPTION_KEY,
       },
       defaultModels: DEFAULT_MODELS,
