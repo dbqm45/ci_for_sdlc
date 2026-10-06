@@ -7,12 +7,12 @@ import {
   extractClaims,
   findConflicts,
   impactAnalysis,
-  type Decision,
+  type ActiveDecision,
   type SemanticAnalyzer,
 } from '../src/index.js';
 
 const item = (r: Awaited<ReturnType<typeof analyzeProject>>, key: string) => r.result.items.find((i) => i.key === key)!;
-const decision = (p: Partial<Decision> & Pick<Decision, 'questionId' | 'findingId' | 'itemKey' | 'answer'>): Decision => ({
+const decision = (p: Partial<ActiveDecision> & Pick<ActiveDecision, 'questionId' | 'findingId' | 'itemKey' | 'answer'>): ActiveDecision => ({
   id: p.questionId,
   topic: 'test',
   question: 'Q',

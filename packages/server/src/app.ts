@@ -3,7 +3,7 @@ import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type Decision, type DecisionEffect, type IssueType, type NewDecision } from '@ci/core';
+import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
 import { Engine } from './engine.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { MUTATION, approveBody, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
@@ -168,7 +168,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       effect: b.effect ?? 'resolve',
       changeReason: (b.reason ?? b.changeReason)?.trim(),
     };
-    let decision!: Decision;
+    let decision!: ActiveDecision;
     await store.updateDecisions((all) => {
       const r = recordDecision(all, input);
       decision = r.decision;
@@ -184,7 +184,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   app.delete<{ Params: { id: string }; Body: { by?: string; reason?: string } | null }>('/api/decisions/:id', { schema: { params: idParams, body: withdrawBody, response: errors(404, 422), ...MUTATION } }, async (req) => {
     const at = new Date().toISOString();
     const { actor: by, via } = who(req, req.body);
-    let d: Decision | undefined;
+    let d: WithdrawnDecision | undefined;
     await store.updateDecisions((all) => {
       const r = withdrawDecision(all, req.params.id, by, at, req.body?.reason?.slice(0, 2000));
       d = r.decision;

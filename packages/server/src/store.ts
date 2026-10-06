@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_POLICY, errorMessage, normalizeDecision, type Approval, type Decision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, errorMessage, normalizeDecision, type Approval, type Decision, type StoredDecision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
 import type { Principal } from './http.js';
 import { pruneToSchema, settingsBody } from './schemas.js';
 
@@ -207,10 +207,10 @@ export class Store {
 
   /** All decision versions, including superseded and withdrawn ones. */
   async decisions() {
-    return (await this.readJson('decisions.json', [], listOf<Decision>())).map(normalizeDecision);
+    return (await this.readJson('decisions.json', [], listOf<StoredDecision>())).map(normalizeDecision);
   }
   updateDecisions(fn: (all: Decision[]) => Decision[] | void) {
-    return this.update('decisions.json', [], listOf<Decision>(), (all) => {
+    return this.update('decisions.json', [], listOf<StoredDecision>(), (all) => {
       const list = all.map(normalizeDecision);
       return fn(list) ?? list;
     }, true);
