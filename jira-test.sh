@@ -52,14 +52,29 @@ if [[ -z "$BASE_URL" || -z "$EMAIL" || -z "$PROJECT_KEY" ]]; then
   exit 1
 fi
 
-# Prefer the token actually injected into the app container, then the caller's exported value.
-TOKEN=""
-if command -v docker >/dev/null 2>&1; then
+# Read the generated .env without sourcing it: values in that file are data, not shell code.
+env_file_token() {
+  local line value
+  [[ -f .env ]] || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" == JIRA_API_TOKEN=* ]] || continue
+    value=${line#JIRA_API_TOKEN=}
+    if [[ "$value" == \"*\" && "$value" == *\" ]]; then value=${value:1:${#value}-2}; fi
+    if [[ "$value" == \'*\' && "$value" == *\' ]]; then value=${value:1:${#value}-2}; fi
+    printf '%s' "$value"
+    return 0
+  done <.env
+  return 1
+}
+
+# Prefer the shell override, then the generated .env, then the running container.
+TOKEN="${JIRA_API_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then TOKEN=$(env_file_token || true); fi
+if [[ -z "$TOKEN" ]] && command -v docker >/dev/null 2>&1; then
   TOKEN=$(docker compose exec -T app printenv JIRA_API_TOKEN 2>/dev/null || true)
 fi
-TOKEN="${TOKEN:-${JIRA_API_TOKEN:-}}"
 if [[ -z "$TOKEN" ]]; then
-  printf 'JIRA_API_TOKEN is unavailable. Start the app with its token configured, or export JIRA_API_TOKEN.\n' >&2
+  printf 'JIRA_API_TOKEN is unavailable. Add it to .env or export it in the shell.\n' >&2
   exit 1
 fi
 
