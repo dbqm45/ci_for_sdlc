@@ -69,17 +69,37 @@ describe('fetchFigma', () => {
 
   it('FG-05: limits text layers per frame (data minimization)', async () => {
     const texts = ['a', 'b', 'c'].map((t, i) => ({ id: `9:${i}`, name: t, type: 'TEXT', characters: t }));
-    fakeFetch(
+    const calls = fakeFetch(
       componentMetadata(),
       json(page([{ id: '1:1', name: 'F', type: 'FRAME' }])),
-      nodeDetails({ id: '1:1', name: 'F', type: 'FRAME', children: [{ id: '2:1', name: 'Group', type: 'GROUP' }] }),
-      nodeDetails({ id: '2:1', name: 'Group', type: 'GROUP', children: texts }),
+      nodeDetails({ id: '1:1', name: 'F', type: 'FRAME', children: [{ id: '2:1', name: 'Group', type: 'GROUP', children: texts }] }),
     );
     const [frame] = await fetchFigma({ token: 't', fileKeys: ['K'], maxTextsPerFrame: 2 });
+    expect(calls).toHaveLength(3);
     expect(frame?.texts).toEqual(['a', 'b']);
   });
 
-  it('FG-06: batches all selected frame IDs into one depth-limited nodes request', async () => {
+  it('FG-06: does not issue follow-up requests for every nested Figma layer', async () => {
+    const calls = fakeFetch(
+      componentMetadata(),
+      json(page([{ id: '1:1', name: 'F', type: 'FRAME' }])),
+      nodeDetails({
+        id: '1:1',
+        name: 'F',
+        type: 'FRAME',
+        children: [{ id: '2:1', name: 'Group', type: 'GROUP', children: [{ id: '3:1', name: 'Nested group', type: 'GROUP' }] }],
+      }),
+    );
+    await fetchFigma({ token: 'bounded-token', fileKeys: ['BOUNDED'] });
+    expect(calls).toHaveLength(3);
+    expect(calls.map((call) => call.url)).toEqual([
+      'https://api.figma.com/v1/files/BOUNDED/components',
+      'https://api.figma.com/v1/files/BOUNDED?depth=3',
+      expect.stringContaining('/files/BOUNDED/nodes?ids=1%3A1&depth=2'),
+    ]);
+  });
+
+  it('FG-07: batches all selected frame IDs into one depth-limited nodes request', async () => {
     const calls = fakeFetch(
       componentMetadata('1:1'),
       json(page([
@@ -98,7 +118,7 @@ describe('fetchFigma', () => {
     expect(nodesUrl.searchParams.get('depth')).toBe('2');
   });
 
-  it('FG-07: splits node batches when their response exceeds 500 KB', async () => {
+  it('FG-08: splits node batches when their response exceeds 500 KB', async () => {
     const largeText = 'x'.repeat(300 * 1024);
     const calls = fakeFetch(
       componentMetadata(),
@@ -121,7 +141,7 @@ describe('fetchFigma', () => {
     expect(frames.map((frame) => frame.texts[0]?.length)).toEqual([120, 120]);
   });
 
-  it('FG-08: reuses successful responses from the process cache', async () => {
+  it('FG-09: reuses successful responses from the process cache', async () => {
     const calls = fakeFetch(
       componentMetadata('1:1'),
       json(page([{ id: '1:1', name: 'Pay', type: 'FRAME' }])),
@@ -137,7 +157,7 @@ describe('fetchFigma', () => {
     expect(calls).toHaveLength(6);
   });
 
-  it('FG-09: honors Retry-After and uses exponential delays for repeated 429 responses', async () => {
+  it('FG-10: honors Retry-After and uses exponential delays for repeated 429 responses', async () => {
     vi.useFakeTimers();
     const calls = fakeFetch(
       new Response('Rate limited', { status: 429 }),

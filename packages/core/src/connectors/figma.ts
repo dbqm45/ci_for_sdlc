@@ -38,11 +38,11 @@ const API = 'https://api.figma.com/v1';
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 30_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 const CACHE_TTL_MS = 60_000;
 const MAX_CACHE_ENTRIES = 100;
 const MAX_BATCH_IDS = 20;
 const MAX_RESPONSE_BYTES = 500_000;
-const CHILD_NODE_TYPES = new Set(['CANVAS', 'COMPONENT', 'COMPONENT_SET', 'DOCUMENT', 'FRAME', 'GROUP', 'INSTANCE', 'SECTION']);
 const responseCache = new Map<string, CacheEntry>();
 
 /** Test seam; the cache is deliberately not part of the public connector API. */
@@ -62,7 +62,10 @@ function retryAfterMs(header: string | null, now = Date.now()): number | undefin
 
 async function requestJson(url: string, token: string, fileKey: string): Promise<CachedResponse> {
   for (let retry = 0; ; retry += 1) {
-    const res = await fetch(url, { headers: { Accept: 'application/json', 'X-Figma-Token': token } });
+    const res = await fetch(url, {
+      headers: { Accept: 'application/json', 'X-Figma-Token': token },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
     if (res.status === 429 && retry < MAX_RETRIES) {
       const requestedDelay = retryAfterMs(res.headers.get('Retry-After')) ?? 0;
       await res.arrayBuffer();
@@ -173,18 +176,11 @@ async function getNodeBatch(fileKey: string, token: string, ids: string[]): Prom
 
 async function fetchNodeDetails(fileKey: string, token: string, roots: FigmaNode[]): Promise<Map<string, FigmaNode>> {
   const details = new Map<string, FigmaNode>();
-  let pending = roots;
-  while (pending.length) {
-    const unique = [...new Map(pending.map((node) => [node.id, node])).values()].filter((node) => !details.has(node.id));
-    pending = [];
-    for (const batch of nodeIdBatches(unique.map((node) => node.id))) {
-      const fetched = await getNodeBatch(fileKey, token, batch);
-      for (const [id, node] of fetched) {
-        details.set(id, node);
-        for (const child of node.children ?? []) {
-          if (CHILD_NODE_TYPES.has(child.type) && child.children === undefined && !details.has(child.id)) pending.push(child);
-        }
-      }
+  const unique = [...new Map(roots.map((node) => [node.id, node])).values()];
+  for (const batch of nodeIdBatches(unique.map((node) => node.id))) {
+    const fetched = await getNodeBatch(fileKey, token, batch);
+    for (const [id, node] of fetched) {
+      details.set(id, node);
     }
   }
   return details;
