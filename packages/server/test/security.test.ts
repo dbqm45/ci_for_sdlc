@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { InjectOptions } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { FigmaRateLimitError } from '@ci/core';
 import { buildApp, type AppOptions } from '../src/app.js';
 
 let ctx: Awaited<ReturnType<typeof buildApp>> | undefined;
@@ -126,6 +127,16 @@ describe('errors as application/problem+json (RFC 9457)', () => {
     expect(r.status).toBe(500);
     expect(JSON.stringify(r.body)).not.toMatch(/secret/);
     expect(r.body.title).toBe('Internal Server Error');
+  });
+
+  it('maps an exhausted Figma rate limit to 429 with Retry-After, not a generic 500', async () => {
+    await start();
+    vi.spyOn(ctx!.engine, 'analyze').mockRejectedValueOnce(new FigmaRateLimitError('CASE-1', 30_000));
+    const r = await call({ method: 'POST', url: '/api/analyze' });
+    expect(r.status).toBe(429);
+    expect(r.headers['retry-after']).toBe('30');
+    expect(r.body.title).toBe('Too Many Requests');
+    expect(r.body.detail).toMatch(/rate limit/i);
   });
 });
 

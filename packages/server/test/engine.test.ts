@@ -10,7 +10,7 @@ let dir: string;
 let store: Store;
 let engine: Engine;
 
-const ENV = ['JIRA_API_TOKEN', 'CONFLUENCE_API_TOKEN', 'FIGMA_TOKEN', 'CUSTOM_AI_API_KEY'] as const;
+const ENV = ['JIRA_API_TOKEN', 'CONFLUENCE_API_TOKEN', 'FIGMA_TOKEN', 'CUSTOM_AI_API_KEY', 'CI_DISABLE_SCHEDULE'] as const;
 const savedEnv = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
 
 beforeEach(async () => {
@@ -78,6 +78,7 @@ describe('Engine.loadContext (live mode)', () => {
       ['/search/jql', { issues: [{ key: 'PAY-1', fields: { summary: 'Pay', issuetype: { name: 'Story' } } }] }],
       ['/spaces?keys=ARCH', { results: [{ id: 1 }] }],
       ['/spaces/1/pages', { results: [{ id: 10, title: 'Doc' }] }],
+      ['/files/F1/components', { meta: { components: [] } }],
       ['api.figma.com', { name: 'Design', lastModified: '2026-01-01', document: { type: 'DOCUMENT', children: [] } }],
     ]);
     const ctx = await engine.loadContext(liveSettings);
@@ -189,14 +190,22 @@ describe('Engine scheduling and demo', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('EN-14: resetDemo discards the modified demo workspace', async () => {
+  it('EN-14: CI_DISABLE_SCHEDULE disables automatic runs regardless of saved schedule mode', async () => {
+    process.env.CI_DISABLE_SCHEDULE = 'true';
+    await store.saveSettings(settings((s) => void (s.schedule.mode = 'continuous')));
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    await engine.reschedule();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('EN-15: resetDemo discards the modified demo workspace', async () => {
     await engine.applyDemoScenario('timeout-change');
     expect(await store.demoContext()).not.toBeNull();
     await engine.resetDemo();
     expect(await store.demoContext()).toBeNull();
   });
 
-  it('EN-15: an unknown demo scenario is rejected', async () => {
+  it('EN-16: an unknown demo scenario is rejected', async () => {
     await expect(engine.applyDemoScenario('nope')).rejects.toThrow('Unknown scenario nope');
   });
 });

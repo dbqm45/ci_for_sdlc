@@ -184,6 +184,7 @@ export class Engine extends EventEmitter {
   async reschedule() {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
+    if (process.env.CI_DISABLE_SCHEDULE === 'true') return;
     const s = await this.store.settings();
     const minutes = s.schedule.mode === 'continuous' ? 5 : s.schedule.mode === 'interval' ? Math.max(1, s.schedule.intervalMinutes) : 0;
     if (minutes) this.timer = setInterval(() => void this.analyze(`scheduled (${minutes} min)`).catch(() => undefined), minutes * 60_000);

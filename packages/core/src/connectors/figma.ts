@@ -4,8 +4,8 @@ import { isRecord, records, str } from '../guards.js';
 
 /**
  * Figma connector (REST API, personal access token or OAuth token).
- * Reads top-level frames per page, their text layers / variant names and
- * prototype transitions. Images are never downloaded.
+ * Reads top-level frames per page and their shallow text/transition metadata.
+ * Images and nested node details are never downloaded.
  */
 export interface FigmaConfig {
   token: string;
@@ -41,13 +41,31 @@ const MAX_BACKOFF_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const CACHE_TTL_MS = 60_000;
 const MAX_CACHE_ENTRIES = 100;
-const MAX_BATCH_IDS = 20;
 const MAX_RESPONSE_BYTES = 500_000;
 const responseCache = new Map<string, CacheEntry>();
 
 /** Test seam; the cache is deliberately not part of the public connector API. */
 export function clearFigmaCache(): void {
   responseCache.clear();
+}
+
+/** Figma's own rate limit, not a connector bug — the HTTP layer maps this to 429, not a generic 500. */
+export class FigmaRateLimitError extends Error {
+  readonly retryAfterMs?: number;
+  /** From X-Figma-Rate-Limit-Type: 'low' (Collab/Viewer seats) or 'high' (Full/Dev seats). */
+  readonly rateLimitType?: string;
+  /** From X-Figma-Plan-Tier: enterprise/org/pro/starter/student. */
+  readonly planTier?: string;
+  /** Which Figma endpoint (e.g. /v1/files/{key}/components) actually returned the 429. */
+  readonly endpoint?: string;
+  constructor(fileKey: string, retryAfterMs?: number, rateLimitType?: string, planTier?: string, endpoint?: string) {
+    super(`Figma file ${fileKey} → rate limited (429) after ${MAX_RETRIES} retries`);
+    this.name = 'FigmaRateLimitError';
+    this.retryAfterMs = retryAfterMs;
+    this.rateLimitType = rateLimitType;
+    this.planTier = planTier;
+    this.endpoint = endpoint;
+  }
 }
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -66,11 +84,21 @@ async function requestJson(url: string, token: string, fileKey: string): Promise
       headers: { Accept: 'application/json', 'X-Figma-Token': token },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (res.status === 429 && retry < MAX_RETRIES) {
-      const requestedDelay = retryAfterMs(res.headers.get('Retry-After')) ?? 0;
+    if (res.status === 429) {
+      const requestedDelayMs = retryAfterMs(res.headers.get('Retry-After'));
       await res.arrayBuffer();
-      await delay(Math.max(requestedDelay, Math.min(BASE_BACKOFF_MS * 2 ** retry, MAX_BACKOFF_MS)));
-      continue;
+      if (retry < MAX_RETRIES) {
+        // Retry-After is upstream-controlled; never let it stall the analysis queue beyond our own backoff cap.
+        await delay(Math.min(Math.max(requestedDelayMs ?? 0, BASE_BACKOFF_MS * 2 ** retry), MAX_BACKOFF_MS));
+        continue;
+      }
+      throw new FigmaRateLimitError(
+        fileKey,
+        requestedDelayMs,
+        res.headers.get('X-Figma-Rate-Limit-Type') ?? undefined,
+        res.headers.get('X-Figma-Plan-Tier') ?? undefined,
+        new URL(url).pathname,
+      );
     }
     const text = await res.text();
     if (!res.ok) throw new Error(`Figma file ${fileKey} → HTTP ${res.status}: ${text.slice(0, 200)}`);
@@ -145,52 +173,6 @@ function frameNodes(doc: FigmaNode): FigmaNode[] {
   return out;
 }
 
-function nodeIdBatches(ids: string[]): string[][] {
-  const batches: string[][] = [];
-  for (let i = 0; i < ids.length; i += MAX_BATCH_IDS) batches.push(ids.slice(i, i + MAX_BATCH_IDS));
-  return batches;
-}
-
-async function getNodeBatch(fileKey: string, token: string, ids: string[]): Promise<Map<string, FigmaNode>> {
-  const query = new URLSearchParams({ ids: ids.join(','), depth: '2' });
-  const url = `${API}/files/${encodeURIComponent(fileKey)}/nodes?${query}`;
-  const response = await getJson(url, token, fileKey);
-  if (response.byteLength >= MAX_RESPONSE_BYTES && ids.length > 1) {
-    const middle = Math.ceil(ids.length / 2);
-    const first = await getNodeBatch(fileKey, token, ids.slice(0, middle));
-    const second = await getNodeBatch(fileKey, token, ids.slice(middle));
-    return new Map([...first, ...second]);
-  }
-
-  if (!isRecord(response.body) || !isRecord(response.body.nodes)) throw new Error(`Figma file ${fileKey} → unexpected node response`);
-  const result = new Map<string, FigmaNode>();
-  for (const id of ids) {
-    const nodeResponse = response.body.nodes[id];
-    if (!isRecord(nodeResponse) || !isRecord(nodeResponse.document)) throw new Error(`Figma file ${fileKey} → missing node ${id}`);
-    const node = toFigmaNode(nodeResponse.document);
-    if (!node) throw new Error(`Figma file ${fileKey} → invalid node ${id}`);
-    result.set(id, node);
-  }
-  return result;
-}
-
-async function fetchNodeDetails(fileKey: string, token: string, roots: FigmaNode[]): Promise<Map<string, FigmaNode>> {
-  const details = new Map<string, FigmaNode>();
-  const unique = [...new Map(roots.map((node) => [node.id, node])).values()];
-  for (const batch of nodeIdBatches(unique.map((node) => node.id))) {
-    const fetched = await getNodeBatch(fileKey, token, batch);
-    for (const [id, node] of fetched) {
-      details.set(id, node);
-    }
-  }
-  return details;
-}
-
-function expandDetails(node: FigmaNode, details: Map<string, FigmaNode>): FigmaNode {
-  const full = details.get(node.id) ?? node;
-  return { ...full, children: full.children?.map((child) => expandDetails(child, details)) };
-}
-
 export async function fetchFigma(cfg: FigmaConfig): Promise<DesignFrame[]> {
   const frames: DesignFrame[] = [];
   for (const key of cfg.fileKeys) {
@@ -203,11 +185,10 @@ export async function fetchFigma(cfg: FigmaConfig): Promise<DesignFrame[]> {
     const fileResponse = await getJson(fileUrl, cfg.token, key);
     const file: unknown = fileResponse.body;
     if (!isRecord(file) || !isRecord(file.document)) throw new Error(`Figma file ${key} → unexpected response`);
-    const shallowDocument = toFigmaDocument(file.document);
-    const roots = frameNodes(shallowDocument).sort((a, b) => Number(componentIds.has(b.id)) - Number(componentIds.has(a.id)));
-    const details = await fetchNodeDetails(key, cfg.token, roots);
-    const fullDocument = expandDetails(shallowDocument, details);
-    frames.push(...framesFromDocument(key, str(file.name) ?? key, str(file.lastModified) ?? new Date().toISOString(), fullDocument, cfg.maxTextsPerFrame ?? 40));
+    const document = toFigmaDocument(file.document);
+    const fileFrames = framesFromDocument(key, str(file.name) ?? key, str(file.lastModified) ?? new Date().toISOString(), document, cfg.maxTextsPerFrame ?? 40);
+    fileFrames.sort((a, b) => Number(componentIds.has(b.id)) - Number(componentIds.has(a.id)));
+    frames.push(...fileFrames);
   }
   return frames;
 }

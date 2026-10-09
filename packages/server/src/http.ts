@@ -1,6 +1,7 @@
 import { STATUS_CODES } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { FigmaRateLimitError } from '@ci/core';
 
 /** How the caller proved it may change state. Recorded with every audit entry it causes. */
 export type Principal = 'admin_token' | 'loopback';
@@ -110,6 +111,12 @@ export function registerProblemHandler(app: FastifyInstance) {
         return { field: `${v.instancePath}${extra ? `/${extra}` : ''}` || '/', message: v.message ?? 'invalid' };
       });
       return send(reply, req, 422, `Invalid ${err.validationContext ?? 'request'}: ${errors.map((e) => `${e.field} ${e.message}`).join('; ')}`, { errors });
+    }
+    if (err instanceof FigmaRateLimitError) {
+      const { retryAfterMs, rateLimitType, planTier, endpoint } = err as FigmaRateLimitError;
+      req.log.warn({ retryAfterMs, rateLimitType, planTier, endpoint }, err.message);
+      if (retryAfterMs !== undefined) reply.header('retry-after', String(Math.ceil(retryAfterMs / 1000)));
+      return send(reply, req, 429, 'Figma API rate limit exceeded. Please retry later.');
     }
     const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
     if (status >= 500) req.log.error(err);

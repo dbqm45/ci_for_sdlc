@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../App';
 import { api, ApiError, currentUser, errMsg, setCurrentUser } from '../api';
 import { Card, Spinner } from '../components/ui';
+import { parseFigmaFileKey } from '../components/figmaFileKey';
 
 const EFFORTS: readonly AiEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -124,7 +125,7 @@ export function Settings() {
             <Field label="Space keys (comma separated)"><input className="input" placeholder="PAY, CHK" value={s.integrations.confluence.spaceKeys.join(', ')} onChange={(e) => set('integrations.confluence.spaceKeys', e.target.value.split(',').map((x: string) => x.trim()).filter(Boolean))} /></Field>
           </Integration>
           <Integration title="Figma" enabled={s.integrations.figma.enabled} onToggle={(v) => set('integrations.figma.enabled', v)} badges={secret('FIGMA_TOKEN')}>
-            <Field label="File keys (comma separated)"><input className="input" placeholder="from figma.com/design/<FILE_KEY>/…" value={s.integrations.figma.fileKeys.join(', ')} onChange={(e) => set('integrations.figma.fileKeys', e.target.value.split(',').map((x: string) => x.trim()).filter(Boolean))} /></Field>
+            <Field label="File keys (comma separated)"><input className="input" placeholder="from figma.com/design/<FILE_KEY>/…" value={s.integrations.figma.fileKeys.join(', ')} onChange={(e) => set('integrations.figma.fileKeys', e.target.value.split(',').map((x: string) => parseFigmaFileKey(x)).filter(Boolean))} /></Field>
           </Integration>
         </div>
       </Card>

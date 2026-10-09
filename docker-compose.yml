@@ -30,6 +30,8 @@ services:
       CI_ADMIN_TOKEN: ${CI_ADMIN_TOKEN:?Set CI_ADMIN_TOKEN, e.g. export CI_ADMIN_TOKEN=$(openssl rand -hex 32)}
       CI_ENCRYPTION_KEY: ${CI_ENCRYPTION_KEY:-}
       CI_WEBHOOK_SECRET: ${CI_WEBHOOK_SECRET:-}
+      # Temporary diagnostic override: set CI_DISABLE_SCHEDULE=false to honor schedule settings.
+      CI_DISABLE_SCHEDULE: ${CI_DISABLE_SCHEDULE:-true}
       JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
       CONFLUENCE_API_TOKEN: ${CONFLUENCE_API_TOKEN:-}
       FIGMA_TOKEN: ${FIGMA_TOKEN:-}
