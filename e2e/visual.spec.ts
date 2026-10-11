@@ -6,7 +6,7 @@ import { heading1, resetWorkspace } from './support/helpers';
 // (baselines in e2e/__screenshots__, procedure in docs/TESTING-REGRESSION.md).
 
 const PAGES: [string, string, string][] = [
-  ['overview', '/#/overview', 'Continuous Intelligence — Checkout'],
+  ['overview', '/#/overview', 'Project health'],
   ['backlog', '/#/backlog', 'Backlog'],
   ['item-pay-123', '/#/item/PAY-123', 'PAY-123 — Save payment method'],
   ['impact', '/#/impact', 'Impact analysis'],

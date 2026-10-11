@@ -16,7 +16,7 @@ test('NAV-01: every sidebar link opens its page', { tag: '@smoke' }, async ({ pa
     [/Impact analysis/, 'Impact analysis', /#\/impact$/],
     [/Settings/, 'Settings', /#\/settings$/],
     [/Audit log/, 'Audit log', /#\/audit$/],
-    [/Project health/, 'Continuous Intelligence — Checkout', /#\/overview$/],
+    [/Project health/, 'Project health', /#\/overview$/],
   ];
   for (const [link, title, url] of pages) {
     await nav(page, link).click();
@@ -32,12 +32,12 @@ test('NAV-02: a deep link opens the work item directly', async ({ page }) => {
 
 test('NAV-03: a link to an unknown work item explains that it does not exist', async ({ page }) => {
   await page.goto('/#/item/NOPE-1');
-  await expect(page.getByText('No work item NOPE-1')).toBeVisible();
+  await expect(page.getByText('No work item NOPE-1', { exact: true })).toBeVisible();
 });
 
 test('NAV-04: an unknown address falls back to project health', async ({ page }) => {
   await page.goto('/#/nowhere');
-  await expect(heading1(page, 'Continuous Intelligence — Checkout')).toBeVisible();
+  await expect(heading1(page, 'Project health')).toBeVisible();
 });
 
 test('NAV-05: the breadcrumb leads from a story to its epic and back to the backlog', async ({ page }) => {

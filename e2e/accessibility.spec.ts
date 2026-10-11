@@ -5,7 +5,7 @@ import { heading1, resetWorkspace } from './support/helpers';
 // Accessibility regression: axe (WCAG 2 A/AA) on every page, plus aria snapshots of the app's structure.
 
 const PAGES: [string, string, string][] = [
-  ['overview', '/#/overview', 'Continuous Intelligence — Checkout'],
+  ['overview', '/#/overview', 'Project health'],
   ['backlog', '/#/backlog', 'Backlog'],
   ['item', '/#/item/PAY-123', 'PAY-123 — Save payment method'],
   ['decisions', '/#/decisions', 'Decision debt'],
@@ -111,7 +111,7 @@ test('A11Y-SNAP-03: project health names its headline sections', { tag: '@a11y' 
   await page.goto('/#/overview');
   await expect(page.getByRole('main')).toMatchAriaSnapshot(`
     - main:
-      - heading "Continuous Intelligence — Checkout" [level=1]
+      - heading "Project health" [level=1]
       - heading "Backlog health" [level=2]
       - heading "Where is the biggest risk?" [level=2]
   `);

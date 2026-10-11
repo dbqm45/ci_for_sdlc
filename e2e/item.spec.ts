@@ -9,11 +9,11 @@ test.beforeEach(async ({ request }) => {
 
 test('ITM-01: approving a ready story freezes the baseline, is audited and can be withdrawn', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/#/item/PAY-123');
-  await expect(page.getByText('🟢 READY FOR IMPLEMENTATION')).toBeVisible();
+  await expect(page.getByText('READY FOR IMPLEMENTATION')).toBeVisible();
   await page.getByRole('button', { name: 'Approve for implementation' }).click();
 
   await expect(toast(page)).toHaveText('PAY-123 approved — drift will be monitored from now on');
-  await expect(page.getByText(/✓ Approved .* · drift monitored/)).toBeVisible();
+  await expect(page.getByText(/Approved .* · drift monitored/)).toBeVisible();
 
   await page.getByRole('button', { name: 'Withdraw approval' }).click();
   await expect(page.getByRole('button', { name: 'Approve for implementation' })).toBeVisible();
@@ -26,22 +26,27 @@ test('ITM-01: approving a ready story freezes the baseline, is audited and can b
 
 test('ITM-02: a not-ready story can be force-approved only with a reason', async ({ page }) => {
   await page.goto('/#/item/CHK-201');
-  await expect(page.getByText('🔴 NOT READY')).toBeVisible();
+  await expect(page.getByText('NOT READY', { exact: true })).toBeVisible();
   await expect(page.getByText(/^1 blocking issue:/)).toBeVisible();
 
-  page.once('dialog', (d) => d.accept('Pilot release, timeout confirmed by phone'));
   await page.getByRole('button', { name: 'Force approve…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Force approve CHK-201?' });
+  await dialog.getByLabel(/Why approve it anyway/).fill('Pilot release, timeout confirmed by phone');
+  await dialog.getByRole('button', { name: 'Force approve', exact: true }).click();
 
   await expect(toast(page)).toHaveText('CHK-201 approved — drift will be monitored from now on');
-  await expect(page.getByText(/✓ Force-approved .* · drift monitored/)).toBeVisible();
+  await expect(page.getByText(/Force-approved .* · drift monitored/)).toBeVisible();
   await expect(page.getByText('Reason: Pilot release, timeout confirmed by phone')).toBeVisible();
 });
 
 test('ITM-03: cancelling the force-approval reason leaves the story unapproved', async ({ page }) => {
   await page.goto('/#/item/CHK-201');
-  page.once('dialog', (d) => d.dismiss());
   await page.getByRole('button', { name: 'Force approve…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Force approve CHK-201?' });
+  await dialog.getByLabel(/Why approve it anyway/).fill('Pilot release, timeout confirmed by phone');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
 
+  await expect(dialog).not.toBeVisible();
   await expect(page.getByRole('button', { name: 'Force approve…' })).toBeVisible();
   await expect(page.getByText(/drift monitored/)).not.toBeVisible();
 });
@@ -76,16 +81,20 @@ test('ITM-05: the analysis tabs show findings, states, context, claims and drift
 
 test('ITM-06: "WHY?" reveals the evidence behind a finding', async ({ page }) => {
   await page.goto('/#/item/PAY-123');
-  const why = page.getByRole('button', { name: '▸ WHY? — 3 sources' });
+  const why = page.getByRole('button', { name: 'WHY? — 3 sources' });
+  await expect(page.locator('.evidence .ev')).toHaveCount(0);
   await why.click();
-  await expect(page.getByRole('button', { name: '▾ WHY? — 3 sources' })).toBeVisible();
   await expect(page.locator('.evidence .ev')).toHaveCount(3);
 });
 
 test('ITM-07: "AI review" without a configured provider explains what to do', async ({ page }) => {
   await page.goto('/#/item/PAY-123');
   await page.getByRole('button', { name: /AI review/ }).click();
-  await expect(toast(page)).toHaveText(/No AI provider configured/);
+
+  const dialog = page.getByRole('dialog', { name: 'AI review of PAY-123' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(/No AI provider is configured/)).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Open Settings' })).toBeVisible();
 });
 
 test('ITM-08: an approved story changed in a source system can be re-approved after review', async ({ page, request }) => {
@@ -93,7 +102,7 @@ test('ITM-08: an approved story changed in a source system can be re-approved af
   await applyScenarioViaApi(request, 'figma-remove-error');
   await page.goto('/#/item/PAY-123');
 
-  await expect(page.getByText('🔴 NOT READY')).toBeVisible();
+  await expect(page.getByText('NOT READY', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Re-approve after review' }).click();
 
   await expect(toast(page)).toHaveText('PAY-123 approved — drift will be monitored from now on');

@@ -12,7 +12,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 /** The question box of an open finding or challenge. */
-const question = (page: Page, text: string) => page.locator('.question').filter({ hasText: `❓ ${text}` });
+const question = (page: Page, text: string) => page.locator('.question').filter({ hasText: text });
 /** The decision log row of the newest decision for a question (the log is append-only, newest first). */
 const logRow = (page: Page, text: string) => card(page, 'Decision log').getByRole('row').filter({ hasText: text }).first();
 
@@ -24,9 +24,9 @@ test('DEC-01: choosing an answer resolves the conflict and makes the story ready
   await q.getByPlaceholder('Note / rationale (optional) — becomes part of the specification').fill('Checkout API is the contract');
   await q.getByRole('button', { name: 'Record decision' }).click();
 
-  await expect(page.getByText('🟢 READY FOR IMPLEMENTATION')).toBeVisible();
+  await expect(page.getByText('READY FOR IMPLEMENTATION', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /resolved \/ accepted finding/ }).click();
-  await expect(page.getByText('✓ Decided: 30 s (as in Checkout API)')).toBeVisible();
+  await expect(page.getByText('Decided: 30 s (as in Checkout API)')).toBeVisible();
 
   await nav(page, /Decisions/).click();
   await expect(logRow(page, TIMEOUT_QUESTION)).toContainText('30 s (as in Checkout API)');
@@ -41,7 +41,7 @@ test('DEC-02: "Other" records a free-text answer', async ({ page }) => {
   await q.getByPlaceholder('Describe what should happen…').fill('40 s, agreed with the payments team');
   await q.getByRole('button', { name: 'Record decision' }).click();
 
-  await expect(page.getByText('🟢 READY FOR IMPLEMENTATION')).toBeVisible();
+  await expect(page.getByText('READY FOR IMPLEMENTATION', { exact: true })).toBeVisible();
   await nav(page, /Decisions/).click();
   await expect(logRow(page, TIMEOUT_QUESTION)).toContainText('40 s, agreed with the payments team');
 });
@@ -53,7 +53,7 @@ test('DEC-03: accepting the risk closes the finding and keeps the story ready', 
 
   await expect(page.getByText('No open findings.', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: /resolved \/ accepted finding/ }).click();
-  await expect(page.getByText('✓ Risk accepted: Risk accepted')).toBeVisible();
+  await expect(page.getByText('Risk accepted: Risk accepted')).toBeVisible();
 
   await nav(page, /Decisions/).click();
   const row = card(page, 'Decision log').getByRole('row').filter({ hasText: 'CHK-204' }).first();
@@ -66,7 +66,7 @@ test('DEC-04: "Not applicable" dismisses the finding', async ({ page }) => {
   await finding.getByRole('button', { name: 'Not applicable' }).click();
 
   await page.getByRole('button', { name: /resolved \/ accepted finding/ }).click();
-  await expect(page.getByText('✓ Dismissed: Not applicable')).toBeVisible();
+  await expect(page.getByText('Dismissed: Not applicable')).toBeVisible();
 
   await nav(page, /Decisions/).click();
   const row = card(page, 'Decision log').getByRole('row').filter({ hasText: 'PAY-123' }).first();
@@ -76,13 +76,13 @@ test('DEC-04: "Not applicable" dismisses the finding', async ({ page }) => {
 test('DEC-05: re-opening a decision on the item page brings the question back', async ({ page, request }) => {
   await decideViaApi(request, 'CHK-201', TIMEOUT_FINDING, '30 s (as in Checkout API)');
   await page.goto('/#/item/CHK-201');
-  await expect(page.getByText('🟢 READY FOR IMPLEMENTATION')).toBeVisible();
+  await expect(page.getByText('READY FOR IMPLEMENTATION', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: /resolved \/ accepted finding/ }).click();
   page.once('dialog', (d) => d.accept('Payments team disagrees'));
   await page.locator('.resolution').filter({ hasText: '30 s (as in Checkout API)' }).getByRole('button', { name: 'Re-open' }).click();
 
-  await expect(page.getByText('🔴 NOT READY')).toBeVisible();
+  await expect(page.getByText('NOT READY', { exact: true })).toBeVisible();
   await expect(question(page, TIMEOUT_QUESTION)).toBeVisible();
 });
 
@@ -95,7 +95,7 @@ test('DEC-06: re-opening a decision from the decision log marks it withdrawn', a
 
   await expect(logRow(page, TIMEOUT_QUESTION).getByText('withdrawn', { exact: true })).toBeVisible();
   await expect(logRow(page, TIMEOUT_QUESTION)).toContainText('Payments team disagrees');
-  await expect(card(page, /^Open questions/).getByText(`❓ ${TIMEOUT_QUESTION}`)).toBeVisible();
+  await expect(card(page, /^Open questions/).getByText(TIMEOUT_QUESTION)).toBeVisible();
 });
 
 test('DEC-07: cancelling a re-open keeps the decision in force', async ({ page, request }) => {
@@ -116,7 +116,7 @@ test('DEC-08: open questions can be filtered by topic and lead to the item', asy
   await page.getByRole('button', { name: 'order timeout · 1' }).click();
   const open = card(page, 'Open questions (1)');
   await expect(open).toBeVisible();
-  await open.getByText(`❓ ${TIMEOUT_QUESTION}`).click();
+  await open.getByText(TIMEOUT_QUESTION).click();
 
   await expect(page).toHaveURL(/#\/item\/CHK-201$/);
 });

@@ -20,7 +20,7 @@ test('DRF-01: a change to an approved story is flagged as drift on that story', 
   await expect(page).toHaveURL(/#\/drift$/);
   await expect(heading1(page, 'Continuous drift detection')).toBeVisible();
 
-  await expect(card(page, '🟡 Impact detected on approved items (1)')).toBeVisible();
+  await expect(card(page, 'Impact detected on approved items (1)')).toBeVisible();
   await expect(page.getByText('Impact detected: 1 related artifact changed since approval')).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'card max items changed from 5 cards to 10 cards in "PAY-123"' }).first()).toBeVisible();
 });
@@ -44,11 +44,11 @@ test('DRF-03: an approved story that regresses is reported as "DRIFT DETECTED" a
   await page.goto('/#/drift');
 
   const row = card(page, 'Change log').getByRole('row').filter({ hasText: 'PAY-123 regressed: READY → NOT READY' }).first();
-  await expect(row.getByText('🔴 DRIFT DETECTED')).toBeVisible();
+  await expect(row.getByText('DRIFT DETECTED')).toBeVisible();
 
   await row.getByRole('link', { name: 'PAY-123' }).click();
   await expect(heading1(page, 'PAY-123 — Save payment method')).toBeVisible();
-  await expect(page.getByText('🔴 NOT READY')).toBeVisible();
+  await expect(page.getByText('NOT READY', { exact: true })).toBeVisible();
 });
 
 test('DRF-04: the impacted item opens with its drift history', async ({ page, request }) => {
@@ -56,7 +56,7 @@ test('DRF-04: the impacted item opens with its drift history', async ({ page, re
   await applyScenarioViaApi(request, 'figma-remove-error');
   await page.goto('/#/drift');
 
-  await card(page, /^🟡 Impact detected on approved items/).getByText('PAY-123', { exact: true }).click();
+  await card(page, /^Impact detected on approved items/).getByText('PAY-123', { exact: true }).click();
   await expect(page).toHaveURL(/#\/item\/PAY-123$/);
 
   await page.getByRole('button', { name: /^Drift \(\d+\)$/ }).click();

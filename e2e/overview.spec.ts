@@ -9,7 +9,7 @@ test.beforeEach(async ({ page, request }) => {
 });
 
 test('OVR-01: project health shows the demo project and its health counts', { tag: '@smoke' }, async ({ page }) => {
-  await expect(heading1(page, 'Continuous Intelligence — Checkout')).toBeVisible();
+  await expect(heading1(page, 'Project health')).toBeVisible();
   const banner = page.getByRole('banner');
   await expect(banner.getByText('4 critical')).toBeVisible();
   await expect(banner.getByText('4 need attention')).toBeVisible();
@@ -35,7 +35,7 @@ test('OVR-04: an epic row opens the epic with its stories', async ({ page }) => 
 });
 
 test('OVR-05: "All events →" opens the drift page', async ({ page }) => {
-  await card(page, 'Recent drift').getByRole('link', { name: 'All events →' }).click();
+  await card(page, 'Recent drift').getByRole('link', { name: 'All events' }).click();
   await expect(heading1(page, 'Continuous drift detection')).toBeVisible();
 });
 

@@ -33,11 +33,11 @@ test('BKL-02: the type filter shows only epics', async ({ page }) => {
 });
 
 test('BKL-03: the "Critical" filter lists the four critical stories', async ({ page }) => {
-  await page.getByRole('button', { name: '🔴 Critical' }).click();
+  await page.getByRole('button', { name: 'Critical' }).click();
   await expect(rows(page)).toHaveCount(4);
   for (const key of ['PAY-125', 'PAY-128', 'CHK-201', 'CHK-202']) await expect(rows(page).filter({ hasText: key })).toHaveCount(1);
 
-  await page.getByRole('button', { name: 'All', exact: true }).click();
+  await page.getByRole('button', { name: 'Any readiness', exact: true }).click();
   await expect(rows(page).filter({ hasText: 'PAY-123' })).toHaveCount(1);
 });
 
