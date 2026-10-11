@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Decision, Finding, Question } from '@ci/core';
 import { api, currentUser, errMsg } from '../api';
-import { CATEGORY_LABELS, DIMENSION_LABELS, SeverityBadge, Source } from './ui';
+import { CATEGORY_LABELS, Chevron, DIMENSION_LABELS, QuestionMark, SeverityBadge, Source, StatusIcon } from './ui';
 
 /** Finding → Explanation → Evidence → Question → Decision */
 export function FindingCard({ finding, decision, onChanged }: { finding: Finding; decision?: Decision; onChanged: () => void }) {
@@ -22,8 +22,8 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
       <div className="title">{finding.title}</div>
       <p>{finding.explanation}</p>
       <div>
-        <button className="btn ghost sm" onClick={() => setWhy(!why)}>
-          {why ? '▾' : '▸'} WHY? — {finding.evidence.length} source{finding.evidence.length === 1 ? '' : 's'}
+        <button className="btn ghost sm row" onClick={() => setWhy(!why)}>
+          <Chevron open={why} /> WHY? — {finding.evidence.length} source{finding.evidence.length === 1 ? '' : 's'}
         </button>
       </div>
       {why && (
@@ -47,8 +47,9 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
       )}
       {finding.needsConfirmation && finding.question && <ConfirmButton finding={finding} onChanged={onChanged} />}
       {finding.resolution && (
-        <div className="resolution">
-          ✓ {finding.status === 'accepted_risk' ? 'Risk accepted' : finding.status === 'dismissed' ? 'Dismissed' : 'Decided'}: {finding.resolution.summary}
+        <div className="resolution row" style={{ gap: 8 }}>
+          <StatusIcon status="ok" />
+          {finding.status === 'accepted_risk' ? 'Risk accepted' : finding.status === 'dismissed' ? 'Dismissed' : 'Decided'}: {finding.resolution.summary}
           {decision && (
             <span className="small" style={{ color: 'var(--muted)' }}>
               {' '}
@@ -128,7 +129,7 @@ export function QuestionBox({
 
   return (
     <div className="question">
-      <div className="q">❓ {question.text}</div>
+      <div className="q row" style={{ gap: 8 }}><QuestionMark /> {question.text}</div>
       {rationale && <div className="small muted">{rationale}</div>}
       <div className="options">
         {question.options.map((o) => (
@@ -139,8 +140,8 @@ export function QuestionBox({
       </div>
       {isOther && <input className="input" autoFocus maxLength={500} placeholder="Describe what should happen…" value={other} onChange={(e) => setOther(e.target.value)} />}
       {selected && <textarea className="input" maxLength={2000} placeholder="Note / rationale (optional) — becomes part of the specification" value={note} onChange={(e) => setNote(e.target.value)} />}
-      <div className="row wrap">
-        <button className="btn primary sm" disabled={!answer || busy} onClick={() => submit('resolve')}>
+      <div className="row wrap decision-actions">
+        <button className="btn accent-outline sm" disabled={!answer || busy} onClick={() => submit('resolve')}>
           Record decision
         </button>
         {allowRisk && (
@@ -153,7 +154,10 @@ export function QuestionBox({
             </button>
           </>
         )}
-        <span className="small muted right">Decision by {currentUser()} · the human owns the decision</span>
+        <span className="small right decision-by">
+          <span>Decision by <strong>{currentUser()}</strong></span>
+          <span className="decision-by-sub">the human owns the decision</span>
+        </span>
       </div>
       {err && <div className="banner bad">{err}</div>}
     </div>

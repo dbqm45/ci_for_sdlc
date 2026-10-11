@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../App';
 import { api, type AuditEntry } from '../api';
-import { Card } from '../components/ui';
+import { Card, DateTime } from '../components/ui';
 
 export function Audit() {
   const { version } = useApp();
@@ -32,19 +32,19 @@ export function Audit() {
           <thead>
             <tr>
               <th style={{ width: 170 }}>When</th>
-              <th style={{ width: 120 }}>Event</th>
-              <th style={{ width: 160 }}>Actor</th>
+              <th className="hide-sm" style={{ width: 120 }}>Event</th>
+              <th className="hide-sm" style={{ width: 160 }}>Actor</th>
               <th>Summary</th>
             </tr>
           </thead>
           <tbody>
             {shown.map((l, i) => (
               <tr key={i} className={l.details ? 'clickable' : ''} onClick={() => l.details && setOpen(open === i ? undefined : i)}>
-                <td className="small muted">{new Date(l.at).toLocaleString()}</td>
-                <td>
+                <td className="small muted"><DateTime iso={l.at} /></td>
+                <td className="hide-sm">
                   <span className="badge">{l.kind.replace('_', ' ')}</span>
                 </td>
-                <td className="small">{l.actor}</td>
+                <td className="small hide-sm">{l.actor}</td>
                 <td>
                   {l.summary}
                   {open === i && <pre className="mono small" style={{ whiteSpace: 'pre-wrap', background: 'var(--panel-2)', padding: 8, borderRadius: 6 }}>{JSON.stringify(l.details, null, 2)}</pre>}

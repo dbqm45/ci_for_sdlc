@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useApp } from '../App';
-import { Bar, DIMENSION_LABELS, HealthNumber, StatusBadge, healthTone } from '../components/ui';
+import { Bar, Chevron, DIMENSION_LABELS, HealthNumber, StatusBadge, StatusIcon, healthTone } from '../components/ui';
 
 export function Backlog() {
   const { analysis, navigate } = useApp();
@@ -28,7 +28,7 @@ export function Backlog() {
           <p>Every item with its health and readiness. Expand a row to see the dimensions behind the number.</p>
         </div>
       </div>
-      <div className="row wrap">
+      <div className="row wrap filter-bar">
         <input className="input" style={{ maxWidth: 280 }} aria-label="Search" placeholder="Search key, title, domain…" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="input" style={{ width: 160 }} aria-label="Item type" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
           <option value="all">All types</option>
@@ -38,8 +38,8 @@ export function Backlog() {
           <option value="bug">Bugs</option>
         </select>
         {(['all', 'critical', 'needs_attention', 'healthy'] as const).map((f) => (
-          <button key={f} className={`btn sm ${filter === f ? 'primary' : ''}`} onClick={() => setFilter(f)}>
-            {f === 'all' ? 'All' : f === 'critical' ? '🔴 Critical' : f === 'needs_attention' ? '🟡 Needs attention' : '🟢 Healthy'}
+          <button key={f} className={`btn choice sm ${filter === f ? 'selected' : ''}`} onClick={() => setFilter(f)}>
+            {f === 'all' ? 'Any readiness' : f === 'critical' ? 'Critical' : f === 'needs_attention' ? 'Needs attention' : 'Healthy'}
           </button>
         ))}
       </div>
@@ -47,13 +47,13 @@ export function Backlog() {
         <table className="table">
           <thead>
             <tr>
-              <th style={{ width: 30 }} />
-              <th style={{ width: 60 }}>Status</th>
-              <th style={{ width: 70 }}>Type</th>
-              <th style={{ width: 100 }}>Key</th>
+              <th className="hide-sm" style={{ width: 30 }} />
+              <th className="hide-sm" style={{ width: 60 }}>Status</th>
+              <th className="hide-sm" style={{ width: 70 }}>Type</th>
+              <th className="hide-sm" style={{ width: 100 }}>Key</th>
               <th>Title</th>
-              <th style={{ width: 120 }}>Domain</th>
-              <th style={{ width: 150 }}>Readiness</th>
+              <th className="hide-sm" style={{ width: 120 }}>Domain</th>
+              <th className="readiness-col" style={{ width: 150 }}>Readiness</th>
               <th style={{ width: 70, textAlign: 'right' }}>Health</th>
             </tr>
           </thead>
@@ -63,19 +63,23 @@ export function Backlog() {
               return (
                 <Fragment key={i.key}>
                   <tr className="clickable" onClick={() => navigate(`/item/${i.key}`)}>
-                    <td onClick={(e) => (e.stopPropagation(), setOpen(open === i.key ? undefined : i.key))} title="Show dimensions" style={{ color: 'var(--muted)' }}>
-                      {open === i.key ? '▾' : '▸'}
+                    <td className="hide-sm" onClick={(e) => (e.stopPropagation(), setOpen(open === i.key ? undefined : i.key))} title="Show dimensions" style={{ color: 'var(--faint)' }}>
+                      <Chevron open={open === i.key} />
                     </td>
-                    <td><span className={`dot ${healthTone(i.healthStatus)}`} /></td>
-                    <td className="type">{i.type}</td>
-                    <td className="key">{i.key}</td>
+                    <td className="hide-sm"><span className={`dot ${healthTone(i.healthStatus)}`} /></td>
+                    <td className="type hide-sm">{i.type}</td>
+                    <td className="key hide-sm">{i.key}</td>
                     <td>
                       <strong>{i.title}</strong>
                       {openCount > 0 && <span className="small muted"> · {openCount} open finding{openCount > 1 ? 's' : ''}</span>}
-                      {i.blockingIssues[0] && <div className="small" style={{ color: 'var(--bad)' }}>✗ {i.blockingIssues[0]}{i.blockingIssues.length > 1 ? ` (+${i.blockingIssues.length - 1})` : ''}</div>}
+                      {i.blockingIssues[0] && (
+                        <div className="small row blocking-line" style={{ gap: 6, color: 'var(--bad)' }}>
+                          <StatusIcon status="bad" /> {i.blockingIssues[0]}{i.blockingIssues.length > 1 ? ` (+${i.blockingIssues.length - 1})` : ''}
+                        </div>
+                      )}
                     </td>
-                    <td className="small muted">{i.domain?.name ?? '—'}</td>
-                    <td><StatusBadge status={i.readiness} /></td>
+                    <td className="small muted hide-sm">{i.domain?.name ?? '—'}</td>
+                    <td className="readiness-cell"><StatusBadge status={i.readiness} /></td>
                     <td style={{ textAlign: 'right' }}><HealthNumber value={i.health} status={i.healthStatus} /></td>
                   </tr>
                   {open === i.key && (

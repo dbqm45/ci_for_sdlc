@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../App';
 import { api, type HistoryPoint, errMsg } from '../api';
-import { Bar, Card, HealthNumber, SeverityBadge, Source, Stat, StatusBadge, ago } from '../components/ui';
+import { Bar, Card, EmptyState, HealthNumber, LinkArrow, Sdot, SeverityBadge, Source, Stat, StatusBadge, StatusIcon } from '../components/ui';
+import { CheckIcon } from '../components/icons';
 
 export function Overview() {
   const { analysis, navigate, setAnalysis, toast, version } = useApp();
@@ -41,25 +42,24 @@ export function Overview() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Continuous Intelligence — {a.project.name}</h1>
+          <h1>Project health</h1>
           <p>Is the team ready to build what it has defined — and do Jira, Confluence and Figma say the same thing?</p>
         </div>
-        <span className="small muted">Analyzed {ago(a.analyzedAt)} in {a.durationMs} ms</span>
       </div>
 
       <div className="grid g4">
         <Stat label="Epics" value={a.counts.epics} sub={a.counts.features ? `${a.counts.features} features` : undefined} />
         <Stat label="Stories" value={a.counts.stories} sub={`${a.counts.bugs} bugs · ${a.counts.tasks} tasks`} />
-        <Stat label="Warnings" value={a.counts.warnings} tone="warn" sub="open findings" />
-        <Stat label="Critical" value={a.counts.criticalFindings} tone="bad" sub="blocking findings" />
+        <Stat label="Warnings" value={a.counts.warnings} tone="warn" tint sub="open findings" />
+        <Stat label="Critical" value={a.counts.criticalFindings} tone="bad" tint sub="blocking findings" />
       </div>
 
       <Card title="Backlog health">
         <div className="col" style={{ gap: 12 }}>
           <div className="stack">
-            <span style={{ width: `${(a.counts.healthy / work) * 100}%`, background: 'var(--ok)' }} />
-            <span style={{ width: `${(a.counts.needsAttention / work) * 100}%`, background: 'var(--warn)' }} />
-            <span style={{ width: `${(a.counts.critical / work) * 100}%`, background: 'var(--bad)' }} />
+            <span style={{ width: `${(a.counts.healthy / work) * 100}%`, background: 'var(--ok-solid)' }} />
+            <span style={{ width: `${(a.counts.needsAttention / work) * 100}%`, background: 'var(--warn-solid)' }} />
+            <span style={{ width: `${(a.counts.critical / work) * 100}%`, background: 'var(--bad-solid)' }} />
           </div>
           <div className="row wrap" style={{ gap: 20 }}>
             <span className="row"><span className="dot ok" /> Healthy <strong>{a.counts.healthy}</strong></span>
@@ -70,21 +70,27 @@ export function Overview() {
         </div>
       </Card>
 
-      <div className="grid g4">
-        <Stat label="Feature readiness" value={`${m.readiness}%`} sub="stories ready for implementation" tone={m.readiness >= 70 ? 'ok' : m.readiness >= 40 ? 'warn' : 'bad'} />
-        <Stat label="Specification health" value={m.specificationHealth} sub="average story health" />
-        <Stat label="Design coverage" value={`${m.designCoverage}%`} sub="required UI states present in Figma" />
-        <Stat label="User journey coverage" value={`${m.journeyCoverage}%`} sub="expected paths defined" />
-        <Stat label="Documentation consistency" value={`${m.documentationConsistency}%`} sub="items without conflicts / outdated docs" />
-        <Stat label="Drift" value={m.drift} sub="changes since last analysis + open drift" tone={m.drift ? 'warn' : undefined} />
-        <div className="card stat" style={{ gridColumn: 'span 2' }}>
-          <div className="label">Decision debt — unresolved decisions that will cause rework later</div>
-          <div className="row" style={{ gap: 18, marginTop: 6 }}>
-            <span className="value" style={{ color: 'var(--bad)' }}>🔴 {m.decisionDebt.critical}</span>
-            <span className="value" style={{ color: 'var(--warn)' }}>🟡 {m.decisionDebt.important}</span>
-            <span className="value" style={{ color: 'var(--muted)' }}>⚪ {m.decisionDebt.minor}</span>
+      <div className="metrics-box">
+        <div className="metrics-box-head">
+          <h2>Quality metrics</h2>
+          <span className="small muted right">7 indicators</span>
+        </div>
+        <div className="grid g4">
+          <Stat label="Feature readiness" value={`${m.readiness}%`} sub="stories ready for implementation" tone={m.readiness >= 70 ? 'ok' : m.readiness >= 40 ? 'warn' : 'bad'} />
+          <Stat label="Specification health" value={m.specificationHealth} sub="average story health" />
+          <Stat label="Design coverage" value={`${m.designCoverage}%`} sub="required UI states present in Figma" />
+          <Stat label="User journey coverage" value={`${m.journeyCoverage}%`} sub="expected paths defined" />
+          <Stat label="Documentation consistency" value={`${m.documentationConsistency}%`} sub="items without conflicts / outdated docs" />
+          <Stat label="Drift" value={m.drift} sub="changes since last analysis + open drift" tone={m.drift ? 'warn' : undefined} />
+          <div className="card stat" style={{ gridColumn: 'span 2' }}>
+            <div className="label">Decision debt — unresolved decisions that will cause rework later</div>
+            <div className="row" style={{ gap: 18, marginTop: 6 }}>
+              <span className="value row" style={{ color: 'var(--bad)' }}><Sdot tone="bad" /> {m.decisionDebt.critical}</span>
+              <span className="value row" style={{ color: 'var(--warn)' }}><Sdot tone="warn" /> {m.decisionDebt.important}</span>
+              <span className="value row" style={{ color: 'var(--muted)' }}><span className="sdot sdot-info" aria-hidden="true" /> {m.decisionDebt.minor}</span>
+            </div>
+            <div className="sub">{m.decisionDebt.topics.slice(0, 5).map((t) => `${t.topic} (${t.count})`).join(' · ')}</div>
           </div>
-          <div className="sub">{m.decisionDebt.topics.slice(0, 5).map((t) => `${t.topic} (${t.count})`).join(' · ')}</div>
         </div>
       </div>
 
@@ -126,7 +132,7 @@ export function Overview() {
                         <span>Docs {e.rollup.documentationCoverage}%</span>
                       </div>
                       {e.rollup.highlights.slice(0, 2).map((h) => (
-                        <span key={h} className="small" style={{ color: 'var(--warn)' }}>⚠ {h}</span>
+                        <span key={h} className="small row" style={{ color: 'var(--warn)', gap: 6 }}><StatusIcon status="warn" /> {h}</span>
                       ))}
                     </>
                   )}
@@ -157,9 +163,26 @@ export function Overview() {
           </table>
         </Card>
 
-        <Card title="Recent drift" actions={<a href="#/drift" className="small">All events →</a>} pad={false}>
+        <Card
+          title="Recent drift"
+          actions={
+            <a href="#/drift" className="small link-arrow row">
+              <LinkArrow>All events</LinkArrow>
+            </a>
+          }
+          pad={false}
+          className="card-fill"
+        >
+          {a.drift.length === 0 && (
+            <div className="empty-wrap">
+              <EmptyState
+                icon={<span style={{ color: 'var(--ok)' }}><CheckIcon size={17} /></span>}
+                title="No changes since the previous analysis."
+                description="Jira, Confluence and Figma match the last snapshot."
+              />
+            </div>
+          )}
           <div className="list">
-            {a.drift.length === 0 && <div className="empty">No changes since the previous analysis.</div>}
             {a.drift.slice(0, 6).map((d) => (
               <div key={d.id} className="li">
                 <SeverityBadge severity={d.severity} />

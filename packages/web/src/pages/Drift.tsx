@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../App';
 import { api, type DriftEvent } from '../api';
-import { Card, SeverityBadge, Source } from '../components/ui';
+import { Card, DateTime, EmptyState, Sdot, SeverityBadge, Source } from '../components/ui';
+import { CheckIcon } from '../components/icons';
 
 const KIND: Record<string, string> = {
   changed: 'Changed',
@@ -34,7 +35,7 @@ export function Drift() {
       </div>
 
       {approvedDrift.length > 0 && (
-        <Card title={`🟡 Impact detected on approved items (${approvedDrift.length})`} pad={false}>
+        <Card title={<span className="row" style={{ gap: 8 }}><Sdot tone="warn" /> Impact detected on approved items ({approvedDrift.length})</span>} pad={false}>
           <div className="list">
             {approvedDrift.map(({ item, f }) => (
               <div key={f.id} className="li clickable" onClick={() => navigate(`/item/${item.key}`)}>
@@ -58,32 +59,42 @@ export function Drift() {
             <tr>
               <th style={{ width: 160 }}>When</th>
               <th style={{ width: 110 }}>Severity</th>
-              <th style={{ width: 130 }}>Change</th>
+              <th className="hide-sm" style={{ width: 130 }}>Change</th>
               <th>What</th>
-              <th>Potentially affected</th>
+              <th className="hide-sm">Potentially affected</th>
             </tr>
           </thead>
           <tbody>
             {shown.length === 0 && (
               <tr>
-                <td colSpan={5} className="empty">
-                  No drift yet. In the demo workspace use “Simulate a change” on the Project health page.
+                <td colSpan={5} className="empty-cell">
+                  <EmptyState
+                    icon={<span style={{ color: 'var(--ok)' }}><CheckIcon size={17} /></span>}
+                    title="No drift yet."
+                    description="In the demo workspace use “Simulate a change” on the Project health page."
+                  />
                 </td>
               </tr>
             )}
             {shown.map((e) => (
               <tr key={e.id}>
-                <td className="small muted">{new Date(e.at).toLocaleString()}</td>
+                <td className="small muted"><DateTime iso={e.at} /></td>
                 <td>
                   <SeverityBadge severity={e.severity} />
                 </td>
-                <td className="small">
-                  {e.kind === 'status_change' && e.severity === 'critical' ? <strong style={{ color: 'var(--bad)' }}>🔴 DRIFT DETECTED</strong> : KIND[e.kind]}
+                <td className="small hide-sm">
+                  {e.kind === 'status_change' && e.severity === 'critical' ? (
+                    <strong className="row" style={{ gap: 6, color: 'var(--bad)' }}>
+                      <Sdot tone="bad" /> DRIFT DETECTED
+                    </strong>
+                  ) : (
+                    KIND[e.kind]
+                  )}
                 </td>
                 <td>
                   <Source source={e.source} /> {e.summary}
                 </td>
-                <td className="small">
+                <td className="small hide-sm">
                   {e.impactedItems.map((k) => (
                     <a key={k} href={`#/item/${k}`} className="key" style={{ marginRight: 8 }}>
                       {k}

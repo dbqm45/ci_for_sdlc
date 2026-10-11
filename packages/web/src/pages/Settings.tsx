@@ -2,8 +2,9 @@ import type { AiEffort, AiProviderKind, Settings as SettingsData } from '@ci/cor
 import { useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../App';
 import { api, ApiError, currentUser, errMsg, setCurrentUser } from '../api';
-import { Card, Spinner } from '../components/ui';
+import { Card, Sdot, SourceLogo, Spinner, StatusIcon } from '../components/ui';
 import { parseFigmaFileKey } from '../components/figmaFileKey';
+import { SparkleIcon, SyncIcon } from '../components/icons';
 
 const EFFORTS: readonly AiEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -111,7 +112,7 @@ export function Settings() {
           </div>
         )}
         <div className="col" style={{ gap: 18 }}>
-          <Integration title="Jira" enabled={s.integrations.jira.enabled} onToggle={(v) => set('integrations.jira.enabled', v)} badges={secret('JIRA_API_TOKEN')}>
+          <Integration title="Jira" source="jira" enabled={s.integrations.jira.enabled} onToggle={(v) => set('integrations.jira.enabled', v)} badges={secret('JIRA_API_TOKEN')}>
             <Field label="Site URL"><input className="input" placeholder="https://your-site.atlassian.net" value={s.integrations.jira.baseUrl} onChange={(e) => set('integrations.jira.baseUrl', e.target.value)} /></Field>
             <Field label="Account e-mail"><input className="input" value={s.integrations.jira.email} onChange={(e) => set('integrations.jira.email', e.target.value)} /></Field>
             <Field label="Project key"><input className="input" placeholder="PAY" value={s.integrations.jira.projectKey} onChange={(e) => set('integrations.jira.projectKey', e.target.value)} /></Field>
@@ -119,12 +120,12 @@ export function Settings() {
             <Field label="Additional JQL (optional)"><input className="input" placeholder="AND statusCategory != Done" value={s.integrations.jira.jqlFilter ?? ''} onChange={(e) => set('integrations.jira.jqlFilter', e.target.value || undefined)} /></Field>
             <IssueTypeMap value={s.integrations.jira.issueTypeMap ?? {}} onChange={(m) => set('integrations.jira.issueTypeMap', m)} />
           </Integration>
-          <Integration title="Confluence" enabled={s.integrations.confluence.enabled} onToggle={(v) => set('integrations.confluence.enabled', v)} badges={secret('CONFLUENCE_API_TOKEN')}>
+          <Integration title="Confluence" source="confluence" enabled={s.integrations.confluence.enabled} onToggle={(v) => set('integrations.confluence.enabled', v)} badges={secret('CONFLUENCE_API_TOKEN')}>
             <Field label="Site URL"><input className="input" placeholder="https://your-site.atlassian.net" value={s.integrations.confluence.baseUrl} onChange={(e) => set('integrations.confluence.baseUrl', e.target.value)} /></Field>
             <Field label="Account e-mail"><input className="input" value={s.integrations.confluence.email} onChange={(e) => set('integrations.confluence.email', e.target.value)} /></Field>
             <Field label="Space keys (comma separated)"><input className="input" placeholder="PAY, CHK" value={s.integrations.confluence.spaceKeys.join(', ')} onChange={(e) => set('integrations.confluence.spaceKeys', e.target.value.split(',').map((x: string) => x.trim()).filter(Boolean))} /></Field>
           </Integration>
-          <Integration title="Figma" enabled={s.integrations.figma.enabled} onToggle={(v) => set('integrations.figma.enabled', v)} badges={secret('FIGMA_TOKEN')}>
+          <Integration title="Figma" source="figma" enabled={s.integrations.figma.enabled} onToggle={(v) => set('integrations.figma.enabled', v)} badges={secret('FIGMA_TOKEN')}>
             <Field label="File keys (comma separated)"><input className="input" placeholder="from figma.com/design/<FILE_KEY>/…" value={s.integrations.figma.fileKeys.join(', ')} onChange={(e) => set('integrations.figma.fileKeys', e.target.value.split(',').map((x: string) => parseFigmaFileKey(x)).filter(Boolean))} /></Field>
           </Integration>
         </div>
@@ -133,7 +134,7 @@ export function Settings() {
       <Card title="AI provider">
         <div className="grid g3" style={{ marginBottom: 14 }}>
           {PROVIDERS.map((p) => (
-            <label key={p.id} className={`card card-pad check`} style={{ alignItems: 'flex-start', borderColor: s.ai.provider === p.id ? 'var(--accent)' : undefined }}>
+            <label key={p.id} className={`card card-pad check provider-option ${s.ai.provider === p.id ? 'selected' : ''}`} style={{ alignItems: 'flex-start' }}>
               <input type="radio" name="provider" checked={s.ai.provider === p.id} onChange={() => (set('ai.provider', p.id), setS((x) => x && { ...x, ai: { ...x.ai, provider: p.id, model: data.defaultModels[p.id] ?? '' } }))} />
               <span className="col" style={{ gap: 2 }}>
                 <strong>{p.label}</strong>
@@ -184,7 +185,10 @@ export function Settings() {
             <Check label={<>Encrypt stored context (AES-256-GCM) {secret('CI_ENCRYPTION_KEY')}</>} v={s.security.encryptStoredContext} on={(v) => set('security.encryptStoredContext', v)} />
             <Check label="Audit AI decisions" v={s.security.auditAiDecisions} on={(v) => set('security.auditAiDecisions', v)} />
             <Check label="Record evidence sources sent to AI" v={s.security.recordEvidenceSources} on={(v) => set('security.recordEvidenceSources', v)} />
-            <div className="small muted">✓ Source code is never read or sent — the product analyzes product definition only.</div>
+            <div className="small muted row" style={{ gap: 6 }}>
+              <StatusIcon status="ok" />
+              Source code is never read or sent — the product analyzes product definition only.
+            </div>
             <Field label="Max characters per source sent to AI (data minimization)">
               <input className="input" type="number" min={500} step={500} value={s.security.maxCharsPerSource} onChange={(e) => set('security.maxCharsPerSource', Number(e.target.value))} />
             </Field>
@@ -223,7 +227,18 @@ export function Settings() {
       <Card title="Policy">
         <div className="grid g3">
           {(['critical', 'warning', 'info'] as const).map((sev) => (
-            <Field key={sev} label={`${sev === 'critical' ? '🔴 Critical' : sev === 'warning' ? '🟡 Warnings' : '⚪ Informational'} findings`}>
+            <Field
+              key={sev}
+              label={
+                <span className="policy-label">
+                  <span className={`badge ${sev === 'critical' ? 'bad' : sev === 'warning' ? 'warn' : ''}`}>
+                    {sev === 'info' ? <span className="sdot sdot-info" aria-hidden="true" /> : <Sdot tone={sev === 'critical' ? 'bad' : 'warn'} />}
+                    {sev === 'critical' ? 'Critical' : sev === 'warning' ? 'Warning' : 'Info'}
+                  </span>
+                  findings
+                </span>
+              }
+            >
               <select className="input" value={s.policy.actions[sev]} onChange={(e) => set(`policy.actions.${sev}`, e.target.value)}>
                 <option value="block">Block implementation (NOT READY)</option>
                 <option value="notify">Notify (NEEDS ATTENTION)</option>
@@ -231,14 +246,26 @@ export function Settings() {
               </select>
             </Field>
           ))}
-          <Field label="🤖 AI findings that would block">
+          <Field
+            label={
+              <span className="policy-label">
+                <SparkleIcon size={15} /> AI findings that would block
+              </span>
+            }
+          >
             <select className="input" value={s.policy.aiFindings ?? 'require_confirmation'} onChange={(e) => set('policy.aiFindings', e.target.value)}>
               <option value="require_confirmation">Block after human confirmation</option>
               <option value="block">Block immediately</option>
               <option value="notify">Notify only (NEEDS ATTENTION)</option>
             </select>
           </Field>
-          <Field label="🔁 When an approved story changes in meaning">
+          <Field
+            label={
+              <span className="policy-label">
+                <SyncIcon size={15} /> When an approved story changes in meaning
+              </span>
+            }
+          >
             <select className="input" value={s.policy.driftReaction ?? 'review_required'} onChange={(e) => set('policy.driftReaction', e.target.value)}>
               <option value="review_required">Require review and re-approval (NOT READY)</option>
               <option value="warn">Warn only (NEEDS ATTENTION)</option>
@@ -305,7 +332,7 @@ function IssueTypeMap({ value, onChange }: { value: Record<string, string>; onCh
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <label className="field">
       {label}
@@ -322,12 +349,13 @@ function Check({ label, v, on }: { label: ReactNode; v: boolean; on: (v: boolean
   );
 }
 
-function Integration({ title, enabled, onToggle, badges, children }: { title: string; enabled: boolean; onToggle: (v: boolean) => void; badges: ReactNode; children: ReactNode }) {
+function Integration({ title, source, enabled, onToggle, badges, children }: { title: string; source?: string; enabled: boolean; onToggle: (v: boolean) => void; badges: ReactNode; children: ReactNode }) {
   return (
     <div className="col">
-      <div className="row">
+      <div className="row wrap">
         <label className="check">
           <input type="checkbox" checked={enabled} onChange={(e) => onToggle(e.target.checked)} />
+          {source && <SourceLogo source={source} size={17} />}
           <strong>{title}</strong>
         </label>
         <span className="right">{badges}</span>

@@ -4,17 +4,24 @@ import { useApp } from '../App';
 import { api, currentUser, type GraphData, type ItemDetail, errMsg } from '../api';
 import { FindingCard, QuestionBox } from '../components/FindingCard';
 import { GraphView } from '../components/GraphView';
-import { Bar, Card, DIMENSION_LABELS, HealthNumber, JOURNEY_LABELS, ReadinessBadge, STATE_LABELS, SeverityBadge, Source, Spinner, StatusBadge, ago } from '../components/ui';
+import { Modal } from '../components/Modal';
+import { Bar, Card, Chevron, DIMENSION_LABELS, DateTime, EmptyState, HealthNumber, JOURNEY_LABELS, ReadinessBadge, STATE_LABELS, SeverityBadge, Source, SourceLogo, Spinner, StatusBadge, StatusIcon, ago } from '../components/ui';
+import { ChevronIcon, ListIcon, SearchIcon, SettingsIcon, SlidersIcon, SparkleIcon } from '../components/icons';
 
 type Tab = 'findings' | 'challenge' | 'states' | 'context' | 'claims' | 'history';
 
 export function ItemPage({ itemKey }: { itemKey: string }) {
-  const { navigate, toast, refresh, version } = useApp();
+  const { navigate, toast, refresh, version, analysis } = useApp();
   const [d, setD] = useState<ItemDetail>();
   const [err, setErr] = useState<string>();
   const [tab, setTab] = useState<Tab>('findings');
   const [showClosed, setShowClosed] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
+  const [forceOpen, setForceOpen] = useState(false);
+  const [forceReason, setForceReason] = useState('');
+  const [forceBusy, setForceBusy] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiResult, setAiResult] = useState<{ added: number; total: number; errors: string[] } | { error: string }>();
 
   const load = useCallback(async () => {
     try {
@@ -30,7 +37,7 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
     await refresh();
   }, [load, refresh]);
 
-  if (err) return <div className="empty">{err}</div>;
+  if (err) return <ItemNotFound itemKey={itemKey} message={err} navigate={navigate} />;
   if (!d) return <div className="empty"><Spinner /></div>;
   const a = d.item;
   const open = a.findings.filter((f) => f.status === 'open');
@@ -41,29 +48,50 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
   const approvable = a.type === 'story' || a.type === 'bug';
   // Only drift blocks: the change needs a review, not a forced approval (P4).
   const reviewNeeded = a.readiness === 'not_ready' && a.findings.some((f) => f.blocks && f.origin === 'drift') && !a.findings.some((f) => f.blocks && f.origin !== 'drift');
-  const approve = async (force?: boolean) => {
-    let forced: { reason: string } | undefined;
-    if (force) {
-      const reason = window.prompt(`${a.key} has blocking issues. Why approve it anyway? (required, stored in audit)`)?.trim();
-      if (!reason) return;
-      forced = { reason };
-    }
+  const approve = async (forced?: { reason: string }) => {
     try {
       await api.approve(a.key, currentUser(), forced);
       toast(`${a.key} approved — drift will be monitored from now on`);
       await changed();
+      return true;
     } catch (e) {
       toast(errMsg(e));
+      return false;
     }
+  };
+  const closeForce = () => {
+    setForceOpen(false);
+    setForceReason('');
+  };
+  const submitForce = async () => {
+    const reason = forceReason.trim();
+    if (!reason) return;
+    setForceBusy(true);
+    const ok = await approve({ reason });
+    setForceBusy(false);
+    if (ok) closeForce();
+  };
+  const aiEnabled = !!analysis?.ai.enabled;
+  const aiModel = [analysis?.ai.provider, analysis?.ai.model].filter(Boolean).join(' · ');
+  const openAi = () => {
+    setAiResult(undefined);
+    setAiOpen(true);
+  };
+  const closeAi = () => {
+    if (aiBusy) return;
+    setAiOpen(false);
   };
   const aiReview = async () => {
     setAiBusy(true);
+    setAiResult(undefined);
+    const before = new Set(a.findings.filter((f) => f.origin === 'ai').map((f) => f.id));
     try {
       const r = await api.aiReview(a.key);
-      toast(r.errors.length ? `AI review finished with errors: ${r.errors[0]}` : 'AI review complete');
+      const aiNow = (r.item?.findings ?? []).filter((f) => f.origin === 'ai');
+      setAiResult({ added: aiNow.filter((f) => !before.has(f.id)).length, total: aiNow.length, errors: r.errors });
       await changed();
     } catch (e) {
-      toast(errMsg(e));
+      setAiResult({ error: errMsg(e) });
     } finally {
       setAiBusy(false);
     }
@@ -108,19 +136,21 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
             {a.key} — {a.title}
           </h1>
           <div className="row wrap">
-            <ReadinessBadge readiness={a.readiness} />
+            <span className="badge-lg">
+              <ReadinessBadge readiness={a.readiness} />
+            </span>
             <StatusBadge status={a.healthStatus} />
             {d.approval && (
-              <span className={`badge ${d.approval.forced ? 'warn' : 'ok'}`} title={`Approved by ${d.approval.approvedBy}${d.approval.reason ? ` — reason: ${d.approval.reason}` : ''}`}>
-                ✓ {d.approval.forced ? 'Force-approved' : 'Approved'} {ago(d.approval.approvedAt)} · drift monitored
+              <span className={`badge row ${d.approval.forced ? 'warn' : 'ok'}`} style={{ gap: 5 }} title={`Approved by ${d.approval.approvedBy}${d.approval.reason ? ` — reason: ${d.approval.reason}` : ''}`}>
+                <StatusIcon status={d.approval.forced ? 'warn' : 'ok'} /> {d.approval.forced ? 'Force-approved' : 'Approved'} {ago(d.approval.approvedAt)} · drift monitored
               </span>
             )}
             {d.approval?.reason && <span className="muted">Reason: {d.approval.reason}</span>}
           </div>
         </div>
         <div className="row">
-          <button className="btn" onClick={aiReview} disabled={aiBusy} title="Semantic review + adversarial questions by the configured AI provider">
-            {aiBusy ? <Spinner /> : '✦'} AI review
+          <button className="btn row" style={{ gap: 6 }} onClick={openAi} disabled={aiBusy} title="Semantic review + adversarial questions by the configured AI provider">
+            {aiBusy ? <Spinner /> : <SparkleIcon size={15} />} AI review
           </button>
           {d.approval && reviewNeeded && (
             <button className="btn primary" onClick={() => approve()} title="The approved specification changed in meaning. Re-approve to accept the change as the new baseline.">
@@ -132,7 +162,7 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
               Withdraw approval
             </button>
           ) : !approvable ? null : a.readiness === 'not_ready' ? (
-            <button className="btn" onClick={() => approve(true)} title="Approve despite blocking issues — a reason is required and recorded in the audit log">
+            <button className="btn danger" onClick={() => setForceOpen(true)} title="Approve despite blocking issues — a reason is required and recorded in the audit log">
               Force approve…
             </button>
           ) : (
@@ -159,7 +189,11 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
         <div className="col" style={{ gap: 16 }}>
           {d.source && (d.source.description || d.source.acceptanceCriteria.length > 0) && (
             <Card title="Specification (Jira)">
-              {d.source.description && <p style={{ marginTop: 0, whiteSpace: 'pre-wrap' }}>{d.source.description}</p>}
+              <div className="spec-body">
+              {!d.source.description && d.source.acceptanceCriteria.length === 0 && d.source.businessRules.length === 0 && !d.decisions.some((x) => x.effect === 'resolve') && (
+                <p className="muted">No description, acceptance criteria or business rules in Jira.</p>
+              )}
+              {d.source.description && <p style={{ whiteSpace: 'pre-wrap' }}>{d.source.description}</p>}
               {d.source.acceptanceCriteria.length > 0 && (
                 <>
                   <h3 style={{ margin: '8px 0 4px' }}>Acceptance criteria</h3>
@@ -195,6 +229,7 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
                   </ul>
                 </>
               )}
+              </div>
             </Card>
           )}
 
@@ -217,8 +252,8 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
                     <FindingCard key={f.id} finding={f} onChanged={changed} />
                   ))}
                   {closed.length > 0 && (
-                    <button className="btn ghost sm" onClick={() => setShowClosed(!showClosed)}>
-                      {showClosed ? '▾' : '▸'} {closed.length} resolved / accepted finding{closed.length > 1 ? 's' : ''}
+                    <button className="btn ghost sm row" onClick={() => setShowClosed(!showClosed)}>
+                      <Chevron open={showClosed} /> {closed.length} resolved / accepted finding{closed.length > 1 ? 's' : ''}
                     </button>
                   )}
                   {showClosed && closed.map((f) => <FindingCard key={f.id} finding={f} decision={decisionFor(f.question?.id)} onChanged={changed} />)}
@@ -236,7 +271,7 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
                       <SeverityBadge severity={e.severity} />
                       <div className="col" style={{ gap: 2 }}>
                         <span>{e.summary}</span>
-                        <span className="small muted">{new Date(e.at).toLocaleString()}</span>
+                        <span className="small muted"><DateTime iso={e.at} /></span>
                       </div>
                     </div>
                   ))}
@@ -251,8 +286,8 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
             <div className="dims">
               {a.dimensions.map((x) => (
                 <Fragment key={x.dimension}>
-                  <span className="small" title={x.notes.join('\n')}>
-                    {x.status === 'ok' ? '✓' : x.status === 'warn' ? '⚠' : '✗'} {DIMENSION_LABELS[x.dimension]}
+                  <span className="small row" style={{ gap: 6 }} title={x.notes.join('\n')}>
+                    <StatusIcon status={x.status === 'ok' ? 'ok' : x.status === 'warn' ? 'warn' : 'bad'} /> {DIMENSION_LABELS[x.dimension]}
                   </span>
                   <Bar value={x.score} tone={x.status === 'ok' ? 'ok' : x.status === 'warn' ? 'warn' : 'bad'} />
                   <span className="num small">{x.score}%</span>
@@ -272,7 +307,7 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
                     <h4>{g.group}</h4>
                     {g.items.map((i) => (
                       <div className="check-item" key={i.label}>
-                        <span className={`mark ${i.status}`}>{i.status === 'ok' ? '✓' : i.status === 'warn' ? '⚠' : '✗'}</span>
+                        <StatusIcon status={i.status === 'ok' ? 'ok' : i.status === 'warn' ? 'warn' : 'bad'} />
                         <span>{i.label}</span>
                       </div>
                     ))}
@@ -287,7 +322,7 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
               <div className="col" style={{ gap: 6 }}>
                 {a.tasks.requirements.map((r) => (
                   <div className="check-item" key={r.criterion}>
-                    <span className={`mark ${r.coveredBy.length ? 'ok' : 'fail'}`}>{r.coveredBy.length ? '✓' : '✗'}</span>
+                    <StatusIcon status={r.coveredBy.length ? 'ok' : 'bad'} />
                     <span className="small">
                       {r.criterion} {r.coveredBy.length > 0 && <span className="muted">({r.coveredBy.join(', ')})</span>}
                     </span>
@@ -313,6 +348,220 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
           )}
         </div>
       </div>
+      <Modal
+        open={forceOpen}
+        title={`Force approve ${a.key}?`}
+        onClose={closeForce}
+        footer={
+          <>
+            <button className="btn" onClick={closeForce} disabled={forceBusy}>
+              Cancel
+            </button>
+            <button className="btn danger" onClick={submitForce} disabled={!forceReason.trim() || forceBusy}>
+              {forceBusy ? <Spinner /> : null} Force approve
+            </button>
+          </>
+        }
+      >
+        <p>
+          <strong>{a.key}</strong> has {a.blockingIssues.length || 'open'} blocking issue{a.blockingIssues.length === 1 ? '' : 's'}. Approving freezes the current
+          specification as the baseline for drift detection.
+        </p>
+        {a.blockingIssues.length > 0 && (
+          <ul className="modal-issues">
+            {a.blockingIssues.map((b) => (
+              <li key={b}>
+                <StatusIcon status="bad" /> {b}
+              </li>
+            ))}
+          </ul>
+        )}
+        <label className="field">
+          <span>
+            Why approve it anyway? <span className="faint">(required, stored in the audit log)</span>
+          </span>
+          <textarea
+            className="input"
+            data-autofocus
+            maxLength={1000}
+            rows={3}
+            placeholder="e.g. Release deadline agreed with the PO; retry behaviour will be specified in PAY-130."
+            value={forceReason}
+            onChange={(e) => setForceReason(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void submitForce();
+            }}
+          />
+        </label>
+      </Modal>
+
+      <Modal
+        open={aiOpen}
+        title={`AI review of ${a.key}`}
+        onClose={closeAi}
+        footer={
+          !aiEnabled ? (
+            <>
+              <button className="btn" onClick={closeAi}>
+                Cancel
+              </button>
+              <button
+                className="btn primary"
+                onClick={() => {
+                  setAiOpen(false);
+                  navigate('/settings');
+                }}
+              >
+                <SettingsIcon size={15} /> Open Settings
+              </button>
+            </>
+          ) : aiResult && !('error' in aiResult) && !aiResult.errors.length ? (
+            aiResult.added > 0 ? (
+              <>
+                <button className="btn" onClick={closeAi}>
+                  Close
+                </button>
+                <button
+                  className="btn primary"
+                  onClick={() => {
+                    setTab('findings');
+                    setAiOpen(false);
+                  }}
+                >
+                  Show findings
+                </button>
+              </>
+            ) : (
+              <button className="btn primary" onClick={closeAi}>
+                Close
+              </button>
+            )
+          ) : (
+            <>
+              <button className="btn" onClick={closeAi} disabled={aiBusy}>
+                {aiResult ? 'Close' : 'Cancel'}
+              </button>
+              <button className="btn primary" onClick={aiReview} disabled={aiBusy} data-autofocus>
+                {aiBusy ? <Spinner /> : <SparkleIcon size={15} />} {aiBusy ? 'Reviewing…' : aiResult ? 'Try again' : 'Run AI review'}
+              </button>
+            </>
+          )
+        }
+      >
+        {!aiEnabled ? (
+          <>
+            <p>
+              No AI provider is configured, so only the deterministic rules ran on <strong>{a.key}</strong>.
+            </p>
+            <p className="muted small">Choose a provider (Amazon Bedrock, Anthropic, OpenAI, Azure OpenAI or a custom endpoint) in Settings → AI provider.</p>
+          </>
+        ) : aiResult && 'error' in aiResult ? (
+          <div className="banner bad">{aiResult.error}</div>
+        ) : aiResult ? (
+          <>
+            <p className="row" style={{ gap: 8 }}>
+              <StatusIcon status={aiResult.errors.length ? 'warn' : 'ok'} />
+              {aiResult.errors.length ? 'AI review finished with errors.' : 'AI review complete.'}
+            </p>
+            <p>
+              {aiResult.added > 0 ? (
+                <>
+                  <strong>{aiResult.added}</strong> new AI finding{aiResult.added === 1 ? '' : 's'} added
+                </>
+              ) : (
+                'No new AI findings'
+              )}{' '}
+              · {aiResult.total} AI finding{aiResult.total === 1 ? '' : 's'} on {a.key} in total. Each one cites its evidence and is marked <span className="badge accent">AI</span>.
+            </p>
+            {aiResult.errors.length > 0 && (
+              <ul className="modal-issues">
+                {aiResult.errors.map((e) => (
+                  <li key={e}>
+                    <StatusIcon status="bad" /> {e}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <>
+            <p>
+              The semantic reviewer reads the Jira story together with its linked Confluence pages and Figma frames, and looks for gaps,
+              conflicts and ambiguities that the rules cannot catch.
+            </p>
+            <ul className="modal-facts">
+              <li>
+                <span className="faint">Provider</span> {aiModel || 'configured in Settings'}
+              </li>
+              <li>
+                <span className="faint">Scope</span> {a.key} only — the rest of the backlog is not re-reviewed
+              </li>
+              <li>
+                <span className="faint">Data</span> product definition only; source code is never read or sent
+              </li>
+            </ul>
+            <p className="muted small">New findings are added to the Findings tab and marked AI. Findings that would block can require human confirmation, depending on the policy.</p>
+          </>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function ItemNotFound({ itemKey, message, navigate }: { itemKey: string; message: string; navigate: (p: string) => void }) {
+  const { analysis } = useApp();
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div className="col" style={{ gap: 10 }}>
+          <a href="#/backlog" className="back-link">
+            <ChevronIcon size={14} style={{ transform: 'rotate(180deg)' }} />
+            Backlog
+          </a>
+          <div className="row" style={{ gap: 12 }}>
+            <h1>{itemKey}</h1>
+            <span className="badge badge-outline">
+              <span className="sdot sdot-info" aria-hidden="true" /> Not found
+            </span>
+          </div>
+        </div>
+      </div>
+      <section className="card" style={{ padding: 12 }}>
+        <div className="empty-state empty-state-lg">
+          <span className="empty-state-icon">
+            <SearchIcon size={22} />
+          </span>
+          <strong>No work item {itemKey}</strong>
+          <p>
+            {itemKey} is not part of the latest analysis
+            {analysis && (
+              <>
+                {' '}of <strong>{analysis.project.name}</strong>
+              </>
+            )}
+            . It may have been deleted or moved in Jira, or it does not match the project key and JQL filter in Settings.
+            <span className="sr-only"> ({message})</span>
+          </p>
+          {analysis && (
+            <div className="empty-state-chips">
+              <span className="chip">
+                <span className="faint">Last analysis</span> {ago(analysis.analyzedAt)}
+              </span>
+              <span className="chip">
+                <span className="faint">Items analyzed</span> {analysis.items.length}
+              </span>
+            </div>
+          )}
+          <div className="row" style={{ marginTop: 6 }}>
+            <button className="btn primary" onClick={() => navigate('/backlog')}>
+              <ListIcon size={15} /> Go to backlog
+            </button>
+            <button className="btn" onClick={() => navigate('/settings')}>
+              <SlidersIcon size={15} /> Check Jira filter
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -347,8 +596,8 @@ function EpicRollup({ a, children, navigate }: { a: ItemAnalysis; children: Item
         </div>
       </div>
       {r.highlights.map((h) => (
-        <div key={h} className="small" style={{ color: 'var(--warn)' }}>
-          ⚠ {h}
+        <div key={h} className="small row" style={{ gap: 6, color: 'var(--warn)' }}>
+          <StatusIcon status="warn" /> {h}
         </div>
       ))}
       <table className="table" style={{ marginTop: 12 }}>
@@ -390,7 +639,7 @@ function Challenges({ a, onChanged, decisions }: { a: ItemAnalysis; onChanged: (
       {answered.length > 0 && <h3 style={{ marginTop: 8 }}>Answered</h3>}
       {answered.map((c) => (
         <div key={c.id} className="check-item">
-          <span className="mark ok">✓</span>
+          <StatusIcon status="ok" />
           <div className="col" style={{ gap: 2 }}>
             <span>{c.question.text}</span>
             <span className="small muted">
@@ -421,8 +670,8 @@ function States({ a }: { a: ItemAnalysis }) {
               <div className="name">{STATE_LABELS[state]}</div>
               <div className="why">{because}</div>
               <div className="state-flags">
-                <span style={{ color: inR ? 'var(--ok)' : 'var(--bad)' }}>{inR ? '✓' : '✗'} Requirements</span>
-                <span style={{ color: inD ? 'var(--ok)' : 'var(--bad)' }}>{inD ? '✓' : '✗'} Figma</span>
+                <span className="row" style={{ gap: 5, color: inR ? 'var(--ok)' : 'var(--bad)' }}><StatusIcon status={inR ? 'ok' : 'bad'} /> Requirements</span>
+                <span className="row" style={{ gap: 5, color: inD ? 'var(--ok)' : 'var(--bad)' }}><StatusIcon status={inD ? 'ok' : 'bad'} /> Figma</span>
               </div>
             </div>
           );
@@ -439,7 +688,7 @@ function States({ a }: { a: ItemAnalysis }) {
               {a.journeys.journeys.map((j) => (
                 <tr key={j.journey}>
                   <td style={{ width: 24 }}>
-                    <span className={`mark ${j.covered ? 'ok' : 'fail'}`}>{j.covered ? '✓' : '✗'}</span>
+                    <StatusIcon status={j.covered ? 'ok' : 'bad'} />
                   </td>
                   <td>{JOURNEY_LABELS[j.journey]}</td>
                   <td className="row" style={{ gap: 10 }}>
@@ -461,13 +710,16 @@ function States({ a }: { a: ItemAnalysis }) {
 function ContextTab({ a }: { a: ItemAnalysis }) {
   const [graph, setGraph] = useState<GraphData>();
   useEffect(() => void api.graph(a.key).then(setGraph).catch(() => undefined), [a.key]);
-  const group = (title: string, refs: ContextRef[]) => (
+  // The section header carries the source logo + name; rows only repeat it when they come from another source.
+  const group = (source: string, title: string, refs: ContextRef[]) => (
     <div>
-      <h3 style={{ margin: '4px 0 6px' }}>{title}</h3>
+      <h3 className="row context-group-head">
+        <SourceLogo source={source} size={17} /> {title}
+      </h3>
       {refs.length === 0 && <div className="small faint">Nothing found.</div>}
       {refs.map((r) => (
         <div key={r.entityId} className="row small" style={{ padding: '4px 0', alignItems: 'flex-start' }}>
-          <Source source={r.source} />
+          {r.source !== source && <Source source={r.source} />}
           <div className="col" style={{ gap: 0, flex: 1 }}>
             {r.url ? (
               <a href={r.url} target="_blank" rel="noreferrer">
@@ -494,9 +746,9 @@ function ContextTab({ a }: { a: ItemAnalysis }) {
       </p>
       {graph && <GraphView data={graph} />}
       <div className="grid">
-        {group('Jira', a.context.requirements)}
-        {group('Confluence', a.context.documents)}
-        {group('Figma', a.context.frames)}
+        {group('jira', 'Jira', a.context.requirements)}
+        {group('confluence', 'Confluence', a.context.documents)}
+        {group('figma', 'Figma', a.context.frames)}
       </div>
     </>
   );
