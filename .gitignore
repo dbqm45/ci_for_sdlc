@@ -16,3 +16,4 @@ playwright-report/
 reports/
 /fetch-env.sh
 /tmp
+.idea/
