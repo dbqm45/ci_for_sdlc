@@ -4,6 +4,22 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.2] - 2026-10-11
+
+### Nowe
+
+- **web:** Redesign and improvements
+- **web:** Extend gitignore
+- **web:** Improvements to figma requests
+- **jira:** add Jira API diagnostic script
+
+### Poprawione
+
+- **web:** Fix unit tests after redesign
+- **figma:** bound nested node fetching
+- **figma:** reduce API payloads and handle rate limits
+- **jira:** read API token from generated env file
+
 ## [0.1.1] - 2026-10-06
 
 ### Poprawione
