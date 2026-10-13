@@ -96,6 +96,7 @@ docker compose up -d --build
 
 Dla początkujących: [`ONBOARDING.md`](ONBOARDING.md). Szczegóły techniczne (darmowe konta Jira, Confluence i Figma, tokeny, lokalny model AI przez Ollamę, kopie zapasowe):
 [`docs/LOCAL-ENVIRONMENT.md`](docs/LOCAL-ENVIRONMENT.md).
+Plan generatora danych testowych i środowiska sandbox (Jira, Confluence, Figma): [`docs/TEST-DATA-GENERATOR.md`](docs/TEST-DATA-GENERATOR.md).
 
 ### Co zobaczysz w demo
 
