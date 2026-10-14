@@ -1,15 +1,20 @@
 name: Release image
 
-# Builds the Docker image once, smoke-tests it and publishes it to GitHub Container Registry
-# (ghcr.io/dbqm45/ci_for_sdlc, private like the repository). Run it locally with
-# `docker compose pull && docker compose up -d` (docs/LOCAL-ENVIRONMENT.md).
-# When package.json carries a version that has no tag yet (a merged "chore(release): X.Y.Z" PR), the image
-# is also tagged X.Y.Z and the commit gets the annotated git tag vX.Y.Z with a GitHub Release (docs/RELEASING.md).
+# Every merge to main ends in a published image; a merge that calls for a new version (feat, fix, perf or a
+# breaking change since the last tag vX.Y.Z) also ends in a release, without any manual step (docs/RELEASING.md):
+#   1. prepare: `npm run release -- --ci` computes the version from Conventional Commits, sets it in every
+#      package.json, the lockfile and the API contract, adds the CHANGELOG.md entry; the job commits that as
+#      "chore(release): X.Y.Z" to main. A version already set by hand (a merged "chore(release)" PR) is released as is.
+#   2. image: builds the Docker image of that commit once, smoke-tests it and publishes it to GitHub Container
+#      Registry (ghcr.io/dbqm45/ci_for_sdlc, private like the repository), also tagged X.Y.Z for a new version.
+#   3. tag + github-release: the annotated git tag vX.Y.Z on that commit and a GitHub Release with its CHANGELOG entry.
+# Run it locally with `docker compose pull && docker compose up -d` (docs/LOCAL-ENVIRONMENT.md).
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+# Runs queue instead of overlapping, so two merges never compute the same version.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -22,32 +27,74 @@ env:
   IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  version:
+  prepare:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.read.outputs.version }}
       new: ${{ steps.read.outputs.new }}
+      sha: ${{ steps.read.outputs.sha }}
+      skip: ${{ steps.bump.outputs.skip }}
     steps:
+      # Full history and tags for the version; no token left in .git/config while dependencies install.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Bump the version from the commits since the last tag
+        id: bump
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if ! git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then
+            echo "package.json has $version without a tag (set by a chore(release) PR) — releasing it as is"
+            exit 0
+          fi
+          node scripts/release.mjs --ci
+          [ -z "$(git status --porcelain)" ] && exit 0
+          version=$(node -p "require('./package.json').version")
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -qam "chore(release): $version"
+          # A push with GITHUB_TOKEN starts no new workflow run, so this commit does not release itself again.
+          # If main moved on meanwhile, the push is rejected and the queued run for the newer commit releases both.
+          if ! git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/main"; then
+            echo "::warning::main moved on during the release; the next run on main releases these commits"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - id: read
         run: |
           version=$(node -p "require('./package.json').version")
           node -e "process.exit(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(process.argv[1]) ? 0 : 1)" "$version" \
             || { echo "::error::package.json version '$version' is not X.Y.Z"; exit 1; }
-          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then new=false; else new=true; fi
+          if git rev-parse -q --verify "refs/tags/v$version" > /dev/null; then new=false; else new=true; fi
           # A new version needs its CHANGELOG.md entry (the release notes) before anything is tagged.
           if [ "$new" = true ]; then node scripts/release-notes.mjs "$version" > /dev/null; fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "new=$new" >> "$GITHUB_OUTPUT"
-          echo "Version $version, new release: $new"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Version $version, new release: $new, commit $(git rev-parse --short HEAD)"
 
   image:
-    needs: version
+    needs: prepare
+    if: needs.prepare.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
       - uses: docker/setup-buildx-action@v4
 
       - name: Build
@@ -91,12 +138,12 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:sha-${{ github.sha }}
-            ${{ needs.version.outputs.new == 'true' && format('{0}:{1}', env.IMAGE, needs.version.outputs.version) || '' }}
+            ${{ env.IMAGE }}:sha-${{ needs.prepare.outputs.sha }}
+            ${{ needs.prepare.outputs.new == 'true' && format('{0}:{1}', env.IMAGE, needs.prepare.outputs.version) || '' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
           cache-from: type=gha
 
       # GHCR for a private repository on GitHub Free holds 500 MB; keep only the most recent images.
@@ -110,28 +157,31 @@ jobs:
   # A released version is never moved or re-used (SemVer rule 3): the tag is created once, on the commit
   # whose image passed the smoke test.
   tag:
-    needs: [version, image]
-    if: needs.version.outputs.new == 'true'
+    needs: [prepare, image]
+    if: needs.prepare.outputs.new == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - name: Create tag v${{ needs.version.outputs.version }}
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Create tag v${{ needs.prepare.outputs.version }}
         env:
-          VERSION: ${{ needs.version.outputs.version }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SHA: ${{ needs.prepare.outputs.sha }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git tag -a "v$VERSION" -m "Release $VERSION" "$GITHUB_SHA"
+          git tag -a "v$VERSION" -m "Release $VERSION" "$SHA"
           git push origin "refs/tags/v$VERSION"
 
   # The GitHub Release of the current version, with its CHANGELOG.md entry as notes. Runs whenever the image
   # passed, not only right after tagging, so a release that is missing (e.g. a failed run, or v0.1.0 tagged before
   # this job existed) is created by the next run on main or by a manual run. An existing release is left as is.
   github-release:
-    needs: [version, image, tag]
+    needs: [prepare, image, tag]
     if: ${{ !cancelled() && needs.image.result == 'success' && needs.tag.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -139,14 +189,16 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Create GitHub Release v${{ needs.version.outputs.version }}
+      - name: Create GitHub Release v${{ needs.prepare.outputs.version }}
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.version.outputs.version }}
-          IMAGE_REF: ${{ env.IMAGE }}:${{ needs.version.outputs.version }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          IMAGE_REF: ${{ env.IMAGE }}:${{ needs.prepare.outputs.version }}
         run: |
           if gh release view "v$VERSION" > /dev/null 2>&1; then
             echo "Release v$VERSION already exists"

@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 // Prepares a release on the current branch: computes the next SemVer version from Conventional Commits since
 // the last tag vX.Y.Z, sets it in every package.json (and the lockfile), refreshes the API contract and adds a
-// CHANGELOG.md entry. It does not commit, tag or push — the tag is created on main after the PR is merged.
+// CHANGELOG.md entry. It does not commit, tag or push: on main the Release workflow runs it with --ci after every
+// merge, commits "chore(release): X.Y.Z" and tags it (docs/RELEASING.md).
 //   npm run release                    # version from the commits
 //   npm run release -- minor           # override: major | minor | patch | X.Y.Z (1.0.0 is always explicit)
 //   npm run release -- --dry-run       # only print what would happen
+//   npm run release -- --ci            # Release workflow on main: nothing to release is not an error, no hints
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { bump, bumpKind, changelogEntry, compareVersions, isVersion, nextVersion } from './lib/conventional.mjs';
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
+const ci = args.includes('--ci');
 const wanted = args.find((a) => !a.startsWith('--'));
 
 const run = (cmd, cmdArgs, opts = {}) => execFileSync(cmd, cmdArgs, { encoding: 'utf8', ...opts });
@@ -31,6 +34,10 @@ const kind = bumpKind(messages);
 
 let version;
 if (!wanted) {
+  if (!kind && ci) {
+    console.log(`No feat/fix/perf or breaking change since v${last} — nothing to release`);
+    process.exit(0);
+  }
   if (!kind) fail(`no feat/fix/perf or breaking change since v${last} — nothing to release (pass a version to force one)`);
   version = nextVersion(current, kind);
 } else if (['major', 'minor', 'patch'].includes(wanted)) {
@@ -52,6 +59,10 @@ const changelog = readFileSync('CHANGELOG.md', 'utf8');
 const firstEntry = changelog.indexOf('\n## [');
 writeFileSync('CHANGELOG.md', firstEntry < 0 ? `${changelog.trimEnd()}\n\n${entry}` : `${changelog.slice(0, firstEntry + 1)}${entry}\n${changelog.slice(firstEntry + 1)}`);
 
+if (ci) {
+  console.log(`✓ Version ${version} is set`);
+  process.exit(0);
+}
 console.log(`
 ✓ Version ${version} is set. Next:
   1. Review CHANGELOG.md (reword entries for users, add Zmienione/Wycofywane/Usunięte if needed).
