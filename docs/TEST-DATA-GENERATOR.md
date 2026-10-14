@@ -2,7 +2,8 @@
 
 Status: **plan w trakcie wdrażania.** Z etapu E2 działają już atrapy Jira, Confluence i Figma, `CI_FIGMA_API_BASE`,
 testy kontraktowe konektorów, atrapa dostawcy AI (7.5), e2e `@live-mock` (sekcja 6.2) i scenariusze zmian z webhookami
-(6.3) — etap E2 jest zakończony. Dokument opisuje, jak zbudować jeden zestaw danych testowych,
+(6.3) — etap E2 jest zakończony. Z etapu E1 działają świat „Checkout”, opis scenariuszy i strażnik pokrycia
+(sprawdzenia 1 i 4 z 5.3). Dokument opisuje, jak zbudować jeden zestaw danych testowych,
 który wypełnia prawdziwe źródła (Jira, Confluence, Figma, później Miro i kolejne), zasila testy automatyczne bez
 przeglądarki i rośnie razem z aplikacją.
 
@@ -183,6 +184,22 @@ Każda reguła ma w `expectations.ts` co najmniej dwa wpisy:
 4. każdy scenariusz z `DEMO_SCENARIOS` ma odpowiednik w `scenarios.ts`, i odwrotnie.
 
 Brak któregoś elementu daje czerwony test z komunikatem, co dopisać.
+
+**Wdrożone (E1):** pakiet `packages/sandbox` (`npm run test -w @ci/sandbox`, część `npm test`):
+- `src/world/checkout.ts` — świat to na razie `demoProject()`, ten sam, który serwują atrapy; `worldAfter(...)`
+  stosuje scenariusze z `DEMO_SCENARIOS`.
+- `src/world/expectations.ts` — przypadki `fires` i `silent` dla 21 reguł z `RULES` i reguł pochodnych z przebiegu
+  między elementami (`DEP-001`, `BUG-004`, `EPIC-003`, `EPIC-004`). Strażnik znajduje te reguły sam, w wywołaniach
+  `findingFromDraft` w `analyze.ts`, więc nowa reguła bez przypadków daje czerwony test. `taskCoverage` sprawdza
+  `COV-001`. Przypadek to klucz elementu albo `{ item, after: '<scenariusz>' }`, gdy element powstaje dopiero
+  w scenariuszu (np. `backlog-intake`).
+- `src/world/scenarios.ts` — źródło każdego scenariusza i obiekty, których dotyka; strażnik porównuje je
+  z rzeczywistą różnicą światów przed scenariuszem i po nim.
+- `src/guard.ts` — sprawdzenia 1 i 4 oraz weryfikacja przypadków na wyniku analizy (stały zegar). Sprawdzenia 2 i 3
+  dojdą z kitami w E3.
+- **Znana luka:** `EPIC-004` (sprzeczne wartości w historyjkach jednego epiku) nie odpala na żadnym elemencie świata.
+  Wpis ma pole `gap` z powodem; strażnik zgłosi błąd, gdy reguła zacznie gdzieś odpalać, żeby lukę zamienić
+  na przypadek `fires`. Dane dla niej dojdą ze światem w E3.
 
 ### 5.4. Scenariusze zmian
 
