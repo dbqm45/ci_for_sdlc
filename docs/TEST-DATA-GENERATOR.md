@@ -349,11 +349,13 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
   | `JIRA_API_TOKEN` (odczyt) | aplikacja | `read:jira-work`, `read:jira-user` |
   | `CONFLUENCE_API_TOKEN` (odczyt) | aplikacja | odczyt stron, przestrzeni i etykiet (np. `read:page:confluence`, `read:space:confluence`, `read:label:confluence`) |
   | `SANDBOX_JIRA_WRITE_TOKEN` (zapis) | tylko seeder | `read:jira-work`, `read:jira-user`, `write:jira-work` (zgłoszenia, linki, linki zdalne) |
-  | `SANDBOX_CONFLUENCE_WRITE_TOKEN` (zapis) | tylko seeder | odczyt jak wyżej oraz zapis i usuwanie stron, zapis etykiet (np. `write:page:confluence`, `delete:page:confluence`, `write:label:confluence`) |
+  | `SANDBOX_CONFLUENCE_WRITE_TOKEN` (zapis) | tylko seeder | wszystkie 6: `read:space:confluence`, `read:page:confluence`, `read:label:confluence`, `write:page:confluence`, `delete:page:confluence`, `write:label:confluence` |
 
 - Nazwy zakresów z tabeli istnieją w formularzu tworzenia tokenu (potwierdzone 2026-10). Usuwanie zgłoszeń nie ma
   osobnego zakresu: wystarcza `write:jira-work` plus uprawnienie projektu „Delete work items” (punkt 2 wyżej).
   Token Confluence musi mieć wybraną aplikację **Confluence**; token z inną aplikacją zwraca `401`.
+  Token do zapisu bez zakresów `read:*` też zwraca `401` (seeder najpierw czyta strony i etykiety), zanim cokolwiek
+  zapisze.
 - **Adres API przy tokenach z zakresami (potwierdzone 2026-10):** token z zakresami działa przez bramę
   `https://api.atlassian.com/ex/jira/{cloudId}` (i `…/ex/confluence/{cloudId}`).
   - Konektory przyjmują `baseUrl`, więc obsłużą obie formy.
