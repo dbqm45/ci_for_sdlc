@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { adfText, basic, checkBot, checkSite, client, DESCRIPTION, KEY, MARKER, noConnectionHint, parseSite, redact, setup } from './sandbox-atlassian.mjs';
+import { adfText, basic, checkBot, checkSite, client, cloudIdOf, DESCRIPTION, KEY, MARKER, noConnectionHint, parseSite, redact, setup } from './sandbox-atlassian.mjs';
 
 // Expected behaviour comes from docs/TEST-DATA-GENERATOR.md, 7.2 (CITEST, marker, bot) and 8.4–8.5 (guards, logs).
 
@@ -199,6 +199,18 @@ describe('SBX-429: one retry after Retry-After (8.4.5)', () => {
       assert.equal(r.status, 200);
       assert.deepEqual(t.waits, [ms]);
       assert.equal(t.count(), 2);
+    });
+  }
+});
+
+describe('SBX-CLOUD: cloudId becomes a URL path segment', () => {
+  const callWith = (cloudId) => async () => ({ status: 200, ok: true, json: { cloudId } });
+  it('accepts a plain id', async () => {
+    assert.equal(await cloudIdOf(callWith('cloud-1'), 'x.atlassian.net'), 'cloud-1');
+  });
+  for (const bad of ['../evil', 'a/b', 'a?x=1', 'a#b', 42]) {
+    it(`refuses ${JSON.stringify(bad)}`, async () => {
+      await assert.rejects(cloudIdOf(callWith(bad), 'x.atlassian.net'), /unexpected cloudId/);
     });
   }
 });

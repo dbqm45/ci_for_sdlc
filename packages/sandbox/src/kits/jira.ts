@@ -308,7 +308,8 @@ const liveLevel = (i: LiveIssue) => (i.subtask ? 2 : i.typeName.toLowerCase() ==
 
 /**
  * Deletes issues by world key, subtasks first. Only issues that still carry the sandbox label (found by the search)
- * are deleted; a state entry without a labelled issue is dropped and the issue is left alone.
+ * are deleted; a state entry without a labelled issue is dropped and the issue is left alone. Never with
+ * deleteSubtasks: Jira would take subtasks made by hand along, so an issue that still has them is kept (8.4.4).
  */
 export async function deleteIssues(run: Run, worldKeys: string[]): Promise<void> {
   const { ctx, state } = run;
@@ -323,10 +324,14 @@ export async function deleteIssues(run: Run, worldKeys: string[]): Promise<void>
   });
   targets.sort((a, b) => liveLevel(b.live) - liveLevel(a.live));
   for (const { k, live } of targets) {
-    await act(ctx, `delete ${live.typeName || 'issue'} ${k} (${live.key})`, () =>
-      ctx.call('DELETE', `${ctx.jira}/rest/api/3/issue/${live.key}?deleteSubtasks=true`, { auth: ctx.auth.jira }),
-      (r) => r.ok || r.status === 404,
+    const r = await act(ctx, `delete ${live.typeName || 'issue'} ${k} (${live.key})`, () =>
+      ctx.call('DELETE', `${ctx.jira}/rest/api/3/issue/${live.key}`, { auth: ctx.auth.jira }),
+      (r) => r.ok || r.status === 404 || r.status === 400,
     );
+    if (r?.status === 400) {
+      ctx.warnings.push(`${k}: ${live.key} has subtasks not made by the seeder — left alone; move or delete them by hand`);
+      continue;
+    }
     if (ctx.write) delete state.issues[k];
     // Gone for the rest of the run, also in a dry run: links to it are not listed as separate unlinks.
     delete run.keys[k];

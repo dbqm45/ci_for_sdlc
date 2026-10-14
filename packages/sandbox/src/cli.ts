@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { noConnectionHint } from '../../../scripts/lib/sandbox-atlassian.mjs';
+import { basic, noConnectionHint, redact } from '../../../scripts/lib/sandbox-atlassian.mjs';
 import { mutate, reset, seed, status, type Outcome } from './kits/index.js';
 import { connect, loadState, SandboxError, saveState, type Env, type LiveContext, type SandboxState } from './live/context.js';
 
@@ -58,9 +58,13 @@ export async function main(argv: string[], env: Env, opts: { log?: (line: string
   return { code: outcome.problems.length ? 1 : 0, lines };
 }
 
+/** First line of an unexpected error, masked like every other line (8.5). */
 function message(e: unknown, env: Env): string {
   const msg = (e instanceof Error ? e.message : String(e)).split('\n')[0]!;
-  return msg === 'fetch failed' ? noConnectionHint(env) : msg;
+  if (msg === 'fetch failed') return noConnectionHint(env);
+  const tokens = [env.JIRA_API_TOKEN, env.CONFLUENCE_API_TOKEN, env.SANDBOX_JIRA_WRITE_TOKEN, env.SANDBOX_CONFLUENCE_WRITE_TOKEN].filter((t): t is string => !!t);
+  const email = env.SANDBOX_BOT_EMAIL;
+  return redact(msg, [...tokens, ...(email ? tokens.map((t) => basic(email, t)) : [])]);
 }
 
 function finish(out: (line: string) => void, ctx: LiveContext | undefined, problems: string[], report: string[]): void {

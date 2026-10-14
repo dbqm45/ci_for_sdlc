@@ -167,6 +167,26 @@ describe('mutate, reset, status', () => {
     expect(state().issues).toEqual({});
   });
 
+  it('SBX-16: an issue with a subtask made by hand is left alone, with its subtask', async () => {
+    site();
+    await run(['seed', '--confirm']);
+    const story = labelled().find((i) => fake.typeOf(i).name === 'Story')!;
+    const own = fake.addIssue('Subtask by hand', [], 'Subtask', story.key);
+    const r = await run(['reset', '--confirm']);
+    expect(r.code).toBe(0);
+    expect(fake.requests.filter((q) => q.url.includes('deleteSubtasks'))).toEqual([]);
+    expect(fake.issues.has(own.key)).toBe(true);
+    expect(fake.issues.has(story.key)).toBe(true);
+    expect(r.lines.some((l) => l.startsWith('! ') && l.includes(`${story.key} has subtasks not made by the seeder`))).toBe(true);
+  });
+
+  it('SBX-17: an unexpected error is masked too', async () => {
+    site({ hook: (req) => { if (req.method === 'POST') throw new TypeError(`boom ${ENV.SANDBOX_JIRA_WRITE_TOKEN}`); return undefined; } });
+    const r = await run(['seed', '--confirm']);
+    expect(r.code).toBe(1);
+    for (const t of TOKENS) expect(r.lines.join('\n')).not.toContain(t);
+  });
+
   it('SBX-10: status names an edited issue and page, and the next seed repairs them', async () => {
     site();
     await run(['seed', '--confirm']);

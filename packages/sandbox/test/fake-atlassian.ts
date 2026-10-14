@@ -78,10 +78,10 @@ export class FakeAtlassian {
   }
 
   /** Something people made by hand: an issue or page without the sandbox labels. */
-  addIssue(summary: string, labels: string[] = [], typeName = 'Story'): Issue {
+  addIssue(summary: string, labels: string[] = [], typeName = 'Story', parent?: string): Issue {
     const type = ISSUE_TYPES.find((t) => t.name === typeName)!;
     const n = ++this.seq;
-    const issue = { id: String(n), key: `CITEST-${n}`, fields: { summary, labels, issuetype: { id: type.id }, components: [] } };
+    const issue: Issue = { id: String(n), key: `CITEST-${n}`, fields: { summary, labels, issuetype: { id: type.id }, components: [], ...(parent ? { parent: { key: parent } } : {}) } };
     this.issues.set(issue.key, issue);
     return issue;
   }
@@ -198,7 +198,7 @@ export class FakeAtlassian {
     return json(404, {});
   }
 
-  private typeOf(i: Issue) {
+  typeOf(i: Issue) {
     return ISSUE_TYPES.find((t) => t.id === i.fields.issuetype?.id)!;
   }
 

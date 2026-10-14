@@ -208,9 +208,9 @@ Brak któregoś elementu daje czerwony test z komunikatem, co dopisać.
   `api.atlassian.com/ex/{jira,confluence}/{cloudId}`, bezpieczniki z 8.4, plik stanu;
   `src/kits/jira.ts`, `src/kits/confluence.ts`, `src/kits/encode.ts` — zapis świata; `src/kits/index.ts` — `seed`,
   `mutate`, `reset`, `status`.
-- `test/fake-atlassian.ts` — Jira i Confluence w pamięci; `test/seeder.test.ts` — przypadki SBX-01…SBX-15
+- `test/fake-atlassian.ts` — Jira i Confluence w pamięci; `test/seeder.test.ts` — przypadki SBX-01…SBX-17
   (plan bez zapisu, idempotentny seed, utracony plik stanu, `429`, scenariusze, reset tylko oznaczonych obiektów,
-  dryf, bezpieczniki, maskowanie tokenów).
+  ręczne podzadania, dryf, bezpieczniki, maskowanie tokenów także w nieoczekiwanych błędach).
 - **Znane ograniczenia:**
   - statusy zgłoszeń (np. „Done”) nie są odtwarzane; komponenty `Payments`, `Checkout`, `Account` trzeba założyć
     w projekcie ręcznie (inaczej seeder zapisuje zgłoszenia bez nich, z ostrzeżeniem, a `status` zgłasza różnicę);
@@ -526,7 +526,8 @@ Przypomnienie o rotacji: wydarzenie w kalendarzu 7 dni przed datą wygaśnięcia
    liczbę obiektów do usunięcia.
 4. **Usuwa tylko swoje.** `reset` i `seed` usuwają wyłącznie obiekty z etykietą `ci-sandbox` i etykietą z logicznym ID
    (4.4), także te, których nie ma w `state.json` (np. po utracie pliku). Nigdy nie wykonuje „usuń wszystko
-   w projekcie”; obiekty założone ręcznie bez tych etykiet zostają.
+   w projekcie”; obiekty założone ręcznie bez tych etykiet zostają. Zgłoszenia usuwa bez `deleteSubtasks`: takie,
+   pod którym ktoś ręcznie dodał podzadanie, zostaje razem z nim (z ostrzeżeniem).
 5. **Limity zapytań:**
    - zapytania idą po kolei, bez równoległości;
    - `429` jest ponawiane raz, po czasie z `Retry-After` (najwyżej 60 s).
