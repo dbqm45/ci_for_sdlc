@@ -71,7 +71,8 @@ export function client({ fetchImpl = fetch, log = console.log, sleep = (ms) => n
     const init = { method, headers, body: body === undefined ? undefined : JSON.stringify(body) };
     let res = await fetchImpl(url, init);
     if (res.status === 429) {
-      const wait = Math.min(Number(res.headers?.get?.('retry-after') ?? 5) || 5, 60);
+      const after = Number(res.headers?.get?.('retry-after') ?? 5);
+      const wait = Math.min(Number.isFinite(after) && after >= 0 ? after : 5, 60);
       await sleep(wait * 1000);
       res = await fetchImpl(url, init);
     }

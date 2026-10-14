@@ -63,6 +63,6 @@ export const DERIVED_EXPECTATIONS: DerivedRuleExpectation[] = [
     appliesTo: ['epic', 'feature'],
     fires: [],
     silent: ['PAY-100'],
-    gap: 'no epic has two stories with different values of the same claim (e.g. retry limit 3 and unlimited); the world gets one in E3',
+    gap: 'no epic has two stories with different values of the same claim (e.g. retry limit 3 and unlimited); the world gets one in E4',
   },
 ];

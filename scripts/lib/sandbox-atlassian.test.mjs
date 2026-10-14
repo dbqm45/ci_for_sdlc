@@ -179,3 +179,26 @@ describe('noConnectionHint', () => {
     assert.match(noConnectionHint({ HTTPS_PROXY: 'http://proxy:8080', NODE_USE_ENV_PROXY: '1' }), /allow/);
   });
 });
+
+describe('SBX-429: one retry after Retry-After (8.4.5)', () => {
+  const throttled = (retryAfter) => {
+    const waits = [];
+    let n = 0;
+    const fetchImpl = async () => {
+      n++;
+      const status = n === 1 ? 429 : 200;
+      return { status, headers: { get: (h) => (h === 'retry-after' ? retryAfter : null) }, text: async () => '{}' };
+    };
+    const call = client({ fetchImpl, log: () => {}, sleep: async (ms) => { waits.push(ms); }, secrets: [] });
+    return { waits, call, count: () => n };
+  };
+  for (const [header, ms] of [['0', 0], ['2', 2000], [null, 5000], ['soon', 5000], ['-1', 5000], ['600', 60000]]) {
+    it(`Retry-After ${JSON.stringify(header)} waits ${ms} ms, then retries once`, async () => {
+      const t = throttled(header);
+      const r = await t.call('GET', 'https://api.atlassian.com/ex/jira/x/rest/api/3/myself');
+      assert.equal(r.status, 200);
+      assert.deepEqual(t.waits, [ms]);
+      assert.equal(t.count(), 2);
+    });
+  }
+});
