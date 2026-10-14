@@ -126,7 +126,7 @@ interface SourceKit {
 | `npm run sandbox:mock` | uruchamia atrapy na `127.0.0.1` (do ręcznego klikania bez kont) | brak |
 | `npm run sandbox:seed -- --dry-run` | pokazuje plan zmian (co powstanie, gdzie), nic nie zapisuje | token do odczytu |
 | `npm run sandbox:seed -- --confirm` | zakłada dane w sandboxie | token do zapisu |
-| `npm run sandbox:mutate -- <scenariusz>` | stosuje scenariusz zmiany | token do zapisu |
+| `npm run sandbox:mutate -- <scenariusz> [--confirm]` | stosuje scenariusz zmiany; bez `--confirm` tylko pokazuje plan | token do zapisu (do planu wystarczy odczyt) |
 | `npm run sandbox:reset -- --confirm` | usuwa założone dane | token do zapisu |
 | `npm run sandbox:status` | porównuje stan źródła ze światem (czy coś zginęło lub ktoś zmienił ręcznie) | token do odczytu |
 | `npm run test:e2e:live` | opcjonalnie: e2e na prawdziwym sandboxie (sekcja 6.4) | token do odczytu |
@@ -137,7 +137,9 @@ interface SourceKit {
 `CITEST-12` albo `page.payment-spec` na `65538`.
 
 - Zawiera **wyłącznie identyfikatory, adresy i znaczniki czasu, nigdy tokenów.**
-- Utrata pliku nie jest groźna: `sandbox:status` odbudowuje go z etykiety `ci-sandbox` i prefiksu projektu.
+- Utrata pliku nie jest groźna: `sandbox:seed` i `sandbox:status` odbudowują go z etykiet. Każdy obiekt sandboxa ma
+  `ci-sandbox` i etykietę z logicznym ID: `ci-sbx-<klucz małymi literami>` dla zgłoszenia, `ci-sbx-doc-<id>` dla strony.
+- Plik zapamiętuje też zastosowane scenariusze; `sandbox:status` porównuje witrynę ze światem po tych scenariuszach.
 
 ## 5. Projekt danych
 
@@ -196,10 +198,30 @@ Brak któregoś elementu daje czerwony test z komunikatem, co dopisać.
 - `src/world/scenarios.ts` — źródło każdego scenariusza i obiekty, których dotyka; strażnik porównuje je
   z rzeczywistą różnicą światów przed scenariuszem i po nim.
 - `src/guard.ts` — sprawdzenia 1 i 4 oraz weryfikacja przypadków na wyniku analizy (stały zegar). Sprawdzenia 2 i 3
-  dojdą z kitami w E3.
+  przesunięte do E4 (kity mają dziś osobne testy, patrz niżej).
 - **Znana luka:** `EPIC-004` (sprzeczne wartości w historyjkach jednego epiku) nie odpala na żadnym elemencie świata.
   Wpis ma pole `gap` z powodem; strażnik zgłosi błąd, gdy reguła zacznie gdzieś odpalać, żeby lukę zamienić
-  na przypadek `fires`. Dane dla niej dojdą ze światem w E3.
+  na przypadek `fires`. Dane dla niej przesunięte do E4.
+
+**Wdrożone (E3):** seeder Atlassian.
+- `src/cli.ts` — polecenia z 4.3; `src/live/context.ts` — połączenie przez bramę
+  `api.atlassian.com/ex/{jira,confluence}/{cloudId}`, bezpieczniki z 8.4, plik stanu;
+  `src/kits/jira.ts`, `src/kits/confluence.ts`, `src/kits/encode.ts` — zapis świata; `src/kits/index.ts` — `seed`,
+  `mutate`, `reset`, `status`.
+- `test/fake-atlassian.ts` — Jira i Confluence w pamięci; `test/seeder.test.ts` — przypadki SBX-01…SBX-17
+  (plan bez zapisu, idempotentny seed, utracony plik stanu, `429`, scenariusze, reset tylko oznaczonych obiektów,
+  ręczne podzadania, dryf, bezpieczniki, maskowanie tokenów także w nieoczekiwanych błędach).
+- **Znane ograniczenia:**
+  - statusy zgłoszeń (np. „Done”) nie są odtwarzane; komponenty `Payments`, `Checkout`, `Account` trzeba założyć
+    w projekcie ręcznie (inaczej seeder zapisuje zgłoszenia bez nich, z ostrzeżeniem, a `status` zgłasza różnicę);
+  - zadanie pod historyjką powstaje jako podzadanie; sekcje błędu (kroki, oczekiwany wynik) są w opisie;
+  - Jira pokazuje każde powiązanie z drugiej strony odwrotnie (np. „is blocked by”) — `status` to uwzględnia;
+  - linki do Figmy dojdą w E4; `mutate` nie wywołuje lokalnego webhooka;
+  - stopka z logicznym ID jest częścią treści; gdy Jira jej nie przyjmie, zgłoszenie powstaje bez niej
+    (z ostrzeżeniem);
+  - strona, której nie udało się usunąć z kosza, zostaje w koszu przestrzeni;
+  - obiekty bez etykiety z logicznym ID są pomijane (nie są „nasze”);
+  - kit `mock` (atrapy z E2) zostaje w `test/`, nie jest przeniesiony do `src/kits/`.
 
 ### 5.4. Scenariusze zmian
 
@@ -327,11 +349,13 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
   | `JIRA_API_TOKEN` (odczyt) | aplikacja | `read:jira-work`, `read:jira-user` |
   | `CONFLUENCE_API_TOKEN` (odczyt) | aplikacja | odczyt stron, przestrzeni i etykiet (np. `read:page:confluence`, `read:space:confluence`, `read:label:confluence`) |
   | `SANDBOX_JIRA_WRITE_TOKEN` (zapis) | tylko seeder | `read:jira-work`, `read:jira-user`, `write:jira-work` (zgłoszenia, linki, linki zdalne) |
-  | `SANDBOX_CONFLUENCE_WRITE_TOKEN` (zapis) | tylko seeder | odczyt jak wyżej oraz zapis i usuwanie stron, zapis etykiet (np. `write:page:confluence`, `delete:page:confluence`, `write:label:confluence`) |
+  | `SANDBOX_CONFLUENCE_WRITE_TOKEN` (zapis) | tylko seeder | wszystkie 6: `read:space:confluence`, `read:page:confluence`, `read:label:confluence`, `write:page:confluence`, `delete:page:confluence`, `write:label:confluence` |
 
 - Nazwy zakresów z tabeli istnieją w formularzu tworzenia tokenu (potwierdzone 2026-10). Usuwanie zgłoszeń nie ma
   osobnego zakresu: wystarcza `write:jira-work` plus uprawnienie projektu „Delete work items” (punkt 2 wyżej).
   Token Confluence musi mieć wybraną aplikację **Confluence**; token z inną aplikacją zwraca `401`.
+  Token do zapisu bez zakresów `read:*` też zwraca `401` (seeder najpierw czyta strony i etykiety), zanim cokolwiek
+  zapisze.
 - **Adres API przy tokenach z zakresami (potwierdzone 2026-10):** token z zakresami działa przez bramę
   `https://api.atlassian.com/ex/jira/{cloudId}` (i `…/ex/confluence/{cloudId}`).
   - Konektory przyjmują `baseUrl`, więc obsłużą obie formy.
@@ -499,12 +523,16 @@ Przypomnienie o rotacji: wydarzenie w kalendarzu 7 dni przed datą wygaśnięcia
 2. **Projekt i przestrzeń tylko z prefiksem `CITEST`:**
    - seeder sprawdza, że projekt ma klucz `CITEST` i opis z markerem sandboxa;
    - inaczej przerywa.
-3. **Domyślnie `--dry-run`.** Zapis wymaga `--confirm`. `reset` dodatkowo pokazuje liczbę obiektów do usunięcia.
-4. **Usuwa tylko swoje.** `teardown` usuwa wyłącznie obiekty z `state.json`, które jednocześnie mają etykietę
-   `ci-sandbox`. Nigdy nie wykonuje „usuń wszystko w projekcie”.
+3. **Domyślnie `--dry-run`.** Zapis wymaga `--confirm` i osobnych tokenów do zapisu (`SANDBOX_JIRA_WRITE_TOKEN`,
+   `SANDBOX_CONFLUENCE_WRITE_TOKEN`); plan i `status` działają na tokenach do odczytu. `reset` dodatkowo pokazuje
+   liczbę obiektów do usunięcia.
+4. **Usuwa tylko swoje.** `reset` i `seed` usuwają wyłącznie obiekty z etykietą `ci-sandbox` i etykietą z logicznym ID
+   (4.4), także te, których nie ma w `state.json` (np. po utracie pliku). Nigdy nie wykonuje „usuń wszystko
+   w projekcie”; obiekty założone ręcznie bez tych etykiet zostają. Zgłoszenia usuwa bez `deleteSubtasks`: takie,
+   pod którym ktoś ręcznie dodał podzadanie, zostaje razem z nim (z ostrzeżeniem).
 5. **Limity zapytań:**
-   - równoległość z `pool()` (już jest w `atlassian.ts`);
-   - obsługa `429` i `Retry-After`.
+   - zapytania idą po kolei, bez równoległości;
+   - `429` jest ponawiane raz, po czasie z `Retry-After` (najwyżej 60 s).
 
 ### 8.5. Logi i błędy
 
@@ -550,8 +578,8 @@ To test odporności na prompt injection, a nie dane do klikania.
 ### 8.9. Webhooki
 
 - `CI_WEBHOOK_SECRET` w testach to stała testowa. W sandboxie to osobna losowa wartość z menedżera haseł.
-- Prawdziwe webhooki z chmury do lokalnej aplikacji wymagają tunelu (np. Cloudflare Tunnel). To opcja, nie wymóg:
-  `sandbox:mutate` po zmianie wywołuje lokalny webhook sam.
+- Prawdziwe webhooki z chmury do lokalnej aplikacji wymagają tunelu (np. Cloudflare Tunnel). To opcja, nie wymóg.
+  Planowane: `sandbox:mutate` po zmianie wywoła lokalny webhook sam (w E3 jeszcze tego nie robi).
 - Tunel tylko na czas testu, z sekretem w nagłówku i ograniczeniem do ścieżki `/api/webhooks/*`.
 
 ### 8.10. Po wycieku
@@ -570,7 +598,7 @@ Każdy etap to osobny PR do `main` (Conventional Commits).
 | **E0. Decyzje** | sekcja 11 (decyzje podjęte 14.10.2026); założenie witryny sandbox, projektu i przestrzeni `CITEST`, pliku Figmy; tokeny w menedżerze haseł | konta gotowe, inwentarz uzupełniony | 1–2 h Twojej pracy |
 | **E1. Świat i strażnik** | `packages/sandbox` z typami, światem „Checkout” (z `demo.ts`), scenariuszami, `expectations.ts`, `guard.ts`; `.sandbox/` w `.gitignore` | test strażnika pokazuje braki pokrycia reguł; zero wpływu na aplikację | `test(sandbox): …` / `feat(sandbox): …` |
 | **E2. Atrapy i testy** | atrapy Jira, Confluence i Figma (`node:http`); `CI_FIGMA_API_BASE` z walidacją; testy kontraktowe konektorów; e2e `@live-mock` w Playwright; atrapa AI | CI testuje prawdziwe konektory i tryb Live bez sekretów | `feat(core): …` dla zmiennej Figma, `test(e2e): …` |
-| **E3. Seeder Atlassian** | kity Jira i Confluence: `seed`, `mutate`, `teardown`, `status`; bezpieczniki z 8.4; maskowanie logów | `sandbox:seed` wypełnia witrynę, `sandbox:reset` ją czyści | wymaga E0; przegląd bezpieczeństwa przed merge |
+| **E3. Seeder Atlassian** ✅ | kity Jira i Confluence: `seed`, `mutate`, `teardown`, `status`; bezpieczniki z 8.4; maskowanie logów | `sandbox:seed` wypełnia witrynę, `sandbox:reset` ją czyści | wymaga E0; przegląd bezpieczeństwa przed merge |
 | **E4. Figma** | wtyczka deweloperska generowana ze świata, mapa `node-id`; instrukcja dla drogi MCP | plik Figmy z ramkami w kilka minut | |
 | **E5. Test live (opcjonalnie)** | `test:e2e:live`; workflow nocny tylko do odczytu, jeśli plan GitHuba pozwala | wczesne wykrycie zmian w API dostawców | `ci: …` |
 | **E6. Utrzymanie** | lista kontrolna z sekcji 10; reguła w `CLAUDE.md`; opcjonalnie cotygodniowa rutyna Claude sprawdzająca `sandbox:status` i przypominająca o rotacji tokenów | rozbudowa środowiska jest częścią każdej zmiany | `docs: …` |
@@ -627,7 +655,11 @@ haseł; odczyt pliku przez REST działa (7.3). Token administratora Atlassian po
 Etap E0 jest zakończony. Tokeny trzymasz tylko w menedżerze haseł i zmiennych środowiskowych, nigdy w pliku
 w repozytorium.
 
-**Fakty do potwierdzenia na stronach dostawców przed E3 i E4:**
+**Zrobione w E3 (14.10.2026):** seeder Atlassian (`sandbox:seed`, `sandbox:mutate`, `sandbox:reset`,
+`sandbox:status`) przez bramę `api.atlassian.com` z tokenami bota; testy na Jira i Confluence w pamięci (5.3).
+Sprawdzenia 2 i 3 strażnika oraz dane dla `EPIC-004` przesunięte do E4.
+
+**Fakty do potwierdzenia na stronach dostawców przed E4:**
 
 | Fakt | Gdzie sprawdzić |
 |---|---|

@@ -106,17 +106,32 @@ export function sentences(text: string): string[] {
     .filter((s) => s.length > 3);
 }
 
+/** Named entities Confluence storage format uses for typography; `&nbsp;` becomes a plain space. */
+const ENTITIES: Record<string, string> = {
+  nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+  mdash: '—', ndash: '–', hellip: '…', bull: '•', middot: '·',
+  lsquo: '‘', rsquo: '’', sbquo: '‚', ldquo: '“', rdquo: '”', bdquo: '„', laquo: '«', raquo: '»',
+  larr: '←', rarr: '→', harr: '↔', uarr: '↑', darr: '↓', le: '≤', ge: '≥', ne: '≠',
+  times: '×', divide: '÷', plusmn: '±', deg: '°', euro: '€', pound: '£', sect: '§', para: '¶',
+  copy: '©', reg: '®', trade: '™', oacute: 'ó', Oacute: 'Ó',
+};
+
+/** One pass, so `&amp;lt;` stays `&lt;`; unknown or invalid entities are left as they are. */
+function decodeEntities(text: string): string {
+  return text.replace(/&(#[xX][0-9a-fA-F]+|#\d+|[A-Za-z]+);/g, (whole, name: string) => {
+    if (name[0] !== '#') return ENTITIES[name] ?? whole;
+    const code = name[1] === 'x' || name[1] === 'X' ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
+    return code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+  });
+}
+
 export function htmlToText(html: string): string {
-  return html
-    .replace(/<\s*(br|\/p|\/li|\/h\d|\/tr|\/div)\s*\/?>/gi, '\n')
-    .replace(/<li[^>]*>/gi, '\n- ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+  return decodeEntities(
+    html
+      .replace(/<\s*(br|\/p|\/li|\/h\d|\/tr|\/div)\s*\/?>/gi, '\n')
+      .replace(/<li[^>]*>/gi, '\n- ')
+      .replace(/<[^>]+>/g, ' '),
+  )
     .replace(/[ \t]+/g, ' ')
     .replace(/\n\s+/g, '\n')
     .trim();

@@ -71,7 +71,8 @@ export function client({ fetchImpl = fetch, log = console.log, sleep = (ms) => n
     const init = { method, headers, body: body === undefined ? undefined : JSON.stringify(body) };
     let res = await fetchImpl(url, init);
     if (res.status === 429) {
-      const wait = Math.min(Number(res.headers?.get?.('retry-after') ?? 5) || 5, 60);
+      const after = Number(res.headers?.get?.('retry-after') ?? 5);
+      const wait = Math.min(Number.isFinite(after) && after >= 0 ? after : 5, 60);
       await sleep(wait * 1000);
       res = await fetchImpl(url, init);
     }
@@ -89,6 +90,8 @@ export const gateway = (app, cloudId) => `https://api.atlassian.com/ex/${app}/${
 export async function cloudIdOf(call, site) {
   const r = await call('GET', `https://${site}/_edge/tenant_info`);
   if (!r.ok || !r.json?.cloudId) throw new Error(`cannot read cloudId from https://${site}/_edge/tenant_info (${r.status})`);
+  // It becomes a path segment of every gateway URL sent with the bot's token: no '/', '..', '?' or '#'.
+  if (typeof r.json.cloudId !== 'string' || !/^[A-Za-z0-9-]{1,64}$/.test(r.json.cloudId)) throw new Error(`unexpected cloudId from https://${site}/_edge/tenant_info`);
   return r.json.cloudId;
 }
 

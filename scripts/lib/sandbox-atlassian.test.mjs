@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { adfText, basic, checkBot, checkSite, client, DESCRIPTION, KEY, MARKER, noConnectionHint, parseSite, redact, setup } from './sandbox-atlassian.mjs';
+import { adfText, basic, checkBot, checkSite, client, cloudIdOf, DESCRIPTION, KEY, MARKER, noConnectionHint, parseSite, redact, setup } from './sandbox-atlassian.mjs';
 
 // Expected behaviour comes from docs/TEST-DATA-GENERATOR.md, 7.2 (CITEST, marker, bot) and 8.4–8.5 (guards, logs).
 
@@ -178,4 +178,39 @@ describe('noConnectionHint', () => {
     assert.match(noConnectionHint({}), /allow \*\.atlassian\.net and api\.atlassian\.com/);
     assert.match(noConnectionHint({ HTTPS_PROXY: 'http://proxy:8080', NODE_USE_ENV_PROXY: '1' }), /allow/);
   });
+});
+
+describe('SBX-429: one retry after Retry-After (8.4.5)', () => {
+  const throttled = (retryAfter) => {
+    const waits = [];
+    let n = 0;
+    const fetchImpl = async () => {
+      n++;
+      const status = n === 1 ? 429 : 200;
+      return { status, headers: { get: (h) => (h === 'retry-after' ? retryAfter : null) }, text: async () => '{}' };
+    };
+    const call = client({ fetchImpl, log: () => {}, sleep: async (ms) => { waits.push(ms); }, secrets: [] });
+    return { waits, call, count: () => n };
+  };
+  for (const [header, ms] of [['0', 0], ['2', 2000], [null, 5000], ['soon', 5000], ['-1', 5000], ['600', 60000]]) {
+    it(`Retry-After ${JSON.stringify(header)} waits ${ms} ms, then retries once`, async () => {
+      const t = throttled(header);
+      const r = await t.call('GET', 'https://api.atlassian.com/ex/jira/x/rest/api/3/myself');
+      assert.equal(r.status, 200);
+      assert.deepEqual(t.waits, [ms]);
+      assert.equal(t.count(), 2);
+    });
+  }
+});
+
+describe('SBX-CLOUD: cloudId becomes a URL path segment', () => {
+  const callWith = (cloudId) => async () => ({ status: 200, ok: true, json: { cloudId } });
+  it('accepts a plain id', async () => {
+    assert.equal(await cloudIdOf(callWith('cloud-1'), 'x.atlassian.net'), 'cloud-1');
+  });
+  for (const bad of ['../evil', 'a/b', 'a?x=1', 'a#b', 42]) {
+    it(`refuses ${JSON.stringify(bad)}`, async () => {
+      await assert.rejects(cloudIdOf(callWith(bad), 'x.atlassian.net'), /unexpected cloudId/);
+    });
+  }
 });

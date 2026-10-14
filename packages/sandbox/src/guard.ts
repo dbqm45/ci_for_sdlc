@@ -7,7 +7,7 @@ import { SCENARIOS, type Scenario } from './world/scenarios.js';
 /**
  * Coverage guard (docs/TEST-DATA-GENERATOR.md, 5.3), run by Vitest. Every check returns the list of problems, each
  * saying what to add or fix; an empty list means the world still covers the application. Checks 2 (kits) and 3
- * (OpenAPI endpoints) come with the kits in stage E3.
+ * (OpenAPI endpoints) are deferred to stage E4.
  */
 
 export interface RuleInfo {
