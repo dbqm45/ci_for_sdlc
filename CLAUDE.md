@@ -12,5 +12,7 @@
 
 ## Wersjonowanie
 
-Jedna wersja SemVer dla całej aplikacji, tag `vX.Y.Z` tworzy CI po merge'u PR `chore(release): X.Y.Z`. Szczegóły
-i lista publicznego API: [`docs/RELEASING.md`](docs/RELEASING.md). Numer liczy `npm run release`, nie ręcznie.
+Jedna wersja SemVer dla całej aplikacji. Podbija ją CI automatycznie po każdym merge'u do `main`: z commitów od
+ostatniego tagu (`feat`, `fix`, `perf`, zmiana niezgodna wstecz) liczy numer, commituje `chore(release): X.Y.Z`
+i tworzy tag `vX.Y.Z` z GitHub Release. Nie podbijaj wersji ręcznie w zwykłych PR. Szczegóły, ręczne nadpisanie
+(np. 1.0.0) i lista publicznego API: [`docs/RELEASING.md`](docs/RELEASING.md).

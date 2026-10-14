@@ -61,8 +61,8 @@ Decyduje **najpoważniejsza** zmiana od ostatniego tagu.
 | tylko dokumentacja, testy, CI, refaktoryzacja | bez wydania | bez wydania |
 
 Faza **0.y.z** oznacza, że publiczne API nie jest jeszcze stabilne (reguła 4 SemVer). **1.0.0** wydajemy świadomie, gdy
-aplikacja działa na produkcji albo ktoś na niej polega (`npm run release -- 1.0.0`). To decyzja człowieka, skrypt jej
-nie podejmie.
+aplikacja działa na produkcji albo ktoś na niej polega (ręczny PR, `npm run release -- 1.0.0`). To decyzja
+człowieka, CI jej nie podejmie.
 
 ### Publiczne API
 
@@ -79,26 +79,49 @@ układ modułów czy treść logów, się nie liczą.
 - **Obraz Dockera**: port `4317`, wolumen `/data`, użytkownik `node`, `HEALTHCHECK` na `/api/health`.
 - **CLI**: `npm run analyze` (flagi i kod wyjścia).
 
-## Jak wydać nową wersję
+## Jak podbijana jest wersja (automatycznie)
 
-1. Na świeżej gałęzi od `main` uruchom `npm run release -- --dry-run`. Skrypt pokaże, ile commitów jest od ostatniego
-   tagu, jakie podbicie z nich wynika i jak wygląda szkic wpisu w CHANGELOG.
-2. Jeśli wynik się zgadza, uruchom `npm run release`. Gdy commit został źle oznaczony, nadpisz wynik:
-   `npm run release -- minor` (lub `major` / `patch` / `X.Y.Z`). Skrypt:
-   - ustawia wersję we wszystkich `package.json` i w `package-lock.json` (`npm version --workspaces`);
-   - odświeża kontrakt API (`info.version`);
-   - dopisuje wpis na górze `CHANGELOG.md` z sekcjami *Niezgodne*, *Nowe* i *Poprawione*.
-3. Przejrzyj CHANGELOG. Przeredaguj wpisy dla użytkownika i w razie potrzeby dodaj sekcje *Zmienione*, *Wycofywane* lub
-   *Usunięte*. Opcjonalnie sprawdź plik:
+Wersję podbija CI, bez ręcznych kroków. Po każdym merge'u do `main` workflow `Release image`
+(`.github/workflows/release.yml`) robi kolejno:
+
+1. **Liczy wersję** (`npm run release -- --ci`): bierze commity od ostatniego tagu `vX.Y.Z` i stosuje tabele wyżej.
+   - Brak `feat`, `fix`, `perf` i zmian niezgodnych (np. same `docs`, `test`, `ci`, `chore`, `build`, `refactor`)
+     oznacza brak nowej wersji. Obraz Dockera i tak powstaje, z tagami `latest` i `sha-<commit>`.
+   - W przeciwnym razie skrypt ustawia nową wersję we wszystkich `package.json` i w `package-lock.json`, odświeża
+     kontrakt API (`info.version`) i dopisuje wpis na górze `CHANGELOG.md` (sekcje *Niezgodne*, *Nowe*, *Poprawione*
+     z tytułów commitów).
+2. **Commituje** te zmiany na `main` jako `github-actions[bot]` z komunikatem `chore(release): X.Y.Z`. Push tokenem
+   `GITHUB_TOKEN` nie uruchamia kolejnych workflow, więc commit wydania nie wywołuje następnego wydania.
+3. **Buduje i sprawdza obraz** z commitu wydania (test dymny kontenera) i publikuje go z tagami `latest`,
+   `sha-<commit>` i `X.Y.Z`.
+4. **Tworzy tag** `vX.Y.Z` z adnotacją na commicie wydania. Tag powstaje tylko wtedy, gdy obraz przeszedł test.
+5. **Tworzy GitHub Release** `vX.Y.Z` z treścią wpisu z CHANGELOG (`node scripts/release-notes.mjs X.Y.Z`) i nazwą
+   obrazu. Istniejący Release zostaje bez zmian. Brakujący (np. przebieg padł po utworzeniu tagu) dorobi kolejny
+   przebieg na `main` albo ręczne uruchomienie workflow (*Run workflow*).
+
+Przykład: na `main` od `v0.1.2` są `feat(core): …`, `test(core): …` i `docs: …`. Kolejny merge daje wersję `0.1.3`
+(w fazie 0.y.z nowa funkcja podbija PATCH), commit `chore(release): 0.1.3`, obraz `:0.1.3`, tag `v0.1.3` i Release.
+Następny merge typu `docs: …` nie daje nowej wersji.
+
+Kilka PR-ów zmergowanych szybko po sobie: przebiegi workflow czekają w kolejce (`concurrency: release`), więc nie
+policzą tej samej wersji dwa razy. Gdy w trakcie wydania na `main` trafi nowy commit, push commitu wydania zostanie
+odrzucony, a wszystkie zmiany wyda przebieg uruchomiony dla nowszego commitu.
+
+Wdrożenie, które nie jest wydaniem, rozpoznasz po tagu obrazu `sha-<commit>`. Numer wersji w `GET /api/health`
+wskazuje wtedy ostatnie wydanie.
+
+### Kiedy wydać ręcznie
+
+Ręczny PR jest potrzebny tylko wtedy, gdy wynik z commitów trzeba nadpisać: commit był źle oznaczony, chcesz
+przeredagować CHANGELOG albo wydajesz **1.0.0**.
+
+1. Na świeżej gałęzi od `main` uruchom `npm run release -- --dry-run`, a potem `npm run release -- minor`
+   (lub `major` / `patch` / `X.Y.Z`, np. `1.0.0`).
+2. Przejrzyj i przeredaguj `CHANGELOG.md`. Opcjonalnie sprawdź plik:
    `python3 .claude/skills/core-semver/scripts/semver.py check-changelog CHANGELOG.md`.
-4. Wykonaj commit `chore(release): X.Y.Z` i otwórz PR o tym samym tytule.
-5. Po merge'u workflow `Release image` (`.github/workflows/release.yml`) zauważa wersję bez tagu i:
-   - sprawdza, że `CHANGELOG.md` ma wpis `## [X.Y.Z]` (bez niego nic nie zostanie otagowane);
-   - buduje i sprawdza obraz, publikuje go z dodatkowym tagiem `X.Y.Z`;
-   - tworzy na tym commicie tag `vX.Y.Z` z adnotacją;
-   - tworzy GitHub Release `vX.Y.Z`: treścią jest wpis z CHANGELOG (`node scripts/release-notes.mjs X.Y.Z`)
-     i nazwa obrazu. Gdy Release już istnieje, zostaje bez zmian. Gdy go brakuje (np. przebieg padł po utworzeniu
-     tagu), dorobi go kolejny przebieg na `main` albo ręczne uruchomienie workflow (*Run workflow*).
+3. Wykonaj commit `chore(release): X.Y.Z` i otwórz PR o tym samym tytule.
+4. Po merge'u workflow zauważa w `package.json` wersję bez tagu i wydaje ją bez ponownego liczenia: sprawdza wpis
+   `## [X.Y.Z]` w `CHANGELOG.md` (bez niego nic nie zostanie otagowane), a dalej postępuje jak w krokach 3–5 wyżej.
 
 Zasady:
 
