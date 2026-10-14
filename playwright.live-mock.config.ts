@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { FIGMA_MOCK_API_BASE } from './e2e/live-mock/env';
+import { DUMMY_AI_API_KEY } from './packages/core/test/mocks/ai-mock';
 import { DUMMY_ATLASSIAN_TOKEN } from './packages/core/test/mocks/atlassian-mock';
 import { DUMMY_FIGMA_TOKEN } from './packages/core/test/mocks/figma-mock';
 
 // Live mode against local API mocks (docs/TEST-DATA-GENERATOR.md, 6.2): the real Jira, Confluence and Figma connectors
-// read the demo world from mocks on 127.0.0.1, with dummy tokens only — no secrets needed in CI.
+// read the demo world from mocks on 127.0.0.1 and the `custom` AI provider talks to a deterministic AI mock, with dummy
+// tokens and keys only — no secrets needed in CI.
 const PORT = Number(process.env.E2E_LIVE_MOCK_PORT ?? 4398);
 const baseURL = `http://127.0.0.1:${PORT}`;
 // Its own data directory, so this run never shares settings with the demo e2e run or .ci-data.
@@ -51,6 +53,8 @@ export default defineConfig({
         FIGMA_TOKEN: DUMMY_FIGMA_TOKEN,
         // Accepted only for loopback hosts (figmaApiBase); Jira and Confluence URLs come from the settings.
         CI_FIGMA_API_BASE: FIGMA_MOCK_API_BASE,
+        // The AI mock's base URL comes from the settings (ai.baseUrl), like any custom endpoint.
+        CUSTOM_AI_API_KEY: DUMMY_AI_API_KEY,
       },
     },
   ],

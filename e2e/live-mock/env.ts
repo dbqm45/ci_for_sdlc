@@ -2,5 +2,7 @@
 // dummy credentials they accept. Real tokens never belong here — the mocks reject anything else.
 export const ATLASSIAN_MOCK_PORT = Number(process.env.E2E_ATLASSIAN_MOCK_PORT ?? 4396);
 export const FIGMA_MOCK_PORT = Number(process.env.E2E_FIGMA_MOCK_PORT ?? 4397);
+export const AI_MOCK_PORT = Number(process.env.E2E_AI_MOCK_PORT ?? 4395);
+export const AI_MOCK_API_BASE = `http://127.0.0.1:${AI_MOCK_PORT}/v1`;
 export const ATLASSIAN_MOCK_URL = `http://127.0.0.1:${ATLASSIAN_MOCK_PORT}`;
 export const FIGMA_MOCK_API_BASE = `http://127.0.0.1:${FIGMA_MOCK_PORT}/v1`;
