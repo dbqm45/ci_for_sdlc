@@ -1,7 +1,8 @@
 # Generator danych testowych i środowisko sandbox — plan wdrożenia
 
 Status: **plan w trakcie wdrażania.** Z etapu E2 działają już atrapy Jira, Confluence i Figma, `CI_FIGMA_API_BASE`,
-testy kontraktowe konektorów i e2e `@live-mock` (sekcja 6.2); atrapa AI i scenariusze zmian (6.3) czekają. Dokument opisuje, jak zbudować jeden zestaw danych testowych,
+testy kontraktowe konektorów, atrapa dostawcy AI (7.5) i e2e `@live-mock` (sekcja 6.2); scenariusze zmian (6.3)
+czekają. Dokument opisuje, jak zbudować jeden zestaw danych testowych,
 który wypełnia prawdziwe źródła (Jira, Confluence, Figma, później Miro i kolejne), zasila testy automatyczne bez
 przeglądarki i rośnie razem z aplikacją.
 
@@ -218,6 +219,8 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
 - Atrapy serwują świat demo (`demoProject()`), więc oczekiwane wartości test liczy z tego świata, a nie z UI.
 - Tokeny to stałe, fikcyjne wartości z atrap (`dummy-atlassian-token`, `dummy-figma-token`). Atrapa odrzuca inne,
   więc test LM-03 sprawdza też, czy aplikacja wysyła nagłówek uwierzytelnienia i zgłasza odrzucenie.
+- Ten sam proces startuje atrapę AI (port 4395, sekcja 7.5). Test LM-04 ustawia dostawcę `custom` z `runOn:
+  on_demand`, uruchamia „AI review” na PAY-123 i sprawdza znalezisko z odznaką AI i cytatem z pierwszego źródła.
 - Testy oznaczone tagiem `@live-mock`. Zestaw trwa kilkanaście sekund, więc w PR (`ci.yml`) idzie cały.
 - **Istniejące testy demo zostają** (szybki smoke i zrzuty ekranu).
 
@@ -335,6 +338,14 @@ Ramki i połączenia przez REST: **[do sprawdzenia]**. Miro to dobry kandydat na
 
 - W testach automatycznych **atrapa dostawcy AI** zwraca deterministyczne odpowiedzi, więc CI nie potrzebuje klucza
   ani nie ponosi kosztów.
+  - **Wdrożone:** `packages/core/test/mocks/ai-mock.ts` — `POST /v1/chat/completions` zgodne z OpenAI, dla dostawcy
+    `custom` (`ai.baseUrl` wskazuje atrapę). Słucha tylko na `127.0.0.1` i przyjmuje wyłącznie
+    `Authorization: Bearer dummy-ai-key` (aplikacja bierze go z `CUSTOM_AI_API_KEY`); inny klucz dostaje `401`.
+  - Odpowiedź liczy `mockReview(prompt)`: jedno znalezisko (GAP) cytujące pierwsze źródło (zgłoszenie Jira) jego
+    pierwszą linią i jedno pytanie. Testy wyliczają oczekiwania z tej funkcji, a nie z UI.
+  - Test kontraktowy `packages/core/test/ai-contract.test.ts` (AC-01..04): prawdziwy analizator `custom` przez HTTP —
+    odpowiedź, wysłany prompt systemowy i schemat JSON, odrzucony klucz. e2e: LM-04 (sekcja 6.2).
+  - Atrapa nie ocenia jakości odpowiedzi modelu — sprawdza tylko kontrakt i ścieżkę od przycisku do znaleziska.
 - Do klikania lokalnie: istniejąca konfiguracja (Ollama za darmo albo klucz dostawcy wstrzykiwany z menedżera haseł).
 
 ### 7.6. GitHub Actions
