@@ -4,6 +4,13 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.3] - 2026-10-14
+
+### Nowe
+
+- **core:** allow loopback Figma API base for mocks (#33)
+- **core:** add backlog intake demo scenario (#32)
+
 ## [0.1.2] - 2026-10-11
 
 ### Nowe
