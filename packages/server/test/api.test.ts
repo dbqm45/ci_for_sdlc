@@ -79,3 +79,24 @@ describe('API', () => {
     expect(res.statusCode).toBe(202);
   });
 });
+
+describe('live updates (SSE)', () => {
+  it('SSE-01: /api/events answers at once, so the client knows it is subscribed before the first event', async () => {
+    // A fresh app with nothing running: any event written by an analysis would send the headers along with it.
+    const sseDir = mkdtempSync(join(tmpdir(), 'ci-test-sse-'));
+    const { app } = await buildApp({ dataDir: sseDir });
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const abort = new AbortController();
+    // Shorter than the 25 s keep-alive ping, which used to be the first thing the client received.
+    const timer = setTimeout(() => abort.abort(), 2_000);
+    try {
+      const res = await fetch(`${address}/api/events`, { signal: abort.signal });
+      expect(res.headers.get('content-type')).toBe('text/event-stream');
+    } finally {
+      clearTimeout(timer);
+      abort.abort();
+      await app.close();
+      rmSync(sseDir, { recursive: true, force: true });
+    }
+  });
+});

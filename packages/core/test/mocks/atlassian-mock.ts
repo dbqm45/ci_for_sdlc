@@ -8,6 +8,7 @@ import type { DocumentItem, IssueType, RequirementItem } from '../../src/index.j
  * email/API token pair and never forwards anything upstream.
  */
 export interface AtlassianMockOptions {
+  /** Read on every request, so getters over a mutable world serve its current state. */
   requirements: RequirementItem[];
   documents: DocumentItem[];
   /** The only credentials accepted (Basic auth); real tokens never belong in tests. */
@@ -85,14 +86,15 @@ export const storageBody = (body: string) => body.split('\n').map((line) => `<p>
 export async function startAtlassianMock(opts: AtlassianMockOptions): Promise<AtlassianMock> {
   const expectedAuth = `Basic ${Buffer.from(`${opts.email ?? DUMMY_ATLASSIAN_EMAIL}:${opts.apiToken ?? DUMMY_ATLASSIAN_TOKEN}`).toString('base64')}`;
   const pageSize = opts.pageSize ?? 100;
-  const byKey = new Map(opts.requirements.map((r) => [r.key, r]));
-  const spaces = [...new Set(opts.documents.map((d) => d.space))];
   const requests: string[] = [];
   let rateLimited = opts.rateLimitFirst ?? 0;
 
   const server: Server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const q = url.searchParams;
+    // Read the data on every request, so a sandbox scenario that changes it is visible at once.
+    const byKey = new Map(opts.requirements.map((r) => [r.key, r]));
+    const spaces = [...new Set(opts.documents.map((d) => d.space))];
     requests.push(`${url.pathname}${url.search}`);
     const send = (status: number, body: unknown, headers: Record<string, string> = {}) => {
       res.writeHead(status, { 'content-type': 'application/json', ...headers });

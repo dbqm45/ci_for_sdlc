@@ -2,16 +2,17 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
-import { FIGMA_MOCK_API_BASE } from './e2e/live-mock/env';
+import { APP_PORT, APP_URL, FIGMA_MOCK_API_BASE } from './e2e/live-mock/env';
 import { DUMMY_AI_API_KEY } from './packages/core/test/mocks/ai-mock';
 import { DUMMY_ATLASSIAN_TOKEN } from './packages/core/test/mocks/atlassian-mock';
 import { DUMMY_FIGMA_TOKEN } from './packages/core/test/mocks/figma-mock';
+import { DUMMY_WEBHOOK_SECRET } from './packages/core/test/mocks/sandbox-control';
 
 // Live mode against local API mocks (docs/TEST-DATA-GENERATOR.md, 6.2): the real Jira, Confluence and Figma connectors
 // read the demo world from mocks on 127.0.0.1 and the `custom` AI provider talks to a deterministic AI mock, with dummy
-// tokens and keys only — no secrets needed in CI.
-const PORT = Number(process.env.E2E_LIVE_MOCK_PORT ?? 4398);
-const baseURL = `http://127.0.0.1:${PORT}`;
+// tokens and keys only — no secrets needed in CI. Change scenarios reach the app by webhook from the sandbox control
+// endpoint (section 6.3), signed with a dummy webhook secret.
+const baseURL = APP_URL;
 // Its own data directory, so this run never shares settings with the demo e2e run or .ci-data.
 process.env.E2E_LIVE_MOCK_DATA_DIR ??= mkdtempSync(join(tmpdir(), 'ci-e2e-live-mock-'));
 
@@ -44,7 +45,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 180_000,
       env: {
-        PORT: String(PORT),
+        PORT: String(APP_PORT),
         HOST: '127.0.0.1',
         CI_DATA_DIR: process.env.E2E_LIVE_MOCK_DATA_DIR,
         LOG_LEVEL: 'silent',
@@ -55,6 +56,8 @@ export default defineConfig({
         CI_FIGMA_API_BASE: FIGMA_MOCK_API_BASE,
         // The AI mock's base URL comes from the settings (ai.baseUrl), like any custom endpoint.
         CUSTOM_AI_API_KEY: DUMMY_AI_API_KEY,
+        // Webhooks without this secret get 401, which LM-06 checks.
+        CI_WEBHOOK_SECRET: DUMMY_WEBHOOK_SECRET,
       },
     },
   ],
