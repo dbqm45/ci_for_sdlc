@@ -5,7 +5,7 @@
 //   node scripts/sandbox-atlassian.mjs check             # bot tokens: read-only check, prints cloudId and base URLs
 // Variables: ATLASSIAN_SITE, SANDBOX_ALLOWED_SITES; setup: ATLASSIAN_ADMIN_EMAIL, ATLASSIAN_ADMIN_TOKEN;
 // check: SANDBOX_BOT_EMAIL, JIRA_API_TOKEN, CONFLUENCE_API_TOKEN, SANDBOX_JIRA_WRITE_TOKEN, SANDBOX_CONFLUENCE_WRITE_TOKEN.
-import { BOT_TOKENS, checkBot, checkSite, client, cloudIdOf, gateway, parseSite, setup } from './lib/sandbox-atlassian.mjs';
+import { BOT_TOKENS, checkBot, checkSite, client, cloudIdOf, gateway, noConnectionHint, parseSite, setup } from './lib/sandbox-atlassian.mjs';
 
 const env = process.env;
 const [command, ...flags] = process.argv.slice(2);
@@ -56,5 +56,5 @@ try {
   }
 } catch (e) {
   const msg = String(e?.message ?? e).split('\n')[0];
-  fail([msg === 'fetch failed' ? `no connection to Atlassian — allow *.atlassian.net and api.atlassian.com in the network` : msg]);
+  fail([msg === 'fetch failed' ? noConnectionHint(env) : msg]);
 }

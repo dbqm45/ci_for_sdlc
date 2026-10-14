@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { adfText, basic, checkBot, checkSite, client, DESCRIPTION, KEY, MARKER, parseSite, redact, setup } from './sandbox-atlassian.mjs';
+import { adfText, basic, checkBot, checkSite, client, DESCRIPTION, KEY, MARKER, noConnectionHint, parseSite, redact, setup } from './sandbox-atlassian.mjs';
 
 // Expected behaviour comes from docs/TEST-DATA-GENERATOR.md, 7.2 (CITEST, marker, bot) and 8.4–8.5 (guards, logs).
 
@@ -166,5 +166,16 @@ describe('SBX-BOT: bot tokens (7.2, step 3; tokens)', () => {
     const f = fake({ ...good, [`GET ${conf}/wiki/api/v2/spaces?keys=${KEY}`]: [200, { results: [] }] });
     const r = await checkBot(f.call, { ...args, tokens: { CONFLUENCE_API_TOKEN: 't2xx' } });
     assert.match(r.problems[0], /does not see space/);
+  });
+});
+
+describe('noConnectionHint', () => {
+  it('points at NODE_USE_ENV_PROXY when a proxy is set but Node does not use it', () => {
+    assert.match(noConnectionHint({ HTTPS_PROXY: 'http://proxy:8080' }), /NODE_USE_ENV_PROXY=1/);
+    assert.match(noConnectionHint({ https_proxy: 'http://proxy:8080' }), /NODE_USE_ENV_PROXY=1/);
+  });
+  it('points at the network allow-list otherwise', () => {
+    assert.match(noConnectionHint({}), /allow \*\.atlassian\.net and api\.atlassian\.com/);
+    assert.match(noConnectionHint({ HTTPS_PROXY: 'http://proxy:8080', NODE_USE_ENV_PROXY: '1' }), /allow/);
   });
 });

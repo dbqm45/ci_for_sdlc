@@ -31,6 +31,15 @@ export function checkSite(env) {
   return [];
 }
 
+/** Message for a failed fetch. Node's built-in fetch ignores HTTPS_PROXY unless NODE_USE_ENV_PROXY=1 is set. */
+export function noConnectionHint(env) {
+  const proxy = env.HTTPS_PROXY || env.https_proxy;
+  if (proxy && env.NODE_USE_ENV_PROXY !== '1') {
+    return 'no connection to Atlassian — HTTPS_PROXY is set but Node ignores it; rerun with NODE_USE_ENV_PROXY=1';
+  }
+  return 'no connection to Atlassian — allow *.atlassian.net and api.atlassian.com in the network';
+}
+
 export const basic = (email, token) => `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`;
 
 /** Replaces every secret value in a text with ***. */
