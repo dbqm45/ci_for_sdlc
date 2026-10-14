@@ -17,3 +17,6 @@ reports/
 /fetch-env.sh
 /tmp
 .idea/
+
+# Sandbox state for the test data generator (IDs only)
+.sandbox/
