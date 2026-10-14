@@ -292,8 +292,9 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
    z prawdziwymi danymi. Plan Free obejmuje do 10 użytkowników; po przekroczeniu limitu Atlassian przechodzi na
    plan Standard **[do sprawdzenia: czy automatycznie i czy płatnie]**.
 2. Utwórz projekt Jira `CITEST` (szablon Scrum) i przestrzeń Confluence `CITEST`. Projekt możesz założyć ręcznie,
-   raz. Zakładanie projektu przez REST (`POST /rest/api/3/project`) wymaga globalnego uprawnienia „Administer Jira”,
-   więc seeder **tego nie robi**: zakłada tylko zgłoszenia w istniejącym projekcie.
+   raz, albo jednorazowo skryptem `sandbox:atlassian setup` (niżej) z tokenem administratora. Zakładanie projektu
+   przez REST (`POST /rest/api/3/project`) wymaga globalnego uprawnienia „Administer Jira”, więc seeder **tego nie
+   robi**: zakłada tylko zgłoszenia w istniejącym projekcie.
 3. Załóż **osobne konto bota** (decyzja z sekcji 11) z dostępem tylko do `CITEST`. Nie zakładaj nowej skrzynki
    pocztowej. Weź adres e-mail, którym logujesz się do Atlassian, i dopisz alias `+ci-sandbox-bot` przed `@`,
    np. `twoj.adres@gmail.com` → `twoj.adres+ci-sandbox-bot@gmail.com`. Poczta trafia do Twojej skrzynki, a Atlassian
@@ -309,12 +310,15 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
 
 - Atlassian ma **tokeny API z zakresami** (scoped). Zakresy wybiera się przy tworzeniu i potem nie da się ich
   zmienić. Ważność wynosi od 1 do 365 dni. Ustaw **90 dni** i wpisz datę do inwentarza (sekcja 8.2).
-- Potrzebne są dwa tokeny:
+- Token z zakresami obejmuje jedną aplikację, więc bot potrzebuje czterech tokenów, wszystkie utworzone
+  **jako bot**:
 
   | Token | Używa | Zakres (nazwy do potwierdzenia przy tworzeniu) |
   |---|---|---|
-  | `JIRA_API_TOKEN`, `CONFLUENCE_API_TOKEN` (odczyt) | aplikacja | Jira: `read:jira-work`, `read:jira-user`; Confluence: odczyt stron, przestrzeni i etykiet (np. `read:page:confluence`, `read:space:confluence`, `read:label:confluence`) |
-  | `SANDBOX_ATLASSIAN_WRITE_TOKEN` (zapis) | tylko seeder | Jira: `write:jira-work` (zgłoszenia, linki, linki zdalne) i odczyt; Confluence: zapis i usuwanie stron, zapis etykiet (np. `write:page:confluence`, `delete:page:confluence`, `write:label:confluence`) |
+  | `JIRA_API_TOKEN` (odczyt) | aplikacja | `read:jira-work`, `read:jira-user` |
+  | `CONFLUENCE_API_TOKEN` (odczyt) | aplikacja | odczyt stron, przestrzeni i etykiet (np. `read:page:confluence`, `read:space:confluence`, `read:label:confluence`) |
+  | `SANDBOX_JIRA_WRITE_TOKEN` (zapis) | tylko seeder | `read:jira-work`, `read:jira-user`, `write:jira-work` (zgłoszenia, linki, linki zdalne) |
+  | `SANDBOX_CONFLUENCE_WRITE_TOKEN` (zapis) | tylko seeder | odczyt jak wyżej oraz zapis i usuwanie stron, zapis etykiet (np. `write:page:confluence`, `delete:page:confluence`, `write:label:confluence`) |
 
 - Dokładne nazwy zakresów granularnych, zwłaszcza usuwania zgłoszeń i etykiet Confluence v2, są
   **[do sprawdzenia]** w formularzu tworzenia tokenu.
@@ -325,7 +329,17 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
   - `cloudId` odczytasz z `https://<witryna>.atlassian.net/_edge/tenant_info`.
   - Jeśli to się potwierdzi, trzeba dopisać to do `LOCAL-ENVIRONMENT.md`, rozdział 4.
 - Klasyczny token bez zakresów (ważny maksymalnie rok) jest dopuszczalny tylko jako wyjście awaryjne, bo daje pełne
-  uprawnienia konta.
+  uprawnienia konta. Wyjątek: jednorazowy **token administratora** (`ATLASSIAN_ADMIN_TOKEN`) z Twojego konta, ważny
+  1 dzień, tylko do `setup` poniżej. Po konfiguracji unieważnij go.
+
+**Skrypt konfiguracji i sprawdzenia** (`npm run sandbox:atlassian -- …`, kod w `scripts/sandbox-atlassian.mjs`).
+Tokeny czyta wyłącznie ze zmiennych środowiskowych, loguje tylko metodę, ścieżkę i status.
+
+| Polecenie | Zmienne | Co robi |
+|---|---|---|
+| `setup` | `ATLASSIAN_SITE`, `SANDBOX_ALLOWED_SITES`, `ATLASSIAN_ADMIN_EMAIL`, `ATLASSIAN_ADMIN_TOKEN` | pokazuje, co założy (projekt Jira i przestrzeń Confluence `CITEST` z markerem `[ci-sandbox]`); niczego nie zmienia |
+| `setup --confirm` | jak wyżej | zakłada brakujące; istniejącego `CITEST` bez markera nie dotyka i przerywa |
+| `check` | `ATLASSIAN_SITE`, `SANDBOX_ALLOWED_SITES`, `SANDBOX_BOT_EMAIL`, cztery tokeny bota | tylko odczyt przez bramę `api.atlassian.com`: każdy token działa, należy do bota, a nie do administratora, widzi `CITEST`; token zapisu Jira ma prawo tworzyć i usuwać zgłoszenia; wypisuje `cloudId` i adresy bazowe |
 
 ### 7.3. Figma
 
@@ -424,8 +438,10 @@ Prowadź tabelę w menedżerze haseł (nie w repozytorium). Każdy token ma wier
 
 | Nazwa | Właściciel | Źródło | Zakres | Utworzony | Wygasa | Gdzie używany |
 |---|---|---|---|---|---|---|
-| `JIRA_API_TOKEN` (sandbox, odczyt) | Ty | witryna sandbox | `read:jira-work`, `read:jira-user` | … | +90 dni | aplikacja lokalnie |
-| `SANDBOX_ATLASSIAN_WRITE_TOKEN` | Ty | witryna sandbox | zapis zgłoszeń, stron i etykiet | … | +90 dni | `sandbox:*` lokalnie |
+| `JIRA_API_TOKEN` (sandbox, odczyt) | bot | witryna sandbox | `read:jira-work`, `read:jira-user` | … | +90 dni | aplikacja lokalnie |
+| `CONFLUENCE_API_TOKEN` (sandbox, odczyt) | bot | witryna sandbox | odczyt stron, przestrzeni i etykiet | … | +90 dni | aplikacja lokalnie |
+| `SANDBOX_JIRA_WRITE_TOKEN` | bot | witryna sandbox | zapis zgłoszeń | … | +90 dni | `sandbox:*` lokalnie |
+| `SANDBOX_CONFLUENCE_WRITE_TOKEN` | bot | witryna sandbox | zapis stron i etykiet | … | +90 dni | `sandbox:*` lokalnie |
 | `FIGMA_TOKEN` (odczyt) | Ty | konto Figma | `file_content:read` | … | +90 dni | aplikacja lokalnie |
 | `SANDBOX_MIRO_TOKEN` (później) | Ty | zespół Miro sandbox | `boards:write` | … | … | `sandbox:*` |
 
