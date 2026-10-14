@@ -294,9 +294,16 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
 2. Utwórz projekt Jira `CITEST` (szablon Scrum) i przestrzeń Confluence `CITEST`. Projekt możesz założyć ręcznie,
    raz. Zakładanie projektu przez REST (`POST /rest/api/3/project`) wymaga globalnego uprawnienia „Administer Jira”,
    więc seeder **tego nie robi**: zakłada tylko zgłoszenia w istniejącym projekcie.
-3. Opcjonalnie drugie konto (np. `sandbox-bot@…`) albo konto usługi Atlassian, które ma dostęp tylko do `CITEST`.
-   Dostępność kont usług na planie Free: **[do sprawdzenia]**. Bez tego seeder używa Twojego konta, ale z osobnym
-   tokenem.
+3. Załóż **osobne konto bota** (decyzja z sekcji 11) z dostępem tylko do `CITEST`. Nie zakładaj nowej skrzynki
+   pocztowej. Weź adres e-mail, którym logujesz się do Atlassian, i dopisz alias `+ci-sandbox-bot` przed `@`,
+   np. `twoj.adres@gmail.com` → `twoj.adres+ci-sandbox-bot@gmail.com`. Poczta trafia do Twojej skrzynki, a Atlassian
+   traktuje ten adres jak osobne konto. Gmail, Google Workspace i Outlook obsługują takie aliasy.
+   - Zaproś ten adres z admin.atlassian.com i dokończ rejestrację przez **e-mail i hasło**, nie przez „Continue with
+     Google”. Logowanie przez Google zaloguje Cię na konto główne, nie na konto bota.
+   - Logowanie na konto bota rób w oknie prywatnym albo osobnym profilu przeglądarki, żeby nie mieszać sesji.
+   - Osobną skrzynkę (np. nowe konto Gmail) zakładaj tylko wtedy, gdy Twój dostawca poczty nie obsługuje aliasów
+     z `+` albo Atlassian odrzuci taki adres.
+   - Konto usługi Atlassian zamiast bota: dostępność na planie Free **[do sprawdzenia]**.
 
 **Tokeny:**
 
