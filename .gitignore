@@ -12,6 +12,7 @@ __pycache__/
 coverage/
 test-results/
 playwright-report/
+playwright-report-live-mock/
 .stryker-tmp/
 reports/
 /fetch-env.sh

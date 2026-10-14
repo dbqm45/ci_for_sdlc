@@ -54,6 +54,9 @@ npm run test:e2e
 
 Gdy Chromium jest już zainstalowany poza Playwrightem, wskaż go zmienną `PW_CHROMIUM_PATH`.
 
+`npm run test:e2e:live-mock` uruchamia aplikację w trybie Live na lokalnych atrapach Jira, Confluence i Figma
+(tylko `127.0.0.1`, fikcyjne tokeny, bez sekretów) — szczegóły w [`docs/TEST-DATA-GENERATOR.md`](docs/TEST-DATA-GENERATOR.md#62-e2e-w-trybie-live-na-atrapach-playwright).
+
 Każdy obszar aplikacji ma własny plik w `e2e/` (ścieżki podobne są zgrupowane razem), a ID przypadku jest w nazwie testu:
 
 | Plik | ID | Ścieżki użytkownika |
@@ -79,7 +82,7 @@ Jedna kopia testów, zestawy wybierane tagami. Pełny opis, procedura wzorców w
 | Zestaw | Kiedy | Polecenie |
 |---|---|---|
 | smoke (`@smoke`) | każdy push i PR (`ci.yml`) | `npm run test:e2e:smoke` |
-| PR | każdy push i PR (`ci.yml`) | typecheck, `npm run test:coverage` (z testem kontraktu API), `npm run test:e2e` (z `@a11y`) |
+| PR | każdy push i PR (`ci.yml`) | typecheck, `npm run test:coverage` (z testem kontraktu API), `npm run test:e2e` (z `@a11y`), `npm run test:e2e:live-mock` |
 | nocny | w poniedziałki 02:17 UTC i ręcznie (`regression-nightly.yml`) | e2e na Chromium, Firefox i WebKit ×2 bez tolerancji dla flaky, `npm run test:visual`, `npm run test:mutation` |
 
 Pozostałe polecenia: `npm run test:a11y`, `npm run test:contract` (`test:contract:update` akceptuje zmianę API).

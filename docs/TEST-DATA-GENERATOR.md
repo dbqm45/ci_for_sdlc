@@ -1,6 +1,7 @@
 # Generator danych testowych i środowisko sandbox — plan wdrożenia
 
-Status: **plan, nic nie jest jeszcze zaimplementowane.** Dokument opisuje, jak zbudować jeden zestaw danych testowych,
+Status: **plan w trakcie wdrażania.** Z etapu E2 działają już atrapy Jira, Confluence i Figma, `CI_FIGMA_API_BASE`,
+testy kontraktowe konektorów i e2e `@live-mock` (sekcja 6.2); atrapa AI i scenariusze zmian (6.3) czekają. Dokument opisuje, jak zbudować jeden zestaw danych testowych,
 który wypełnia prawdziwe źródła (Jira, Confluence, Figma, później Miro i kolejne), zasila testy automatyczne bez
 przeglądarki i rośnie razem z aplikacją.
 
@@ -209,11 +210,15 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
 
 ### 6.2. e2e w trybie Live na atrapach (Playwright)
 
-- `playwright.config.ts` dostaje drugi `webServer`: atrapy na `127.0.0.1`. Serwer aplikacji startuje z
-  konfiguracją Live wskazującą na te atrapy.
-- Tokeny w tym trybie to stałe, fikcyjne wartości (np. `dummy-jira-token`). Atrapa odrzuca inne, więc test sprawdza
-  także, czy aplikacja wysyła nagłówek uwierzytelnienia.
-- Testy oznaczone tagiem `@live-mock`. Smoke w PR, pełny zestaw w nocnej regresji.
+**Wdrożone:** `npm run test:e2e:live-mock` (`playwright.live-mock.config.ts`, testy w `e2e/live-mock/`).
+
+- Osobna konfiguracja z dwoma `webServer`: atrapy na `127.0.0.1` (`e2e/live-mock/start-mocks.mts`, porty 4396
+  i 4397) i serwer aplikacji na porcie 4398 z własnym katalogiem danych. Test przełącza ustawienia na tryb Live
+  i kieruje Jira i Confluence na atrapę; Figmę kieruje tam `CI_FIGMA_API_BASE`.
+- Atrapy serwują świat demo (`demoProject()`), więc oczekiwane wartości test liczy z tego świata, a nie z UI.
+- Tokeny to stałe, fikcyjne wartości z atrap (`dummy-atlassian-token`, `dummy-figma-token`). Atrapa odrzuca inne,
+  więc test LM-03 sprawdza też, czy aplikacja wysyła nagłówek uwierzytelnienia i zgłasza odrzucenie.
+- Testy oznaczone tagiem `@live-mock`. Zestaw trwa kilkanaście sekund, więc w PR (`ci.yml`) idzie cały.
 - **Istniejące testy demo zostają** (szybki smoke i zrzuty ekranu).
 
 ### 6.3. Scenariusze zmian w testach

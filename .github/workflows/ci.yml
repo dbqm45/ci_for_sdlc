@@ -34,9 +34,14 @@ jobs:
       # Full e2e on Chromium, including accessibility (@a11y). Cross-browser and visual run nightly.
       - name: E2E full
         run: npm run test:e2e
+      # Live mode: the real connectors against local Jira, Confluence and Figma mocks, with dummy tokens only.
+      - name: E2E live on API mocks
+        run: npm run test:e2e:live-mock
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            playwright-report/
+            playwright-report-live-mock/
           retention-days: 7
