@@ -151,6 +151,7 @@ Wszystko poza sekretami ustawiasz w UI (*Settings*). Sekrety — zmienne środow
 | `CI_ADMIN_TOKEN` | token administratora; gdy ustawiony, każda zmiana przez API wymaga `Authorization: Bearer <token>` (UI zapyta o niego raz na sesję). Bez tokenu zmiany przyjmowane są tylko z tej samej maszyny (loopback) |
 | `CI_ALLOWED_HOSTS` | dodatkowe wartości nagłówka `Host` (po przecinku, np. `ci.firma.local:4317`), gdy serwer jest dostępny pod inną nazwą niż `localhost` — ochrona przed DNS rebinding |
 | `CI_ALLOWED_ORIGINS` | dodatkowe originy przeglądarki, które mogą zmieniać dane (po przecinku, np. `https://ci.firma.pl`) — ochrona przed CSRF |
+| `CI_FIGMA_API_BASE` | adres atrapy API Figmy dla testów (np. `http://127.0.0.1:4010/v1`); przyjmowany tylko host lokalny (`localhost`, `127.0.0.1`, `::1`), inny adres zatrzymuje pobieranie z Figmy, zanim token opuści maszynę |
 | `CI_DATA_DIR`, `PORT`, `HOST` | katalog danych (domyślnie `.ci-data/`), port (4317), host (127.0.0.1) |
 
 Tryb live: *Settings → Workspace → Mode: Live*, włącz integracje, podaj URL-e / klucze projektu / spaces / file keys, *Test connections*, *Save & re-analyze*.
