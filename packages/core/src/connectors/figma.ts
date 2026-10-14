@@ -12,6 +12,8 @@ export interface FigmaConfig {
   fileKeys: string[];
   /** Max text layers kept per frame (data minimization). */
   maxTextsPerFrame?: number;
+  /** Override of the Figma API base URL for local mocks and tests; only loopback hosts are accepted. */
+  apiBase?: string;
 }
 
 interface FigmaNode {
@@ -35,6 +37,7 @@ interface CacheEntry {
 }
 
 const API = 'https://api.figma.com/v1';
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 30_000;
@@ -173,15 +176,31 @@ function frameNodes(doc: FigmaNode): FigmaNode[] {
   return out;
 }
 
+/** Resolves the API base; an override may only point at loopback so the token never leaves the machine except to Figma. */
+export function figmaApiBase(raw?: string): string {
+  if (raw === undefined || raw.trim() === '') return API;
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    throw new Error('Figma API base override is not a valid URL');
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Figma API base override must use http or https');
+  if (!LOOPBACK_HOSTS.has(url.hostname)) throw new Error('Figma API base override must point at a loopback host (localhost, 127.0.0.1, ::1)');
+  if (url.username || url.password || url.search || url.hash) throw new Error('Figma API base override must not contain credentials, query or fragment');
+  return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+}
+
 export async function fetchFigma(cfg: FigmaConfig): Promise<DesignFrame[]> {
+  const api = figmaApiBase(cfg.apiBase);
   const frames: DesignFrame[] = [];
   for (const key of cfg.fileKeys) {
-    const componentUrl = `${API}/files/${encodeURIComponent(key)}/components`;
+    const componentUrl = `${api}/files/${encodeURIComponent(key)}/components`;
     const componentResponse = await getJson(componentUrl, cfg.token, key);
     if (!isRecord(componentResponse.body) || !isRecord(componentResponse.body.meta)) throw new Error(`Figma file ${key} → unexpected component metadata`);
     const componentIds = new Set(records(componentResponse.body.meta.components).flatMap((component) => str(component.node_id) ?? []));
 
-    const fileUrl = `${API}/files/${encodeURIComponent(key)}?depth=3`;
+    const fileUrl = `${api}/files/${encodeURIComponent(key)}?depth=3`;
     const fileResponse = await getJson(fileUrl, cfg.token, key);
     const file: unknown = fileResponse.body;
     if (!isRecord(file) || !isRecord(file.document)) throw new Error(`Figma file ${key} → unexpected response`);

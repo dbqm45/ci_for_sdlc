@@ -417,9 +417,9 @@ Nadpisanie adresu API to potencjalna droga wycieku: gdyby dało się je ustawić
 na swój serwer i odebrać prawdziwy token. Dlatego:
 
 - Adres Figmy będzie nadpisywalny **wyłącznie zmienną środowiskową**, np. `CI_FIGMA_API_BASE`, a nie polem
-  w ustawieniach. Serwer przyjmuje ją tylko, gdy
-  - wskazuje na `127.0.0.1`/`localhost`, albo
-  - jest jawnie dozwolona przez `CI_ALLOWED_HOSTS`.
+  w ustawieniach. Serwer przyjmuje ją tylko, gdy wskazuje na host lokalny (`localhost`, `127.0.0.1`, `::1`),
+  bez danych logowania, zapytania i fragmentu. `CI_ALLOWED_HOSTS` nie rozszerza tej listy, bo dotyczy nagłówka
+  `Host` przychodzących żądań, a nie adresów wychodzących (wdrożone w `figmaApiBase`).
 - Adresy Jira i Confluence już dziś są w konfiguracji. Seeder i testy nie zmieniają tej logiki, ale przegląd
   bezpieczeństwa etapu E2 sprawdza, że walidacja hostów obejmuje adresy atrap.
 - Atrapy:

@@ -61,7 +61,7 @@ export class Engine extends EventEmitter {
     const tasks: Promise<void>[] = [];
     if (jira.enabled) tasks.push(fetchJira({ ...jira, apiToken: jiraToken }).then((r) => void (ctx.requirements = r)));
     if (confluence.enabled) tasks.push(fetchConfluence({ ...confluence, apiToken: confluenceToken }).then((d) => void (ctx.documents = d)));
-    if (figma.enabled) tasks.push(fetchFigma({ token: figmaToken, fileKeys: figma.fileKeys }).then((f) => void (ctx.frames = f)));
+    if (figma.enabled) tasks.push(fetchFigma({ token: figmaToken, fileKeys: figma.fileKeys, apiBase: process.env.CI_FIGMA_API_BASE }).then((f) => void (ctx.frames = f)));
     await Promise.all(tasks);
     return ctx;
   }

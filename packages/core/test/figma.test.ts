@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchFigma, framesFromDocument, FigmaRateLimitError } from '../src/index.js';
+import { fetchFigma, figmaApiBase, framesFromDocument, FigmaRateLimitError } from '../src/index.js';
 import { clearFigmaCache } from '../src/connectors/figma.js';
 
 /** Fake for the network port: answers each request with the next queued response and records the URL and token. */
@@ -183,6 +183,39 @@ describe('fetchFigma', () => {
     const rejection = expect(pending).rejects.toMatchObject({ endpoint: '/v1/files/RL/components' });
     await vi.advanceTimersByTimeAsync(15_000);
     await rejection;
+  });
+});
+
+describe('figmaApiBase', () => {
+  it('FG-15: sends requests to a loopback mock when an API base override is given', async () => {
+    const calls = fakeFetch(componentMetadata(), json(page([{ id: '1:1', name: 'Pay', type: 'FRAME' }])));
+    await fetchFigma({ token: 'figd_x', fileKeys: ['AB1'], apiBase: 'http://127.0.0.1:4010/v1/' });
+    expect(calls.map((c) => c.url)).toEqual(['http://127.0.0.1:4010/v1/files/AB1/components', 'http://127.0.0.1:4010/v1/files/AB1?depth=3']);
+  });
+
+  it.each([
+    { id: 'FG-16', raw: undefined, expected: 'https://api.figma.com/v1' },
+    { id: 'FG-16', raw: '  ', expected: 'https://api.figma.com/v1' },
+    { id: 'FG-17', raw: 'http://localhost:4010', expected: 'http://localhost:4010' },
+    { id: 'FG-17', raw: 'https://[::1]:8443/figma/v1//', expected: 'https://[::1]:8443/figma/v1' },
+  ])('$id: resolves $raw to $expected', ({ raw, expected }) => {
+    expect(figmaApiBase(raw)).toBe(expected);
+  });
+
+  it.each([
+    { id: 'FG-18', raw: 'https://evil.example/v1', message: /loopback/ },
+    { id: 'FG-18', raw: 'http://127.0.0.1.evil.example/v1', message: /loopback/ },
+    { id: 'FG-19', raw: 'ftp://127.0.0.1/v1', message: /http or https/ },
+    { id: 'FG-19', raw: 'not a url', message: /valid URL/ },
+    { id: 'FG-19', raw: 'http://user:pw@localhost/v1', message: /credentials/ },
+  ])('$id: rejects $raw', ({ raw, message }) => {
+    expect(() => figmaApiBase(raw)).toThrow(message);
+  });
+
+  it('FG-18: a non-loopback override fails before any request, so the token is never sent', async () => {
+    const calls = fakeFetch(componentMetadata());
+    await expect(fetchFigma({ token: 'figd_x', fileKeys: ['AB1'], apiBase: 'https://evil.example/v1' })).rejects.toThrow(/loopback/);
+    expect(calls).toEqual([]);
   });
 });
 
