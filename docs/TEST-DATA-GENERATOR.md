@@ -3,7 +3,7 @@
 Status: **plan w trakcie wdrażania.** Z etapu E2 działają już atrapy Jira, Confluence i Figma, `CI_FIGMA_API_BASE`,
 testy kontraktowe konektorów, atrapa dostawcy AI (7.5), e2e `@live-mock` (sekcja 6.2) i scenariusze zmian z webhookami
 (6.3) — etap E2 jest zakończony. Z etapu E1 działają świat „Checkout”, opis scenariuszy i strażnik pokrycia
-(sprawdzenia 1 i 4 z 5.3). W etapie E0 zapadły decyzje (sekcja 11) i działa sandbox Atlassian; czeka Figma. Dokument opisuje, jak zbudować jeden zestaw danych testowych,
+(sprawdzenia 1 i 4 z 5.3). W etapie E0 zapadły decyzje (sekcja 11) i działają sandboxy Atlassian i Figma — etap E0 jest zakończony. Dokument opisuje, jak zbudować jeden zestaw danych testowych,
 który wypełnia prawdziwe źródła (Jira, Confluence, Figma, później Miro i kolejne), zasila testy automatyczne bez
 przeglądarki i rośnie razem z aplikacją.
 
@@ -359,12 +359,22 @@ Tokeny czyta wyłącznie ze zmiennych środowiskowych, loguje tylko metodę, śc
 
 ### 7.3. Figma
 
+**Sprawdzone w E0 (14.10.2026):**
+
+- Plik sandboxa leży w Drafts na koncie Starter i ma jedną stronę. Jego klucz trzymasz w inwentarzu (8.2), nie w repo.
+- `GET /v1/files/<klucz>?depth=1` z nagłówkiem `X-Figma-Token` zwraca `200`.
+- Ten sam token dostaje `403` na `GET /v1/files/<klucz>/comments`, więc ma tylko zakres `file_content:read`.
+- Nieznany klucz pliku daje `404`.
+- W sesji Claude Code w chmurze trzeba dopuścić `api.figma.com` w ustawieniach sieci środowiska.
+  `FIGMA_TOKEN` jest zmienną środowiskową; zmiany działają dopiero w nowej sesji.
+
 **Konto:** wystarczy Starter. Limity planu **[do sprawdzenia, źródła są niespójne]**:
 
 - w przestrzeni zespołu: 3 pliki Design, 3 strony na plik, jeden projekt;
 - w Drafts: bez limitu.
 
-Sandbox potrzebuje **jednego pliku z jedną lub dwiema stronami**, więc limit wystarczy.
+Sandbox potrzebuje **jednego pliku z jedną lub dwiema stronami**, więc limit wystarczy. Plik sandboxa leży w Drafts,
+więc limit przestrzeni zespołu go nie dotyczy.
 
 **Odczyt (aplikacja):**
 
@@ -383,8 +393,9 @@ Sandbox potrzebuje **jednego pliku z jedną lub dwiema stronami**, więc limit w
 - Wtyczka nie potrzebuje żadnego tokenu: działa w Twojej sesji Figmy.
 - Po utworzeniu ramek wtyczka wypisuje mapę `logiczne ID → node-id`, którą wklejasz do `sandbox:seed --figma-map`
   albo seeder pobiera ją przez REST (odczyt) i dopasowuje po nazwach ramek.
-- Wymagania planu dla wtyczek deweloperskich: **[do sprawdzenia]**. Wtyczki deweloperskie zwykle działają na każdym
-  planie w aplikacji desktopowej.
+- Wymagania planu dla wtyczek deweloperskich: według help.figma.com („Plugins: Before you start”, 10.2026)
+  wtyczki można tworzyć na każdym planie. Import z `manifest.json` działa tylko w aplikacji desktopowej (Mac,
+  Windows); przeglądarka nie ma menu Development. Potwierdzimy to w praktyce w E4.
 
 ### 7.4. Miro (gdy zostanie źródłem)
 
@@ -611,8 +622,10 @@ Kolejność E1 → E2 daje wartość od razu (lepsze testy w CI), zanim jakikolw
 z markerem (`setup --confirm`), konto bota z dostępem tylko do `CITEST`, cztery tokeny bota w menedżerze haseł;
 `check` przechodzi dla wszystkich tokenów.
 
-**Pozostało w E0 (Twoja praca):** plik Figmy sandboxa i `FIGMA_TOKEN` wg 8.2; unieważnienie tokenu administratora
-po `setup`. Tokeny tylko w menedżerze haseł i zmiennych środowiskowych, nigdy w pliku w repozytorium.
+**Zrobione w E0 (Figma, 14.10.2026):** plik sandboxa w Drafts i `FIGMA_TOKEN` tylko do odczytu w menedżerze
+haseł; odczyt pliku przez REST działa (7.3). Token administratora Atlassian po `setup` jest unieważniony.
+Etap E0 jest zakończony. Tokeny trzymasz tylko w menedżerze haseł i zmiennych środowiskowych, nigdy w pliku
+w repozytorium.
 
 **Fakty do potwierdzenia na stronach dostawców przed E3 i E4:**
 
@@ -621,8 +634,8 @@ po `setup`. Tokeny tylko w menedżerze haseł i zmiennych środowiskowych, nigdy
 | Czy token Atlassian z zakresami wymaga adresu `api.atlassian.com/ex/{jira,confluence}/{cloudId}` | support.atlassian.com → Manage API tokens for your Atlassian account |
 | Dokładne nazwy zakresów: usuwanie zgłoszeń, linki zdalne, strony i etykiety Confluence v2 | formularz „Create API token with scopes” i developer.atlassian.com → Scopes |
 | Konta usług na planie Free i zachowanie po przekroczeniu 10 użytkowników | support.atlassian.com → Free plan, Service accounts |
-| REST API Figmy: brak tworzenia węzłów; wtyczki deweloperskie na Starter | developers.figma.com → REST API, Plugin API |
-| Limity Figma Starter (pliki i strony) i limity zapisu przez MCP | help.figma.com → Starter plan; developers.figma.com → MCP server |
+| REST API Figmy: brak tworzenia węzłów (wtyczki na Starter — potwierdzone, 7.3) | developers.figma.com → REST API, Plugin API |
+| Limity zapisu przez Figma MCP (limit plików Starter nie dotyczy pliku w Drafts) | help.figma.com → Starter plan; developers.figma.com → MCP server |
 | Miro: ramki i połączenia przez REST v2, limit tablic na Free | developers.miro.com → REST API reference; help.miro.com |
 | Środowiska i wymagani recenzenci w GitHub Actions dla planu i widoczności tego repozytorium | docs.github.com → Managing environments for deployment |
 
