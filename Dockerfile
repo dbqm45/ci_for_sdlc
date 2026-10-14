@@ -11,6 +11,7 @@ COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
 COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
+COPY packages/sandbox/package.json packages/sandbox/
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.base.json ./
 COPY scripts scripts
@@ -28,6 +29,7 @@ COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/
 COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
+COPY packages/sandbox/package.json packages/sandbox/
 RUN npm ci --omit=dev --no-audit --no-fund -w @ci/server -w @ci/core --include-workspace-root=false \
  && npm cache clean --force
 COPY packages/core/src packages/core/src
