@@ -12,6 +12,8 @@ export interface FigmaMockOptions {
   token?: string;
   /** Number of initial requests answered with 429 (Retry-After: 0) before serving data. */
   rateLimitFirst?: number;
+  /** Fixed port (e2e web servers need a known URL); 0 or unset picks a free one. */
+  port?: number;
 }
 
 export interface FigmaMock {
@@ -82,7 +84,7 @@ export async function startFigmaMock(opts: FigmaMockOptions): Promise<FigmaMock>
 
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(opts.port ?? 0, '127.0.0.1', resolve);
   });
   const { port } = server.address() as AddressInfo;
   return {

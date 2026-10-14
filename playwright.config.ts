@@ -24,7 +24,8 @@ for (const b of browsers) if (!(b in BROWSERS)) throw new Error(`Unknown browser
 export default defineConfig({
   testDir: 'e2e',
   // Screenshots are compared only by playwright.visual.config.ts, in the pinned Playwright Docker image.
-  testIgnore: ['visual.spec.ts'],
+  // Live mode on API mocks has its own servers: playwright.live-mock.config.ts.
+  testIgnore: ['visual.spec.ts', 'live-mock/**'],
   // Quarantined tests (README → Testy regresji) stay out of the PR gate; the nightly run includes them.
   grepInvert: process.env.E2E_INCLUDE_QUARANTINE ? undefined : /@quarantine/,
   // The server keeps one shared workspace (approvals, demo changes), so tests run one at a time.

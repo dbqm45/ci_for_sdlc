@@ -17,6 +17,8 @@ export interface AtlassianMockOptions {
   pageSize?: number;
   /** Number of initial requests answered with 429 (Retry-After: 0) before serving data. */
   rateLimitFirst?: number;
+  /** Fixed port (e2e web servers need a known URL); 0 or unset picks a free one. */
+  port?: number;
 }
 
 export interface AtlassianMock {
@@ -151,7 +153,7 @@ export async function startAtlassianMock(opts: AtlassianMockOptions): Promise<At
 
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
+    server.listen(opts.port ?? 0, '127.0.0.1', resolve);
   });
   const { port } = server.address() as AddressInfo;
   return {
