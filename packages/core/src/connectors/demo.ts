@@ -389,6 +389,41 @@ export const DEMO_SCENARIOS: { id: string; title: string; description: string; a
     },
   },
   {
+    id: 'backlog-intake',
+    title: 'Jira: new backlog items arrive',
+    description: 'Product adds a gift wrapping epic with draft stories and QA files a well-formed bug, before refinement.',
+    apply: (ctx) => {
+      const now = new Date().toISOString();
+      ctx.requirements.push(
+        issue({ key: 'GFT-400', type: 'epic', title: 'Gift Wrapping', components: ['Gifts'], description: 'Goal: offer gift wrapping at checkout so that gift orders grow by 10%.', updatedAt: now }),
+        issue({ key: 'GFT-401', type: 'story', title: 'Choose wrapping paper', epicKey: 'GFT-400', components: ['Gifts'], description: 'Wrapping paper picker on the gift step.', updatedAt: now }),
+        issue({
+          key: 'GFT-402',
+          type: 'story',
+          title: 'Print gift message',
+          epicKey: 'GFT-400',
+          components: ['Gifts'],
+          description: 'As a buyer I want to add a gift message so that the recipient knows who sent the gift. If the printer is offline the user can try again.',
+          acceptanceCriteria: ['The message preview appears quickly.', 'The message is printed on the gift card.'],
+          updatedAt: now,
+        }),
+        issue({ key: 'GFT-410', type: 'epic', title: 'Gift Registry', components: ['Gifts'], description: 'Goal: let customers share a wish list so that registry orders reach 5% of gift orders.', updatedAt: now }),
+        issue({
+          key: 'GFT-420',
+          type: 'bug',
+          title: 'Gift message cut after 100 characters',
+          components: ['Gifts'],
+          description: 'Long gift messages are truncated on the printed card.',
+          links: [{ key: 'GFT-402', type: 'relates to' }],
+          acceptanceCriteria: ['Regression test: a 250 character message is printed in full.'],
+          bug: { stepsToReproduce: 'Add a 150 character gift message and place the order.', expected: 'The full message is printed.', actual: 'Only the first 100 characters are printed.', environment: 'Production, web checkout' },
+          updatedAt: now,
+        }),
+        issue({ key: 'GFT-421', type: 'bug', title: 'Wrapping fee shown twice', components: ['Gifts'], description: 'The order summary lists the wrapping fee twice.', updatedAt: now }),
+      );
+    },
+  },
+  {
     id: 'api-idempotency',
     title: 'Confluence: Payments API becomes idempotent',
     description: 'The API reference is updated: POST /payments requires an Idempotency-Key header.',

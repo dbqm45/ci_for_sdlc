@@ -12,8 +12,8 @@ const NOW = new Date('2026-10-05T10:00:00Z');
 // Known gaps in demo data (test-data generator plan, stage E1). The test for each one is
 // expected to fail; once data covers the case it passes, the test turns red and the entry goes.
 const KNOWN_GAPS = {
-  fires: ['REQ-001', 'REQ-002', 'REQ-003', 'REQ-004', 'DOC-001', 'BUG-002', 'EPIC-002'],
-  silent: ['BUG-001', 'BUG-003'],
+  fires: [] as string[],
+  silent: [] as string[],
 };
 
 async function observe() {
