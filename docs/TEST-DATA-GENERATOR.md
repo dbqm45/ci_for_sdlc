@@ -3,7 +3,7 @@
 Status: **plan w trakcie wdrażania.** Z etapu E2 działają już atrapy Jira, Confluence i Figma, `CI_FIGMA_API_BASE`,
 testy kontraktowe konektorów, atrapa dostawcy AI (7.5), e2e `@live-mock` (sekcja 6.2) i scenariusze zmian z webhookami
 (6.3) — etap E2 jest zakończony. Z etapu E1 działają świat „Checkout”, opis scenariuszy i strażnik pokrycia
-(sprawdzenia 1 i 4 z 5.3). Dokument opisuje, jak zbudować jeden zestaw danych testowych,
+(sprawdzenia 1 i 4 z 5.3). W etapie E0 zapadły decyzje (sekcja 11); czekają konta i tokeny. Dokument opisuje, jak zbudować jeden zestaw danych testowych,
 który wypełnia prawdziwe źródła (Jira, Confluence, Figma, później Miro i kolejne), zasila testy automatyczne bez
 przeglądarki i rośnie razem z aplikacją.
 
@@ -23,7 +23,7 @@ Dlatego część z nich ma oznaczenie **[do sprawdzenia]**: przed etapem E3 potw
 8. [Bezpieczeństwo tokenów i danych dostępowych](#8-bezpieczeństwo-tokenów-i-danych-dostępowych)
 9. [Etapy wdrożenia](#9-etapy-wdrożenia)
 10. [Jak dodać nowe źródło albo funkcję](#10-jak-dodać-nowe-źródło-albo-funkcję)
-11. [Decyzje otwarte i fakty do sprawdzenia](#11-decyzje-otwarte-i-fakty-do-sprawdzenia)
+11. [Decyzje i fakty do sprawdzenia](#11-decyzje-i-fakty-do-sprawdzenia)
 12. [Ryzyka](#12-ryzyka)
 
 ## 1. W skrócie
@@ -517,7 +517,7 @@ Każdy etap to osobny PR do `main` (Conventional Commits).
 
 | Etap | Zakres | Rezultat | Szacunek |
 |---|---|---|---|
-| **E0. Decyzje** | sekcja 11; założenie witryny sandbox, projektu i przestrzeni `CITEST`, pliku Figmy; tokeny w menedżerze haseł | konta gotowe, inwentarz uzupełniony | 1–2 h Twojej pracy |
+| **E0. Decyzje** | sekcja 11 (decyzje podjęte 14.10.2026); założenie witryny sandbox, projektu i przestrzeni `CITEST`, pliku Figmy; tokeny w menedżerze haseł | konta gotowe, inwentarz uzupełniony | 1–2 h Twojej pracy |
 | **E1. Świat i strażnik** | `packages/sandbox` z typami, światem „Checkout” (z `demo.ts`), scenariuszami, `expectations.ts`, `guard.ts`; `.sandbox/` w `.gitignore` | test strażnika pokazuje braki pokrycia reguł; zero wpływu na aplikację | `test(sandbox): …` / `feat(sandbox): …` |
 | **E2. Atrapy i testy** | atrapy Jira, Confluence i Figma (`node:http`); `CI_FIGMA_API_BASE` z walidacją; testy kontraktowe konektorów; e2e `@live-mock` w Playwright; atrapa AI | CI testuje prawdziwe konektory i tryb Live bez sekretów | `feat(core): …` dla zmiennej Figma, `test(e2e): …` |
 | **E3. Seeder Atlassian** | kity Jira i Confluence: `seed`, `mutate`, `teardown`, `status`; bezpieczniki z 8.4; maskowanie logów | `sandbox:seed` wypełnia witrynę, `sandbox:reset` ją czyści | wymaga E0; przegląd bezpieczeństwa przed merge |
@@ -555,15 +555,22 @@ Kolejność E1 → E2 daje wartość od razu (lepsze testy w CI), zanim jakikolw
   - porównuje atrapy z odpowiedziami prawdziwego sandboxu;
   - przypomina o tokenach wygasających w ciągu 14 dni.
 
-## 11. Decyzje otwarte i fakty do sprawdzenia
+## 11. Decyzje i fakty do sprawdzenia
 
-**Decyzje (Twoje):**
+**Decyzje (podjęte 14.10.2026, wybrano opcje zalecane):**
 
-1. Nazwa witryny sandbox i czy zakładasz osobne konto bota (zalecane) czy używasz własnego z osobnymi tokenami.
-2. Figma: wtyczka (zalecane) czy MCP jako domyślna droga.
-3. Czy chcesz nocny job live w GitHubie (zależy od planu i widoczności repozytorium), czy wystarczy lokalny
-   `test:e2e:live`.
-4. Czy Miro wchodzi przed innymi nowymi źródłami z `ROADMAP.md`.
+1. **Osobne konto bota** (np. `sandbox-bot@…` albo konto usługi Atlassian, jeśli plan Free na nie pozwala) z dostępem
+   tylko do `CITEST`. Nazwę witryny sandbox wybierasz przy jej zakładaniu w E0 i wpisujesz do inwentarza (8.2).
+2. **Figma: wtyczka deweloperska z repo** (7.3, opcja A) jako domyślna droga; MCP tylko jako alternatywa ręczna.
+3. **Bez nocnego joba live w GitHubie.** Test live (`test:e2e:live`) i seed uruchamiasz lokalnie, CI działa
+   wyłącznie na atrapach (7.6). Do decyzji wracamy, jeśli zmieni się plan lub widoczność repozytorium.
+4. **Miro nie wyprzedza innych źródeł.** Kolejność nowych źródeł wyznacza `ROADMAP.md` (każde źródło musi odpowiadać
+   na konkretne pytanie); Miro wchodzi wtedy, gdy roadmapa je wskaże. Plan nie zawierał tu wyraźnej rekomendacji,
+   więc to wariant domyślny, do zmiany osobnym PR.
+
+**Pozostało w E0 (Twoja praca):** witryna Atlassian Cloud Free tylko na sandbox, projekt Jira i przestrzeń
+Confluence `CITEST`, konto bota, plik Figmy sandboxa, tokeny wg 8.2 (osobne do odczytu i do zapisu, z datą
+wygaśnięcia) przechowywane wyłącznie w menedżerze haseł, nigdy w pliku w repozytorium.
 
 **Fakty do potwierdzenia na stronach dostawców przed E3 i E4:**
 
