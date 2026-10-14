@@ -7,6 +7,7 @@ import type { DesignFrame } from '../../src/index.js';
  * DesignFrames. Listens on 127.0.0.1 only, accepts a single dummy token and never forwards anything upstream.
  */
 export interface FigmaMockOptions {
+  /** Read on every request, so a getter over a mutable world serves its current state. */
   frames: DesignFrame[];
   /** The only token accepted; real tokens never belong in tests. */
   token?: string;
@@ -56,8 +57,6 @@ export function figmaFile(frames: DesignFrame[]): unknown {
 
 export async function startFigmaMock(opts: FigmaMockOptions): Promise<FigmaMock> {
   const token = opts.token ?? DUMMY_FIGMA_TOKEN;
-  const files = new Map<string, DesignFrame[]>();
-  for (const f of opts.frames) files.set(f.fileKey, [...(files.get(f.fileKey) ?? []), f]);
   const requests: string[] = [];
   let rateLimited = opts.rateLimitFirst ?? 0;
 
@@ -75,6 +74,9 @@ export async function startFigmaMock(opts: FigmaMockOptions): Promise<FigmaMock>
       rateLimited -= 1;
       return send(429, { status: 429, err: 'Rate limit exceeded' }, { 'retry-after': '0', 'x-figma-rate-limit-type': 'low', 'x-figma-plan-tier': 'starter' });
     }
+    // Read the frames on every request, so a sandbox scenario that changes them is visible at once.
+    const files = new Map<string, DesignFrame[]>();
+    for (const f of opts.frames) files.set(f.fileKey, [...(files.get(f.fileKey) ?? []), f]);
     const match = /^\/v1\/files\/([^/]+)(\/components)?$/.exec(url.pathname);
     const frames = match ? files.get(decodeURIComponent(match[1] ?? '')) : undefined;
     if (!match || !frames) return send(404, { status: 404, err: 'Not found' });

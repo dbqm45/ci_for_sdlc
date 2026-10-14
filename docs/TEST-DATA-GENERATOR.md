@@ -1,8 +1,8 @@
 # Generator danych testowych i środowisko sandbox — plan wdrożenia
 
 Status: **plan w trakcie wdrażania.** Z etapu E2 działają już atrapy Jira, Confluence i Figma, `CI_FIGMA_API_BASE`,
-testy kontraktowe konektorów, atrapa dostawcy AI (7.5) i e2e `@live-mock` (sekcja 6.2); scenariusze zmian (6.3)
-czekają. Dokument opisuje, jak zbudować jeden zestaw danych testowych,
+testy kontraktowe konektorów, atrapa dostawcy AI (7.5), e2e `@live-mock` (sekcja 6.2) i scenariusze zmian z webhookami
+(6.3) — etap E2 jest zakończony. Dokument opisuje, jak zbudować jeden zestaw danych testowych,
 który wypełnia prawdziwe źródła (Jira, Confluence, Figma, później Miro i kolejne), zasila testy automatyczne bez
 przeglądarki i rośnie razem z aplikacją.
 
@@ -214,7 +214,7 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
 **Wdrożone:** `npm run test:e2e:live-mock` (`playwright.live-mock.config.ts`, testy w `e2e/live-mock/`).
 
 - Osobna konfiguracja z dwoma `webServer`: atrapy na `127.0.0.1` (`e2e/live-mock/start-mocks.mts`, porty 4396
-  i 4397) i serwer aplikacji na porcie 4398 z własnym katalogiem danych. Test przełącza ustawienia na tryb Live
+  i 4397, endpoint sterujący z sekcji 6.3 na 4394) i serwer aplikacji na porcie 4398 z własnym katalogiem danych. Test przełącza ustawienia na tryb Live
   i kieruje Jira i Confluence na atrapę; Figmę kieruje tam `CI_FIGMA_API_BASE`.
 - Atrapy serwują świat demo (`demoProject()`), więc oczekiwane wartości test liczy z tego świata, a nie z UI.
 - Tokeny to stałe, fikcyjne wartości z atrap (`dummy-atlassian-token`, `dummy-figma-token`). Atrapa odrzuca inne,
@@ -229,6 +229,24 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
 1. Test wywołuje `POST /__sandbox/mutate/<scenariusz>` na atrapie (endpoint istnieje tylko w atrapie).
 2. Atrapa wysyła webhook na `/api/webhooks/<źródło>` z testowym `CI_WEBHOOK_SECRET`.
 3. Test sprawdza dryf, historię i zdarzenia SSE.
+
+**Wdrożone:**
+
+- `packages/core/test/mocks/sandbox-control.ts` — endpoint sterujący na `127.0.0.1` (w e2e port 4394, uruchamiany
+  przez `start-mocks.mts`). `POST /__sandbox/mutate/<id>` stosuje scenariusz z `DEMO_SCENARIOS` do świata, który
+  serwują atrapy, i wysyła webhook źródła wskazanego w tytule scenariusza („Confluence: …” → `/api/webhooks/confluence`).
+  W odpowiedzi zwraca status i treść odpowiedzi aplikacji na webhook. `POST /__sandbox/reset` przywraca świat demo
+  (wywołuje go `beforeEach`). Nieznany scenariusz → 404 bez webhooka.
+- Atrapy Atlassian i Figma czytają świat przy każdym żądaniu, więc zmiana scenariusza jest widoczna od razu.
+- Sekret webhooków to stała, fikcyjna wartość `dummy-webhook-secret` (`DUMMY_WEBHOOK_SECRET`), ustawiana aplikacji jako
+  `CI_WEBHOOK_SECRET` tylko w konfiguracji e2e.
+- Testy: SC-01..SC-04 (Vitest, odbiorca webhooków zamiast aplikacji), LM-05 (scenariusz `timeout-change` → webhook
+  Confluence → zdarzenie SSE `analysis` z dryfem → wiersz „PAY-123 regressed: READY → NOT READY” i wpis w audycie)
+  i LM-06 (webhook bez sekretu lub ze złym sekretem → 401, historia bez zmian).
+- LM-05 wykrył, że `/api/events` wysyłał nagłówki dopiero z pierwszym zdarzeniem lub pingiem (co 25 s); serwer
+  wysyła je teraz od razu (test SSE-01).
+- Ograniczenie: konektor Figma trzyma odpowiedzi w pamięci podręcznej przez 60 s, więc analiza po webhooku Figmy może
+  przez minutę widzieć stare ramki. Dlatego LM-05 używa scenariusza Confluence.
 
 ### 6.4. Opcjonalny test na prawdziwym sandboxie
 
