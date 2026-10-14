@@ -319,6 +319,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   // ------------------------------------------------------------------ live updates (SSE)
   app.get('/api/events', (req, reply) => {
     reply.raw.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+    // Send the headers now: otherwise they wait for the first event or ping, and the client sees no connection until then.
+    reply.raw.flushHeaders();
     const send = (event: string) => (data: unknown) => reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     const onAnalysis = send('analysis');
     const onStatus = send('status');
