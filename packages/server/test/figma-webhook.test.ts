@@ -74,4 +74,10 @@ describe('Figma webhook', () => {
     await analysis;
     expect(mock.requests.length).toBe(requestsBefore);
   });
+
+  it('FW-03: "Test connections" reads the enabled sources through the real connector and counts what it found', async () => {
+    const res = await ctx.app.inject({ method: 'POST', url: '/api/settings/test-connections' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ figma: `OK — ${frames.length} frames` });
+  });
 });

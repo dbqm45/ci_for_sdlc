@@ -1,13 +1,15 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { analyzeProject, DEMO_SCENARIOS, RULES, type IssueType, type ItemAnalysis, type ProjectContext } from '@ci/core';
+import { KITS, type KitInfo } from './kits/registry.js';
 import { checkoutWorld, worldAfter } from './world/checkout.js';
 import { DERIVED_EXPECTATIONS, EXPECTATIONS, type Case, type RuleExpectation } from './world/expectations.js';
 import { SCENARIOS, type Scenario } from './world/scenarios.js';
 
 /**
  * Coverage guard (docs/TEST-DATA-GENERATOR.md, 5.3), run by Vitest. Every check returns the list of problems, each
- * saying what to add or fix; an empty list means the world still covers the application. Checks 2 (kits) and 3
- * (OpenAPI endpoints) are deferred to stage E4.
+ * saying what to add or fix; an empty list means the world still covers the application.
  */
 
 export interface RuleInfo {
@@ -134,6 +136,88 @@ export function checkScenarioEffects(scenarios: Scenario[] = SCENARIOS): string[
       const declared = [...(s.touches[kind] ?? [])].sort();
       if (JSON.stringify(declared) !== JSON.stringify(actual[kind])) {
         problems.push(`${s.id}: touches ${kind} [${declared.join(', ')}], but the change touches [${actual[kind].join(', ')}]`);
+      }
+    }
+  }
+  return problems;
+}
+
+/** Repository root and a reader of repo-relative files (undefined when the file is missing). */
+const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+const readRepoFile = (path: string): string | undefined => {
+  const full = join(ROOT, path);
+  return existsSync(full) ? readFileSync(full, 'utf8') : undefined;
+};
+
+/** Check 2: every kit has objects in the world, an API mock, a contract test against that mock and a seeder. */
+export function checkKits(
+  kits: KitInfo[] = KITS,
+  world: ProjectContext = checkoutWorld(),
+  scenarios: Pick<Scenario, 'id' | 'source'>[] = SCENARIOS,
+  read: (path: string) => string | undefined = readRepoFile,
+): string[] {
+  const problems: string[] = [];
+  for (const k of kits) {
+    if (!k.objects(world).length) problems.push(`${k.id}: no objects in the world — add them to world/checkout.ts`);
+    if (read(k.mock) === undefined) problems.push(`${k.id}: the API mock ${k.mock} is missing`);
+    const contract = read(k.contract);
+    if (contract === undefined) problems.push(`${k.id}: the contract test ${k.contract} is missing`);
+    else if (!contract.includes(`/${basename(k.mock).replace(/\.ts$/, '.js')}`)) problems.push(`${k.id}: the contract test ${k.contract} does not use the mock ${k.mock}`);
+    if (read(k.seeder) === undefined) problems.push(`${k.id}: the seeder ${k.seeder} is missing`);
+  }
+  for (const s of scenarios) if (!kits.some((k) => k.id === s.source)) problems.push(`${s.id}: source "${s.source}" has no kit — add it to kits/registry.ts`);
+  return problems;
+}
+
+export interface EndpointCall {
+  method: string;
+  path: string;
+}
+
+const CALL_PATTERNS: [RegExp, (m: RegExpMatchArray) => EndpointCall][] = [
+  // json('GET', '/api/…'), call('POST', …), inject({ method: 'DELETE', url: `/api/…` })
+  [/'(GET|POST|PUT|DELETE|PATCH)'\s*,\s*(?:url:\s*)?[`'"](\/api\/[^`'"?]*)/g, (m) => ({ method: m[1]!, path: m[2]! })],
+  // request.post('/api/…'), page.request.get(`/api/…`)
+  [/\.(get|post|put|delete|patch)\(\s*[`'"](\/api\/[^`'"?]*)/g, (m) => ({ method: m[1]!.toUpperCase(), path: m[2]! })],
+  // new EventSource('/api/events')
+  [/new EventSource\(\s*[`'"](\/api\/[^`'"?]*)/g, (m) => ({ method: 'GET', path: m[1]! })],
+];
+
+/** The API calls in a test source, in source order; the query string is dropped. */
+export function endpointCalls(source: string): EndpointCall[] {
+  return CALL_PATTERNS.flatMap(([re, call]) => [...source.matchAll(re)].map((m) => ({ at: m.index!, call: call(m) })))
+    .sort((a, b) => a.at - b.at)
+    .map((x) => x.call);
+}
+
+/** Test sources of the API and e2e tests (*.ts and *.mts, recursively), by repo-relative path. */
+function testSources(dirs = ['packages/server/test', 'e2e']): Record<string, string> {
+  const out: Record<string, string> = {};
+  const walk = (dir: string) => {
+    for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+      const path = `${dir}/${e.name}`;
+      if (e.isDirectory()) walk(path);
+      else if (/\.m?ts$/.test(e.name)) out[path] = readFileSync(join(ROOT, path), 'utf8');
+    }
+  };
+  for (const d of dirs) if (existsSync(join(ROOT, d))) walk(d);
+  return out;
+}
+
+const METHODS = ['get', 'post', 'put', 'delete', 'patch'];
+
+/** Check 3: every endpoint of the OpenAPI contract is called by at least one API or e2e test. */
+export function checkEndpointCoverage(
+  contract: { paths: Record<string, Record<string, unknown>> } = JSON.parse(readRepoFile('packages/server/contracts/openapi.json')!),
+  sources: Record<string, string> = testSources(),
+): string[] {
+  const calls = Object.values(sources).flatMap(endpointCalls);
+  const problems: string[] = [];
+  for (const [path, ops] of Object.entries(contract.paths)) {
+    const re = new RegExp(`^${path.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\\?\{[^}]+\\?\}/g, '[^/]+')}$`);
+    for (const method of Object.keys(ops).filter((m) => METHODS.includes(m))) {
+      if (!calls.some((c) => c.method === method.toUpperCase() && re.test(c.path))) {
+        problems.push(`${method.toUpperCase()} ${path}: no API or e2e test calls it — add one to packages/server/test or e2e`);
       }
     }
   }

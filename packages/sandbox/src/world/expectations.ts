@@ -61,8 +61,8 @@ export const DERIVED_EXPECTATIONS: DerivedRuleExpectation[] = [
   {
     rule: 'EPIC-004',
     appliesTo: ['epic', 'feature'],
-    fires: [],
+    // GFT-401 says a gift order holds at most 3 items, GFT-402 says at most 5.
+    fires: [intake('GFT-400')],
     silent: ['PAY-100'],
-    gap: 'no epic has two stories with different values of the same claim (e.g. retry limit 3 and unlimited); the world gets one in E4',
   },
 ];

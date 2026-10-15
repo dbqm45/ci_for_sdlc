@@ -199,10 +199,10 @@ Brak któregoś elementu daje czerwony test z komunikatem, co dopisać.
 - `src/world/scenarios.ts` — źródło każdego scenariusza i obiekty, których dotyka; strażnik porównuje je
   z rzeczywistą różnicą światów przed scenariuszem i po nim.
 - `src/guard.ts` — sprawdzenia 1 i 4 oraz weryfikacja przypadków na wyniku analizy (stały zegar). Sprawdzenia 2 i 3
-  przesunięte do E4 (kity mają dziś osobne testy, patrz niżej).
-- **Znana luka:** `EPIC-004` (sprzeczne wartości w historyjkach jednego epiku) nie odpala na żadnym elemencie świata.
-  Wpis ma pole `gap` z powodem; strażnik zgłosi błąd, gdy reguła zacznie gdzieś odpalać, żeby lukę zamienić
-  na przypadek `fires`. Dane dla niej przesunięte do E4.
+  doszły w E4 (patrz niżej).
+- Pole `gap` we wpisie oznacza znaną lukę: reguła nie odpala na żadnym elemencie świata. Strażnik zgłosi błąd,
+  gdy taka reguła zacznie gdzieś odpalać, żeby lukę zamienić na przypadek `fires`. Dziś żaden wpis nie ma luki
+  (`EPIC-004` dostała dane w E4).
 
 **Wdrożone (E3):** seeder Atlassian.
 - `src/cli.ts` — polecenia z 4.3; `src/live/context.ts` — połączenie przez bramę
@@ -242,7 +242,20 @@ Brak któregoś elementu daje czerwony test z komunikatem, co dopisać.
   po scenariuszu.
 - Testy: `test/fake-figma.ts` (API wtyczki i REST w pamięci; wygenerowany `code.js` działa w `node:vm`),
   `test/figma-plugin.test.ts` (FIG-01…FIG-17), `test/seeder.test.ts` (SBX-08, SBX-18…SBX-22).
-- **Nadal otwarte (poza E4):** sprawdzenia 2 i 3 strażnika oraz dane dla `EPIC-004`.
+
+**Wdrożone (E4):** domknięcie strażnika (`test/guard.test.ts`, GRD-12…GRD-15).
+- **Sprawdzenie 2 (kity):** `src/kits/registry.ts` wymienia kity (`jira`, `confluence`, `figma`): skąd w świecie
+  biorą obiekty, atrapę API, test kontraktowy i seeder. Strażnik sprawdza, że każdy kit ma obiekty w świecie,
+  że pliki atrapy, testu kontraktowego i seedera istnieją, że test kontraktowy importuje atrapę i że każde źródło
+  scenariusza ma swój kit. Zgodność atrapy ze światem sprawdzają same testy kontraktowe (`AC-01`, `FC-01`): czytają
+  cały świat przez prawdziwe konektory.
+- **Sprawdzenie 3 (endpointy):** strażnik czyta `packages/server/contracts/openapi.json` i wywołania API w testach
+  `packages/server/test` i `e2e` (`json('GET', '/api/…')`, `inject({ method, url })`, `request.post(…)`,
+  `new EventSource(…)`). Każda para metoda i ścieżka z kontraktu musi mieć co najmniej jedno wywołanie. Brakujące
+  `GET /api/rules`, `GET /api/drift`, `GET /api/demo/scenarios` i `POST /api/settings/test-connections` dostały
+  testy (`api.test.ts`, `figma-webhook.test.ts` FW-03).
+- **`EPIC-004`:** w scenariuszu `backlog-intake` historyjki epiku `GFT-400` mówią „at most 3 items” (`GFT-401`)
+  i „at most 5 items” (`GFT-402`), więc reguła odpala na `GFT-400`; luka zniknęła.
 
 ### 5.4. Scenariusze zmian
 
@@ -703,7 +716,7 @@ Sprawdzenia 2 i 3 strażnika oraz dane dla `EPIC-004` przesunięte do E4.
 
 **Zrobione w E4 (15.10.2026):** wtyczka „CI sandbox” generowana ze świata, odczyt mapy `node-id` przez REST,
 linki z Jiry do ramek, `status` dla Figmy; testy na Figmie w pamięci. Sprawdzenia 2 i 3 strażnika oraz dane
-dla `EPIC-004` zostają otwarte. Brama `api.atlassian.com/ex/…` dla tokenów z zakresami jest potwierdzona
+dla `EPIC-004` domknięte tego samego dnia (5.3, „domknięcie strażnika”). Brama `api.atlassian.com/ex/…` dla tokenów z zakresami jest potwierdzona
 w praktyce w E3 (`LOCAL-ENVIRONMENT.md`, rozdział 5).
 
 **Weryfikacja E4 na żywo (15.10.2026):** `status` i `seed --confirm` przeszły: 23 ramki, 7 linków z Jiry do Figmy.

@@ -396,7 +396,7 @@ export const DEMO_SCENARIOS: { id: string; title: string; description: string; a
       const now = new Date().toISOString();
       ctx.requirements.push(
         issue({ key: 'GFT-400', type: 'epic', title: 'Gift Wrapping', components: ['Gifts'], description: 'Goal: offer gift wrapping at checkout so that gift orders grow by 10%.', updatedAt: now }),
-        issue({ key: 'GFT-401', type: 'story', title: 'Choose wrapping paper', epicKey: 'GFT-400', components: ['Gifts'], description: 'Wrapping paper picker on the gift step.', updatedAt: now }),
+        issue({ key: 'GFT-401', type: 'story', title: 'Choose wrapping paper', epicKey: 'GFT-400', components: ['Gifts'], description: 'Wrapping paper picker on the gift step. A gift order holds at most 3 items.', updatedAt: now }),
         issue({
           key: 'GFT-402',
           type: 'story',
@@ -404,7 +404,7 @@ export const DEMO_SCENARIOS: { id: string; title: string; description: string; a
           epicKey: 'GFT-400',
           components: ['Gifts'],
           description: 'As a buyer I want to add a gift message so that the recipient knows who sent the gift. If the printer is offline the user can try again.',
-          acceptanceCriteria: ['The message preview appears quickly.', 'The message is printed on the gift card.'],
+          acceptanceCriteria: ['The message preview appears quickly.', 'The message is printed on the gift card.', 'A gift order holds at most 5 items.'],
           updatedAt: now,
         }),
         issue({ key: 'GFT-410', type: 'epic', title: 'Gift Registry', components: ['Gifts'], description: 'Goal: let customers share a wish list so that registry orders reach 5% of gift orders.', updatedAt: now }),
