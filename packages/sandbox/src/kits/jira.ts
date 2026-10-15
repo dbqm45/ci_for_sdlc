@@ -13,6 +13,7 @@ import {
   linkId,
   pageIdOfUrl,
   pageTitle,
+  FIGMA_REMOTE,
   REMOTE_PREFIX,
   remoteGlobalId,
   SANDBOX_LABEL,
@@ -21,6 +22,7 @@ import {
   type LinkType,
 } from './encode.js';
 import type { LivePage } from './confluence.js';
+import { figmaNodeOfUrl, type LiveFigma } from './figma.js';
 
 /**
  * Jira kit (docs/TEST-DATA-GENERATOR.md, 4.2): issues, issue links and remote links to the pages of the world.
@@ -57,6 +59,8 @@ export interface Run {
   /** Labelled pages by world page id, and the id of the CITEST space. */
   pages: Map<string, LivePage>;
   spaceId: string;
+  /** The Figma sandbox file read back, when Figma is configured (ctx.figma). */
+  figma?: LiveFigma;
 }
 
 const TYPE_NAMES: JiraTypeName[] = ['Epic', 'Story', 'Bug', 'Task', 'Feature'];
@@ -248,19 +252,41 @@ export async function syncLinks(run: Run): Promise<void> {
 // ---------------------------------------------------------------------------- Remote links
 
 /**
- * Remote links from issues to the sandbox pages of the world. Figma links wait for the Figma kit (E4). Only links
- * whose globalId starts with ci-sandbox: are ever deleted.
+ * Remote links from issues to the sandbox pages and to the frames of the sandbox Figma file. A Figma link points at
+ * the frame the plugin marked with the world id, under Figma's own node id. Only links whose globalId starts with
+ * ci-sandbox: are ever deleted, and Figma links only when the Figma file was read.
  */
 export async function syncRemoteLinks(run: Run): Promise<void> {
   const { ctx, keys, state, world } = run;
-  let figma = 0;
+  let figmaOff = 0;
+  const framesMissing = new Set<string>();
   for (const item of world.requirements) {
     const key = keys[item.key];
     const wanted: { globalId: string; url: string; title: string }[] = [];
+    const labels = new Map<string, string>();
     const pending: string[] = [];
+    let waiting = false;
     for (const url of item.remoteLinks) {
       if (isFigmaUrl(url)) {
-        figma++;
+        const frameId = figmaNodeOfUrl(url);
+        const frame = frameId ? world.frames.find((f) => f.id === frameId) : undefined;
+        if (!frameId || !frame) {
+          ctx.warnings.push(`${item.key}: Figma link ${frameId ? `to frame ${frameId}, which is not in the world` : 'without a node id'} — skipped`);
+          continue;
+        }
+        if (!run.figma) {
+          figmaOff++;
+          continue;
+        }
+        const live = run.figma.frames.get(frameId);
+        if (!live) {
+          framesMissing.add(frameId);
+          waiting = true;
+          continue;
+        }
+        const globalId = remoteGlobalId(item.key, `figma-${frameId.replace(/:/g, '-')}`);
+        wanted.push({ globalId, url: live.url, title: live.name });
+        labels.set(globalId, `Figma frame ${frameId}`);
         continue;
       }
       const pageId = pageIdOfUrl(url);
@@ -271,12 +297,18 @@ export async function syncRemoteLinks(run: Run): Promise<void> {
       }
       const page = state.pages[pageId];
       if (!page) pending.push(pageId);
-      else wanted.push({ globalId: remoteGlobalId(item.key, pageId), url: page.url, title: pageTitle(doc, keys) });
+      else {
+        const globalId = remoteGlobalId(item.key, pageId);
+        wanted.push({ globalId, url: page.url, title: pageTitle(doc, keys) });
+        labels.set(globalId, `page ${pageId}`);
+      }
     }
     if (!key || pending.length) {
       for (const p of pending) ctx.actions.push(`would link ${item.key} to page ${p}`);
       continue;
     }
+    // A frame the file lacks: the item waits for the plugin, as an item with a pending page waits for the page.
+    if (waiting) continue;
     const entry = state.issues[item.key];
     const relHash = hash(JSON.stringify(wanted));
     if (!entry || entry.relHash === relHash) continue;
@@ -288,18 +320,23 @@ export async function syncRemoteLinks(run: Run): Promise<void> {
     for (const p of present) {
       const gid = String(p.globalId ?? '');
       if (!gid.startsWith(REMOTE_PREFIX) || wanted.some((w) => w.globalId === gid)) continue;
+      // Without the Figma file the seeder cannot tell a stale Figma link from a good one: it keeps them.
+      if (!run.figma && gid.includes(FIGMA_REMOTE)) continue;
       await act(ctx, `remove remote link ${gid} from ${item.key}`, () => ctx.call('DELETE', `${base}/${p.id}`, { auth: ctx.auth.jira }), (x) => x.ok || x.status === 404);
     }
     for (const w of wanted) {
       const same = present.find((p) => p.globalId === w.globalId);
       if (same?.object?.url === w.url && same?.object?.title === w.title) continue;
-      await act(ctx, `link ${item.key} to page ${w.globalId.split(':').pop()}`, () =>
+      await act(ctx, `link ${item.key} to ${labels.get(w.globalId)}`, () =>
         ctx.call('POST', base, { auth: ctx.auth.jira, body: { globalId: w.globalId, object: { url: w.url, title: w.title } } }),
       );
     }
     if (ctx.write) state.issues[item.key] = { ...entry, relHash };
   }
-  if (figma) ctx.warnings.push(`${figma} Figma link(s) left out — the Figma kit comes in stage E4`);
+  if (figmaOff) ctx.warnings.push(`${figmaOff} Figma link(s) left out — set FIGMA_TOKEN and SANDBOX_FIGMA_FILE_KEY to link the sandbox Figma file`);
+  if (framesMissing.size) {
+    ctx.warnings.push(`Figma frame(s) ${[...framesMissing].join(', ')} not in the sandbox file — their issues keep their remote links; run "CI sandbox → Seed" in Figma, then seed again`);
+  }
 }
 
 // ---------------------------------------------------------------------------- Deleting

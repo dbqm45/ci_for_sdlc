@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { figmaApiBase } from '@ci/core';
 import {
   KEY,
   MARKER,
@@ -16,6 +17,7 @@ import {
   type FetchLike,
   type Reply,
 } from '../../../../scripts/lib/sandbox-atlassian.mjs';
+import type { FigmaAccess } from '../kits/figma.js';
 
 /**
  * Connection to the sandbox site and the local state of the seeder (docs/TEST-DATA-GENERATOR.md, 8.4).
@@ -40,6 +42,8 @@ export interface LiveContext {
   actions: string[];
   warnings: string[];
   secrets: string[];
+  /** The Figma sandbox file, when FIGMA_TOKEN and SANDBOX_FIGMA_FILE_KEY are set; Figma is optional (4.2). */
+  figma?: FigmaAccess;
 }
 
 export class SandboxError extends Error {
@@ -61,6 +65,12 @@ export async function connect(env: Env, opts: ConnectOptions): Promise<LiveConte
   const confVar = opts.write ? 'SANDBOX_CONFLUENCE_WRITE_TOKEN' : 'CONFLUENCE_API_TOKEN';
   const problems = [...checkSite(env)];
   for (const name of ['SANDBOX_BOT_EMAIL', jiraVar, confVar]) if (!env[name]) problems.push(`${name}: not set`);
+  let figmaBase: string | undefined;
+  try {
+    figmaBase = figmaApiBase(env.CI_FIGMA_API_BASE);
+  } catch (e) {
+    problems.push(`CI_FIGMA_API_BASE: ${(e as Error).message}`);
+  }
   if (problems.length) throw new SandboxError(problems);
 
   const site = parseSite(env.ATLASSIAN_SITE)!;
@@ -68,13 +78,18 @@ export async function connect(env: Env, opts: ConnectOptions): Promise<LiveConte
   const jiraToken = env[jiraVar]!;
   const confluenceToken = env[confVar]!;
   // Every token the process knows is masked, not only the ones this mode uses.
-  const secrets = [jiraToken, confluenceToken, env.JIRA_API_TOKEN, env.CONFLUENCE_API_TOKEN, env.SANDBOX_JIRA_WRITE_TOKEN, env.SANDBOX_CONFLUENCE_WRITE_TOKEN]
+  // The Figma file key is not a credential, but it opens the file to anyone with a token: masked as well.
+  const secrets = [jiraToken, confluenceToken, env.JIRA_API_TOKEN, env.CONFLUENCE_API_TOKEN, env.SANDBOX_JIRA_WRITE_TOKEN, env.SANDBOX_CONFLUENCE_WRITE_TOKEN, env.FIGMA_TOKEN, env.SANDBOX_FIGMA_FILE_KEY]
     .filter((s): s is string => !!s);
   const auth = { jira: basic(email, jiraToken), confluence: basic(email, confluenceToken) };
   secrets.push(auth.jira, auth.confluence);
   const log = opts.log ?? ((line: string) => console.log(line));
   const call = client({ fetchImpl: opts.fetchImpl, log, sleep: opts.sleep, secrets });
   const cloudId = await cloudIdOf(call, site);
+  const fetchImpl = opts.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
+  const figma = env.FIGMA_TOKEN && env.SANDBOX_FIGMA_FILE_KEY
+    ? { token: env.FIGMA_TOKEN, fileKey: env.SANDBOX_FIGMA_FILE_KEY, apiBase: figmaBase!, fetchImpl }
+    : undefined;
   return {
     call,
     jira: gateway('jira', cloudId),
@@ -87,6 +102,7 @@ export async function connect(env: Env, opts: ConnectOptions): Promise<LiveConte
     actions: [],
     warnings: [],
     secrets,
+    figma,
   };
 }
 

@@ -63,8 +63,9 @@ function message(e: unknown, env: Env): string {
   const msg = (e instanceof Error ? e.message : String(e)).split('\n')[0]!;
   if (msg === 'fetch failed') return noConnectionHint(env);
   const tokens = [env.JIRA_API_TOKEN, env.CONFLUENCE_API_TOKEN, env.SANDBOX_JIRA_WRITE_TOKEN, env.SANDBOX_CONFLUENCE_WRITE_TOKEN].filter((t): t is string => !!t);
+  const figma = [env.FIGMA_TOKEN, env.SANDBOX_FIGMA_FILE_KEY].filter((t): t is string => !!t);
   const email = env.SANDBOX_BOT_EMAIL;
-  return redact(msg, [...tokens, ...(email ? tokens.map((t) => basic(email, t)) : [])]);
+  return redact(msg, [...tokens, ...figma, ...(email ? tokens.map((t) => basic(email, t)) : [])]);
 }
 
 function finish(out: (line: string) => void, ctx: LiveContext | undefined, problems: string[], report: string[]): void {

@@ -6,7 +6,9 @@ import { basic } from '../../../scripts/lib/sandbox-atlassian.mjs';
 import { main } from '../src/cli.js';
 import { SANDBOX_LABEL } from '../src/kits/encode.js';
 import { checkoutWorld } from '../src/world/checkout.js';
+import { pluginFiles } from '../src/figma-plugin.js';
 import { ENV, FakeAtlassian, TOKENS, type FakeOptions } from './fake-atlassian.js';
+import { FakeFigma, FIGMA_TOKEN, FILE_KEY, combinedFetch } from './fake-figma.js';
 
 // docs/TEST-DATA-GENERATOR.md, 4.3 and 8.4: the seeder against an in-memory Jira and Confluence.
 // Status reads through the core connectors (global fetch), so the fake stands in for both.
@@ -24,6 +26,24 @@ function site(opts: FakeOptions = {}): FakeAtlassian {
 
 const run = (argv: string[], env: Record<string, string | undefined> = ENV) =>
   main(argv, env, { file, fetchImpl: fake.fetch, sleep: async () => {} });
+
+// Stage E4: the sandbox Figma file, built by the generated plugin, read by the seeder over REST.
+const FIGMA_ENV = { ...ENV, FIGMA_TOKEN, SANDBOX_FIGMA_FILE_KEY: FILE_KEY };
+const PLUGIN = pluginFiles().code;
+const FIGMA_LINKS = WORLD.requirements.flatMap((r) => r.remoteLinks).filter((u) => new URL(u).hostname.endsWith('figma.com')).length;
+let fig: FakeFigma;
+
+function figmaSite(opts: FakeOptions = {}): FakeFigma {
+  site(opts);
+  fig = new FakeFigma();
+  vi.stubGlobal('fetch', combinedFetch(fig, fake.fetch));
+  return fig;
+}
+
+const runF = (argv: string[], env: Record<string, string | undefined> = FIGMA_ENV) =>
+  main(argv, env, { file, fetchImpl: combinedFetch(fig, fake.fetch) as typeof fake.fetch, sleep: async () => {} });
+const figmaRemotes = () => fake.remotes.filter((r) => (r.globalId ?? '').includes(':figma-'));
+const problems = (lines: string[]) => lines.filter((l) => l.startsWith('✗'));
 
 const labelled = () => [...fake.issues.values()].filter((i) => i.fields.labels.includes(SANDBOX_LABEL));
 const labelledPages = () => [...fake.pages.values()].filter((p) => !p.trashed && p.labels.includes(SANDBOX_LABEL));
@@ -145,12 +165,30 @@ describe('mutate, reset, status', () => {
     expect(unknown.lines.join('\n')).toMatch(/unknown scenario "nope"/);
   });
 
-  it('SBX-08: a Figma scenario waits for stage E4 and writes nothing', async () => {
-    site();
-    const r = await run(['mutate', 'figma-remove-error', '--confirm']);
+  it("SBX-08: a Figma scenario needs Figma, then the plugin's Mutate, and only then is recorded", async () => {
+    figmaSite();
+    await fig.run(PLUGIN, 'seed');
+    expect((await runF(['seed', '--confirm'])).code).toBe(0);
+
+    const off = await runF(['mutate', 'figma-remove-error', '--confirm'], ENV);
+    expect(off.code).toBe(1);
+    expect(off.lines.join('\n')).toMatch(/set FIGMA_TOKEN and SANDBOX_FIGMA_FILE_KEY/);
+
+    const before = fake.writes().length;
+    const early = await runF(['mutate', 'figma-remove-error', '--confirm']);
+    expect(early.code).toBe(1);
+    expect(early.lines.join('\n')).toMatch(/CI sandbox → Mutate: figma-remove-error/);
+    expect(fake.writes().slice(before)).toEqual([]);
+    expect(state().scenarios ?? []).toEqual([]);
+
+    await fig.run(PLUGIN, 'mutate:figma-remove-error');
+    const r = await runF(['mutate', 'figma-remove-error', '--confirm']);
+    expect(problems(r.lines)).toEqual([]);
     expect(r.code).toBe(0);
-    expect(r.lines.join('\n')).toMatch(/E4/);
-    expect(fake.writes()).toEqual([]);
+    expect(state().scenarios).toEqual(['figma-remove-error']);
+    const s = await runF(['status']);
+    expect(problems(s.lines)).toEqual([]);
+    expect(s.code).toBe(0);
   });
 
   it('SBX-09: reset deletes only labelled objects', async () => {
@@ -203,6 +241,81 @@ describe('mutate, reset, status', () => {
 
     expect((await run(['seed', '--confirm'])).code).toBe(0);
     expect((await run(['status'])).code).toBe(0);
+  });
+});
+
+describe('figma (E4)', () => {
+  it('SBX-18: without Figma settings the Figma links are left out, with a warning', async () => {
+    site();
+    const r = await run(['seed', '--confirm']);
+    expect(r.code).toBe(0);
+    expect(r.lines.some((l) => l.startsWith('! ') && l.includes(`${FIGMA_LINKS} Figma link(s) left out`))).toBe(true);
+    expect(figmaRemotes()).toEqual([]);
+  });
+
+  it('SBX-19: seed links issues to the frames the plugin made, under their real node ids; status is in sync', async () => {
+    figmaSite();
+    await fig.run(PLUGIN, 'seed');
+    const r = await runF(['seed', '--confirm']);
+    expect(problems(r.lines)).toEqual([]);
+    expect(r.code).toBe(0);
+    expect(figmaRemotes()).toHaveLength(FIGMA_LINKS);
+    const nodeIds = new Set(fig.root.children.flatMap((p) => p.children).map((n) => n.id.replace(/:/g, '-')));
+    for (const link of figmaRemotes()) {
+      const url = new URL(link.object.url);
+      expect(url.pathname.split('/')[2]).toBe(FILE_KEY);
+      expect(nodeIds.has(url.searchParams.get('node-id')!)).toBe(true);
+    }
+
+    const s = await runF(['status']);
+    expect(problems(s.lines)).toEqual([]);
+    expect(s.code).toBe(0);
+    expect(s.lines.some((l) => /Figma: \d+ frame\(s\) of the plugin in the sandbox file; world: \d+ frames/.test(l))).toBe(true);
+
+    const before = fake.writes().length;
+    expect((await runF(['seed', '--confirm'])).code).toBe(0);
+    expect(fake.writes().slice(before)).toEqual([]);
+  });
+
+  it('SBX-20: before the plugin ran, issues wait for their frames and no Figma link is written', async () => {
+    figmaSite();
+    const r = await runF(['seed', '--confirm']);
+    expect(r.code).toBe(0);
+    expect(r.lines.some((l) => l.startsWith('! ') && l.includes('not in the sandbox file'))).toBe(true);
+    expect(figmaRemotes()).toEqual([]);
+    const s = await runF(['status']);
+    expect(s.code).toBe(1);
+    expect(problems(s.lines).some((l) => l.includes('CI sandbox → Seed'))).toBe(true);
+  });
+
+  it('SBX-21: a frame edited in Figma and a Figma link removed in Jira are reported; seed restores the link', async () => {
+    figmaSite();
+    await fig.run(PLUGIN, 'seed');
+    await runF(['seed', '--confirm']);
+    const frame = fig.root.children.flatMap((p) => p.children).find((n) => n.getSharedPluginData('ci_sandbox', 'id'))!;
+    frame.name = 'Renamed by hand';
+    const gone = figmaRemotes()[0]!;
+    fake.remotes.splice(fake.remotes.indexOf(gone), 1);
+
+    const s = await runF(['status']);
+    expect(s.code).toBe(1);
+    expect(problems(s.lines).some((l) => l.includes('name differ from the world'))).toBe(true);
+    expect(problems(s.lines).some((l) => l.includes('links to Figma frames'))).toBe(true);
+
+    await fig.run(PLUGIN, 'seed');
+    expect((await runF(['seed', '--confirm'])).code).toBe(0);
+    expect(figmaRemotes()).toHaveLength(FIGMA_LINKS);
+    expect((await runF(['status'])).code).toBe(0);
+  });
+
+  it('SBX-22: the Figma token and file key are masked in every line', async () => {
+    figmaSite({ hook: (req) => (req.method === 'POST' ? { status: 400, json: { errorMessages: [`bad ${FIGMA_TOKEN} ${FILE_KEY}`] } } : undefined) });
+    await fig.run(PLUGIN, 'seed');
+    const r = await runF(['seed', '--confirm']);
+    expect(r.code).toBe(1);
+    const out = r.lines.join('\n');
+    expect(out).not.toContain(FIGMA_TOKEN);
+    expect(out).not.toContain(FILE_KEY);
   });
 });
 

@@ -1,0 +1,32 @@
+{
+  "name": "CI sandbox",
+  "id": "ci-sandbox-seeder",
+  "api": "1.0.0",
+  "main": "code.js",
+  "editorType": [
+    "figma"
+  ],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": [
+      "none"
+    ]
+  },
+  "menu": [
+    {
+      "name": "Seed",
+      "command": "seed"
+    },
+    {
+      "name": "Mutate: figma-remove-error",
+      "command": "mutate:figma-remove-error"
+    },
+    {
+      "separator": true
+    },
+    {
+      "name": "Reset",
+      "command": "reset"
+    }
+  ]
+}

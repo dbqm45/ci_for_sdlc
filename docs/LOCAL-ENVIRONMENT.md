@@ -107,11 +107,21 @@ docker compose down
    - Confluence: ten sam *Site URL* i e-mail, *Space keys* `PAY`.
 5. *Test connections*, potem *Save & re-analyze*.
 
+Token z zakresami (*Create API token with scopes*, np. dla bota piaskownicy) nie działa pod adresem
+`https://<nazwa>.atlassian.net` — wywołania idą przez bramę `https://api.atlassian.com/ex/jira/<cloudId>`
+i `…/ex/confluence/<cloudId>` (`cloudId` z `https://<nazwa>.atlassian.net/_edge/tenant_info`). Generator danych
+testowych obsługuje obie formy adresu, a `npm run sandbox:atlassian -- check` wypisuje `cloudId`
+(docs/TEST-DATA-GENERATOR.md, 7.2).
+
 ## 5. Figma (plan Starter)
 
 1. Figma → *Settings → Security → Personal access tokens* → *Generate new token*; zakres wystarczy *File content: Read*.
    Zapisz jako `FIGMA_TOKEN`.
 2. Klucz pliku jest w adresie: `figma.com/design/<FILE_KEY>/…`. Wpisz go w *Settings → Integrations → Figma → File keys*.
+3. Piaskownica (generator danych testowych): klucz osobnego, pustego pliku trzymaj w zmiennej
+   `SANDBOX_FIGMA_FILE_KEY` (menedżer haseł lub ustawienia środowiska, nie repozytorium). Ramki tworzy w nim wtyczka
+   *CI sandbox* — Figma desktop → *Plugins → Development → Import plugin from manifest…* →
+   `packages/sandbox/figma-plugin/manifest.json`, potem *CI sandbox → Seed*. Szczegóły: docs/TEST-DATA-GENERATOR.md, 7.3.
 
 ## 6. Model AI za darmo
 

@@ -176,6 +176,8 @@ export const isFigmaUrl = (url: string) => /^https:\/\/(?:www\.)?figma\.com\//.t
 /** globalId of a remote link: ours start with this prefix, so the seeder never touches links people added. */
 export const REMOTE_PREFIX = 'ci-sandbox:';
 export const remoteGlobalId = (key: string, pageId: string) => `${REMOTE_PREFIX}${key}:${pageId}`;
+/** Figma links take `figma-<frame id>` in place of the page id: ci-sandbox:PAY-1:figma-1-1. */
+export const FIGMA_REMOTE = ':figma-';
 
 // ---------------------------------------------------------------------------- Confluence
 
