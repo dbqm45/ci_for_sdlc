@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { DEMO_SCENARIOS, RULES } from '@ci/core';
 import { buildApp } from '../src/app.js';
 import { putSettings } from './helpers.js';
 
@@ -58,6 +59,8 @@ describe('API', () => {
     expect((await json('POST', '/api/items/PAY-123/approve', { by: 'po' })).status).toBe(200);
     const res = await json('POST', '/api/demo/scenarios/timeout-change');
     expect(res.body.drift.some((d: any) => d.kind === 'claim_changed')).toBe(true);
+    const log = await json('GET', '/api/drift');
+    expect(log.body.map((d: any) => d.id)).toEqual(expect.arrayContaining(res.body.drift.map((d: any) => d.id)));
     const item = await json('GET', '/api/items/PAY-123');
     expect(item.body.item.findings.some((f: any) => f.category === 'DRIFT')).toBe(true);
     expect(item.body.drift.length).toBeGreaterThan(0);
@@ -72,6 +75,15 @@ describe('API', () => {
     const res = await putSettings(ctx.app, { schedule: { mode: 'interval', intervalMinutes: 30 } });
     expect(res.json().settings.schedule.mode).toBe('interval');
     expect((await json('POST', '/api/items/PAY-125/ai-review')).status).toBe(400);
+  });
+
+  it('API-01: lists the rules and the demo scenarios', async () => {
+    const rules = await json('GET', '/api/rules');
+    expect(rules.body.map((r: any) => r.id)).toEqual(RULES.map((r) => r.id));
+    expect(Object.keys(rules.body[0]).sort()).toEqual(['appliesTo', 'description', 'id', 'name']);
+    const scenarios = await json('GET', '/api/demo/scenarios');
+    expect(scenarios.body.map((s: any) => s.id)).toEqual(DEMO_SCENARIOS.map((s) => s.id));
+    expect(scenarios.body[0]).not.toHaveProperty('apply');
   });
 
   it('accepts webhooks', async () => {
