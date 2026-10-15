@@ -706,6 +706,11 @@ linki z Jiry do ramek, `status` dla Figmy; testy na Figmie w pamięci. Sprawdzen
 dla `EPIC-004` zostają otwarte. Brama `api.atlassian.com/ex/…` dla tokenów z zakresami jest potwierdzona
 w praktyce w E3 (`LOCAL-ENVIRONMENT.md`, rozdział 5).
 
+**Weryfikacja E4 na żywo (15.10.2026):** `status` i `seed --confirm` przeszły: 23 ramki, 7 linków z Jiry do Figmy.
+Mutację `figma-remove-error` wykonano we wtyczce, ale `sandbox:mutate` i reset czekają **do 19.10.2026**: Figma
+zablokowała odczyt pliku na ok. 95 h (`429`, plan Starter, limit `low` — kilka odczytów całego pliku w miesiącu).
+Przypomnienie: `.claude/reminders.json` (hook `reminders.py`).
+
 **Fakty do potwierdzenia na stronach dostawców:**
 
 | Fakt | Gdzie sprawdzić |

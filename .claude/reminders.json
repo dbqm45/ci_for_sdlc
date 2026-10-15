@@ -1,0 +1,7 @@
+[
+  {
+    "id": "e4-live-check-steps-3-4",
+    "from": "2026-10-19",
+    "text": "Dokończ weryfikację na żywo E4 (docs/TEST-DATA-GENERATOR.md, „Zrobione w E4”): krok 3 — `npm run sandbox:mutate -- figma-remove-error --confirm` (we wtyczce mutacja już wykonana), potem `sandbox:status` i linki do Figmy w Jirze; krok 4 — Reset we wtyczce „CI sandbox”, potem `sandbox:reset` i `sandbox:status`. Figma (plan Starter, limit low) zablokowała odczyt pliku 15.10 na ok. 95 h. Gdy krok 3 i 4 będą zrobione, usuń to przypomnienie z .claude/reminders.json."
+  }
+]
