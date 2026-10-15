@@ -81,13 +81,29 @@ export function liveFigma(fileKey: string, file: unknown): LiveFigma {
   return out;
 }
 
+/** Low-tier seats get a handful of file reads a month, so the wait can be days: say how long Figma asked for. */
+export function rateLimited(headers: { get(name: string): string | null } | undefined, now = Date.now()): string {
+  const raw = headers?.get('retry-after') ?? null;
+  const seconds = raw === null || raw.trim() === '' ? NaN : Number(raw);
+  const waitMs = Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : raw ? Date.parse(raw) - now : NaN;
+  const minutes = Math.ceil(waitMs / 60_000);
+  const wait = !Number.isFinite(waitMs) || waitMs < 0 ? 'try again later'
+    : minutes <= 90 ? `Figma asks to wait ${Math.max(1, minutes)} min`
+    : minutes <= 48 * 60 ? `Figma asks to wait ${Math.ceil(minutes / 60)} h`
+    : `Figma asks to wait ${Math.ceil(minutes / 1440)} days`;
+  const tier = headers?.get('x-figma-plan-tier');
+  const type = headers?.get('x-figma-rate-limit-type');
+  const plan = tier || type ? ` (plan ${tier ?? '?'}, limit ${type ?? '?'} — a token from a Full/Dev seat on a paid plan gets more file reads)` : '';
+  return `Figma: rate limited (429) — ${wait}${plan}`;
+}
+
 /** Reads the sandbox file. Errors carry the status and a hint, never the response body or the file key. */
 export async function readFigma(access: FigmaAccess): Promise<LiveFigma> {
   const url = `${access.apiBase}/files/${encodeURIComponent(access.fileKey)}?depth=3&plugin_data=shared`;
   const r = await access.fetchImpl(url, { method: 'GET', headers: { 'X-Figma-Token': access.token, Accept: 'application/json' } });
   if (r.status === 401 || r.status === 403) throw new SandboxError([`Figma: reading the sandbox file refused (${r.status}) — check FIGMA_TOKEN (scope file_content:read) and that its account can open the file`]);
   if (r.status === 404) throw new SandboxError(['Figma: no sandbox file (404) — check SANDBOX_FIGMA_FILE_KEY']);
-  if (r.status === 429) throw new SandboxError(['Figma: rate limited (429) — try again in a minute']);
+  if (r.status === 429) throw new SandboxError([rateLimited(r.headers)]);
   if (r.status < 200 || r.status >= 300) throw new SandboxError([`Figma: reading the sandbox file failed (${r.status})`]);
   let body: unknown;
   try {
