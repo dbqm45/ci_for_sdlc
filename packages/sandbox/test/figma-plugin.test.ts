@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { compareFrames, liveFigma, readFigma, type FigmaAccess } from '../src/kits/figma.js';
+import { compareFrames, liveFigma, rateLimited, readFigma, type FigmaAccess } from '../src/kits/figma.js';
 import { PLUGIN_DIR, pluginFiles, pluginWorld } from '../src/figma-plugin.js';
 import { SandboxError } from '../src/live/context.js';
 import { checkoutWorld, worldAfter } from '../src/world/checkout.js';
@@ -143,5 +143,16 @@ describe('readFigma', () => {
   ])('$id: status $status → $hint', async ({ status, body, hint }) => {
     const fetchImpl = (async () => new Response(body, { status })) as unknown as FigmaAccess['fetchImpl'];
     expect(await failure(access(new FakeFigma(), { fetchImpl }))).toMatch(hint);
+  });
+
+  it.each([
+    { id: 'FIG-18', headers: {} as Record<string, string>, hint: 'rate limited (429) — try again later' },
+    { id: 'FIG-19', headers: { 'retry-after': '30' }, hint: 'wait 1 min' },
+    { id: 'FIG-20', headers: { 'retry-after': '7200' }, hint: 'wait 2 h' },
+    { id: 'FIG-21', headers: { 'retry-after': '343657', 'x-figma-plan-tier': 'starter', 'x-figma-rate-limit-type': 'low' }, hint: 'wait 4 days (plan starter, limit low' },
+    { id: 'FIG-22', headers: { 'retry-after': 'Thu, 01 Jan 1970 00:10:00 GMT' }, hint: 'wait 10 min' },
+    { id: 'FIG-23', headers: { 'retry-after': 'soon' }, hint: 'try again later' },
+  ])('$id: 429 with $headers → $hint', ({ headers, hint }) => {
+    expect(rateLimited(new Headers(headers), 0)).toContain(hint);
   });
 });
