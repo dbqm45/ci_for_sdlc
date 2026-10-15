@@ -1,6 +1,7 @@
 # Generator danych testowych i środowisko sandbox — plan wdrożenia
 
-Status: **plan w trakcie wdrażania.** Z etapu E2 działają już atrapy Jira, Confluence i Figma, `CI_FIGMA_API_BASE`,
+Status: **plan w trakcie wdrażania.** Z etapu E4 działa wtyczka Figmy generowana ze świata i linki z Jiry do jej
+ramek (4.4, 7.3); z etapu E3 — seeder Atlassian. Z etapu E2 działają już atrapy Jira, Confluence i Figma, `CI_FIGMA_API_BASE`,
 testy kontraktowe konektorów, atrapa dostawcy AI (7.5), e2e `@live-mock` (sekcja 6.2) i scenariusze zmian z webhookami
 (6.3) — etap E2 jest zakończony. Z etapu E1 działają świat „Checkout”, opis scenariuszy i strażnik pokrycia
 (sprawdzenia 1 i 4 z 5.3). W etapie E0 zapadły decyzje (sekcja 11) i działają sandboxy Atlassian i Figma — etap E0 jest zakończony. Dokument opisuje, jak zbudować jeden zestaw danych testowych,
@@ -216,12 +217,32 @@ Brak któregoś elementu daje czerwony test z komunikatem, co dopisać.
     w projekcie ręcznie (inaczej seeder zapisuje zgłoszenia bez nich, z ostrzeżeniem, a `status` zgłasza różnicę);
   - zadanie pod historyjką powstaje jako podzadanie; sekcje błędu (kroki, oczekiwany wynik) są w opisie;
   - Jira pokazuje każde powiązanie z drugiej strony odwrotnie (np. „is blocked by”) — `status` to uwzględnia;
-  - linki do Figmy dojdą w E4; `mutate` nie wywołuje lokalnego webhooka;
+  - `mutate` nie wywołuje lokalnego webhooka;
   - stopka z logicznym ID jest częścią treści; gdy Jira jej nie przyjmie, zgłoszenie powstaje bez niej
     (z ostrzeżeniem);
   - strona, której nie udało się usunąć z kosza, zostaje w koszu przestrzeni;
   - obiekty bez etykiety z logicznym ID są pomijane (nie są „nasze”);
   - kit `mock` (atrapy z E2) zostaje w `test/`, nie jest przeniesiony do `src/kits/`.
+
+**Wdrożone (E4):** Figma.
+- `figma-plugin/` — wtyczka deweloperska „CI sandbox”. `runtime.js` piszesz ręcznie; `code.js` i `manifest.json`
+  generuje `npm run sandbox:figma-plugin` (`src/figma-plugin.ts`) ze świata. Test pada, gdy pliki w repo nie
+  nadążają za światem — po zmianie ramek albo scenariusza Figmy uruchom generator i zacommituj wynik.
+- Polecenia wtyczki: **Seed** (ramki świata bazowego), **Mutate: &lt;scenariusz&gt;** (dla każdego scenariusza Figmy:
+  świat po tym scenariuszu), **Reset** (usuwa wszystko, co zrobiła). Każdą ramkę oznacza w shared plugin data
+  `ci_sandbox.id` = ID ramki ze świata (`1:1`, `2:3`…); Figma nadaje jej własny `node-id`.
+- **Mapa `node-id`:** seeder czyta plik przez REST (`GET /v1/files/<klucz>?depth=3&plugin_data=shared`,
+  `src/kits/figma.ts`) i dopasowuje ramki po znaczniku, nie po nazwie. Nic nie trzeba wklejać.
+- Seeder dodaje linki zdalne z zgłoszeń do ramek (`globalId` `ci-sandbox:<klucz>:figma-<id ramki>`, adres
+  z prawdziwym kluczem pliku i `node-id`), więc aplikacja w trybie Live łączy zgłoszenie z ramką.
+  `status` porównuje ramki ze światem (strona, nazwa, teksty, połączenia prototypu) i linki do nich.
+- Bez `FIGMA_TOKEN` i `SANDBOX_FIGMA_FILE_KEY` seeder pomija linki do Figmy (z ostrzeżeniem) i nie usuwa
+  istniejących; `mutate` scenariusza Figmy wtedy odmawia. Gdy wtyczka nie zbudowała jeszcze ramek, zgłoszenia
+  czekają na linki (ostrzeżenie), a `mutate` scenariusza Figmy nic nie zapisuje, dopóki plik nie odpowiada światu
+  po scenariuszu.
+- Testy: `test/fake-figma.ts` (API wtyczki i REST w pamięci; wygenerowany `code.js` działa w `node:vm`),
+  `test/figma-plugin.test.ts` (FIG-01…FIG-17), `test/seeder.test.ts` (SBX-08, SBX-18…SBX-22).
+- **Nadal otwarte (poza E4):** sprawdzenia 2 i 3 strażnika oraz dane dla `EPIC-004`.
 
 ### 5.4. Scenariusze zmian
 
@@ -360,7 +381,7 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
   `https://api.atlassian.com/ex/jira/{cloudId}` (i `…/ex/confluence/{cloudId}`).
   - Konektory przyjmują `baseUrl`, więc obsłużą obie formy.
   - `cloudId` odczytasz z `https://<witryna>.atlassian.net/_edge/tenant_info`; `check` go wypisuje.
-  - Trzeba to jeszcze dopisać do `LOCAL-ENVIRONMENT.md`, rozdział 4 (tam opisany jest token klasyczny).
+  - Opisane też w `LOCAL-ENVIRONMENT.md`, rozdział 4.
 - Klasyczny token bez zakresów (ważny maksymalnie rok) jest dopuszczalny tylko jako wyjście awaryjne, bo daje pełne
   uprawnienia konta. Wyjątek: jednorazowy **token administratora** (`ATLASSIAN_ADMIN_TOKEN`) z Twojego konta, ważny
   1 dzień, tylko do `setup` poniżej. Po konfiguracji unieważnij go.
@@ -414,12 +435,30 @@ więc limit przestrzeni zespołu go nie dotyczy.
 | **A. Wtyczka deweloperska z repo (zalecana)** | `packages/sandbox/figma-plugin/` z `manifest.json` i `code.js` wygenerowanym ze świata. W aplikacji desktopowej Figma: Plugins → Development → Import plugin from manifest, potem uruchom w pliku sandboxa. | deterministyczna, bez tokenu do zapisu, bez limitów MCP, działa offline | jedno kliknięcie ręcznie przy każdym seedzie lub mutacji |
 | **B. Figma MCP (`use_figma`)** | Claude, na Twoje polecenie w sesji, buduje ramki w pliku według świata | w pełni automatyczna z poziomu rozmowy | wymaga miejsca Full z prawem edycji; na Starter ok. 6 wywołań zapisu miesięcznie, w becie bezpłatne, potem płatne za użycie **[do sprawdzenia]**; mniej deterministyczna |
 
-- Wtyczka nie potrzebuje żadnego tokenu: działa w Twojej sesji Figmy.
-- Po utworzeniu ramek wtyczka wypisuje mapę `logiczne ID → node-id`, którą wklejasz do `sandbox:seed --figma-map`
-  albo seeder pobiera ją przez REST (odczyt) i dopasowuje po nazwach ramek.
+- Wtyczka nie potrzebuje żadnego tokenu: działa w Twojej sesji Figmy. Nie ma dostępu do sieci
+  (`networkAccess: none`).
+- Mapy `logiczne ID → node-id` nie trzeba przepisywać: wtyczka zapisuje ID ze świata w shared plugin data ramki,
+  a seeder odczytuje je przez REST tokenem tylko do odczytu (4.4, „Wdrożone (E4)”).
 - Wymagania planu dla wtyczek deweloperskich: według help.figma.com („Plugins: Before you start”, 10.2026)
   wtyczki można tworzyć na każdym planie. Import z `manifest.json` działa tylko w aplikacji desktopowej (Mac,
-  Windows); przeglądarka nie ma menu Development. Potwierdzimy to w praktyce w E4.
+  Windows); przeglądarka nie ma menu Development.
+
+**Droga A krok po kroku:**
+
+1. `npm run sandbox:figma-plugin` (tylko po zmianie świata; pliki są w repo).
+2. Figma desktop → otwórz plik sandboxa → Plugins → Development → Import plugin from manifest →
+   `packages/sandbox/figma-plugin/manifest.json`. Import robisz raz; po zmianie `code.js` Figma czyta nowy plik sama.
+3. Plugins → Development → CI sandbox → **Seed**. Wtyczka odmawia, gdy w pliku są warstwy, których nie zrobiła
+   (plik sandboxa ma być pusty), i wtedy niczego nie zmienia.
+4. `npm run sandbox:status`, potem `npm run sandbox:seed -- --confirm` — seeder dodaje linki do ramek.
+5. Scenariusz Figmy: najpierw **Mutate: &lt;scenariusz&gt;** we wtyczce, potem
+   `npm run sandbox:mutate -- <scenariusz> --confirm`. Sprzątanie: **Reset** we wtyczce i `sandbox:reset`.
+
+**Droga B (MCP) — alternatywa ręczna:** w sesji Claude z serwerem Figma MCP poproś o uruchomienie kodu wtyczki
+narzędziem `use_figma` w pliku sandboxa: najpierw ustaw `figma.command` na `seed` (albo `mutate:<scenariusz>`,
+`reset`), potem treść `code.js`. Wynik musi być taki sam jak z drogi A (te same znaczniki), więc dalej obowiązują
+kroki 4–5. Wymaga miejsca z prawem edycji i zużywa limit wywołań MCP **[do sprawdzenia: czy `use_figma` przyjmuje
+cały `code.js` i ustawienie `figma.command`]**.
 
 ### 7.4. Miro (gdy zostanie źródłem)
 
@@ -533,6 +572,9 @@ Przypomnienie o rotacji: wydarzenie w kalendarzu 7 dni przed datą wygaśnięcia
 5. **Limity zapytań:**
    - zapytania idą po kolei, bez równoległości;
    - `429` jest ponawiane raz, po czasie z `Retry-After` (najwyżej 60 s).
+6. **Figma:** seeder tylko czyta plik (token `file_content:read`); ramki zmienia wyłącznie wtyczka, uruchamiana przez
+   Ciebie. Wtyczka zmienia i usuwa tylko oznaczone przez siebie ramki i strony, a `Seed` i `Mutate` odmawiają
+   w pliku z cudzymi warstwami. Token i klucz pliku są maskowane w logach jak tokeny Atlassian.
 
 ### 8.5. Logi i błędy
 
@@ -599,7 +641,7 @@ Każdy etap to osobny PR do `main` (Conventional Commits).
 | **E1. Świat i strażnik** | `packages/sandbox` z typami, światem „Checkout” (z `demo.ts`), scenariuszami, `expectations.ts`, `guard.ts`; `.sandbox/` w `.gitignore` | test strażnika pokazuje braki pokrycia reguł; zero wpływu na aplikację | `test(sandbox): …` / `feat(sandbox): …` |
 | **E2. Atrapy i testy** | atrapy Jira, Confluence i Figma (`node:http`); `CI_FIGMA_API_BASE` z walidacją; testy kontraktowe konektorów; e2e `@live-mock` w Playwright; atrapa AI | CI testuje prawdziwe konektory i tryb Live bez sekretów | `feat(core): …` dla zmiennej Figma, `test(e2e): …` |
 | **E3. Seeder Atlassian** ✅ | kity Jira i Confluence: `seed`, `mutate`, `teardown`, `status`; bezpieczniki z 8.4; maskowanie logów | `sandbox:seed` wypełnia witrynę, `sandbox:reset` ją czyści | wymaga E0; przegląd bezpieczeństwa przed merge |
-| **E4. Figma** | wtyczka deweloperska generowana ze świata, mapa `node-id`; instrukcja dla drogi MCP | plik Figmy z ramkami w kilka minut | |
+| **E4. Figma** ✅ | wtyczka deweloperska generowana ze świata, mapa `node-id`; instrukcja dla drogi MCP; linki z Jiry do ramek | plik Figmy z ramkami w kilka minut | `feat(sandbox): …` |
 | **E5. Test live (opcjonalnie)** | `test:e2e:live`; workflow nocny tylko do odczytu, jeśli plan GitHuba pozwala | wczesne wykrycie zmian w API dostawców | `ci: …` |
 | **E6. Utrzymanie** | lista kontrolna z sekcji 10; reguła w `CLAUDE.md`; opcjonalnie cotygodniowa rutyna Claude sprawdzająca `sandbox:status` i przypominająca o rotacji tokenów | rozbudowa środowiska jest częścią każdej zmiany | `docs: …` |
 
@@ -659,7 +701,12 @@ w repozytorium.
 `sandbox:status`) przez bramę `api.atlassian.com` z tokenami bota; testy na Jira i Confluence w pamięci (5.3).
 Sprawdzenia 2 i 3 strażnika oraz dane dla `EPIC-004` przesunięte do E4.
 
-**Fakty do potwierdzenia na stronach dostawców przed E4:**
+**Zrobione w E4 (15.10.2026):** wtyczka „CI sandbox” generowana ze świata, odczyt mapy `node-id` przez REST,
+linki z Jiry do ramek, `status` dla Figmy; testy na Figmie w pamięci. Sprawdzenia 2 i 3 strażnika oraz dane
+dla `EPIC-004` zostają otwarte. Brama `api.atlassian.com/ex/…` dla tokenów z zakresami jest potwierdzona
+w praktyce w E3 (`LOCAL-ENVIRONMENT.md`, rozdział 5).
+
+**Fakty do potwierdzenia na stronach dostawców:**
 
 | Fakt | Gdzie sprawdzić |
 |---|---|

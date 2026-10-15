@@ -4,6 +4,7 @@ import { emptyState, guardContainers, SandboxError, type LiveContext, type Sandb
 import { SCENARIOS } from '../world/scenarios.js';
 import { checkoutWorld, worldAfter } from '../world/checkout.js';
 import { deletePages, discoverPages, pageUrl, syncPages } from './confluence.js';
+import { compareFrames, figmaNodeOfUrl, readFigma, type LiveFigma } from './figma.js';
 import {
   adfDescription,
   desiredLinks,
@@ -68,7 +69,15 @@ async function open(ctx: LiveContext, state: SandboxState, world: ProjectContext
     const entry = state.pages[id];
     state.pages[id] = entry?.id === live.id ? entry : { id: live.id, url: pageUrl(ctx.site, live.id), version: live.version, syncedAt: now() };
   }
-  return { ctx, state, world, meta, keys, issues, pages, spaceId };
+  const figma = ctx.figma ? await readFigma(ctx.figma) : undefined;
+  if (figma?.unmarked) ctx.warnings.push(`Figma: ${figma.unmarked} frame(s) in the sandbox file not made by the plugin — the seeder ignores them`);
+  return { ctx, state, world, meta, keys, issues, pages, spaceId, figma };
+}
+
+/** The plugin command that brings the Figma file to the world after `scenarios` (one Figma scenario at a time). */
+function pluginCommand(scenarios: string[]): string {
+  const last = scenarios.filter((id) => SCENARIOS.find((s) => s.id === id)?.source === 'figma').pop();
+  return last ? `Mutate: ${last}` : 'Seed';
 }
 
 /** Brings the site to `world`: creates, updates and deletes only labelled objects. */
@@ -96,6 +105,7 @@ export interface Outcome {
 /** Base world, no scenarios. */
 export async function seed(ctx: LiveContext, state: SandboxState): Promise<Outcome> {
   const run = await open(ctx, state, checkoutWorld());
+  if (run.figma) ctx.warnings.push(...compareFrames(run.world.frames, run.figma, 'Seed'));
   await sync(run);
   if (ctx.write) state.scenarios = [];
   return { state, report: [], problems: [] };
@@ -106,8 +116,15 @@ export async function mutate(ctx: LiveContext, state: SandboxState, id: string):
   const scenario = SCENARIOS.find((s) => s.id === id);
   if (!scenario) return { state, report: [], problems: [`unknown scenario "${id}" — one of: ${SCENARIOS.map((s) => s.id).join(', ')}`] };
   if (state.scenarios.includes(id)) return { state, report: [], problems: [`scenario "${id}" is already applied — run sandbox:seed to start over`] };
-  if (scenario.source === 'figma') return { state, report: [`${id} changes Figma — the Figma kit comes in stage E4; nothing to do`], problems: [] };
+  if (scenario.source === 'figma' && !ctx.figma) {
+    return { state, report: [], problems: [`${id} changes Figma — set FIGMA_TOKEN and SANDBOX_FIGMA_FILE_KEY first`] };
+  }
   const run = await open(ctx, state, worldAfter(...state.scenarios, id));
+  // Only the plugin can change the Figma file: the seeder checks it did, then moves the links to the new frames.
+  if (scenario.source === 'figma') {
+    const diff = compareFrames(run.world.frames, run.figma!, `Mutate: ${id}`);
+    if (diff.length) return { state, report: [], problems: [...diff, `${id}: run "CI sandbox → Mutate: ${id}" in Figma first, then this command again`] };
+  }
   await sync(run);
   if (ctx.write) state.scenarios = [...state.scenarios, id];
   return { state, report: [], problems: [] };
@@ -117,6 +134,7 @@ export async function mutate(ctx: LiveContext, state: SandboxState, id: string):
 export async function reset(ctx: LiveContext, state: SandboxState): Promise<Outcome> {
   const run = await open(ctx, state, checkoutWorld());
   const report = [`${KEY}: ${run.issues.size} issue(s) and ${run.pages.size} page(s) carry the label ${SANDBOX_LABEL}`];
+  if (run.figma?.frames.size) report.push(`Figma: ${run.figma.frames.size} frame(s) of the plugin in the sandbox file — run "CI sandbox → Reset" in Figma to remove them`);
   await deleteIssues(run, [...run.issues.keys()]);
   await deletePages(run, [...run.pages.keys()]);
   return { state: ctx.write ? emptyState(ctx.site) : state, report, problems: [] };
@@ -162,6 +180,21 @@ export async function status(ctx: LiveContext, state: SandboxState): Promise<Out
   const { project } = await guardContainers(ctx);
   const meta = await jiraMeta(ctx, project);
   const world = worldAfter(...state.scenarios);
+  let figma: LiveFigma | undefined;
+  if (ctx.figma) {
+    try {
+      figma = await readFigma(ctx.figma);
+      problems.push(...compareFrames(world.frames, figma, pluginCommand(state.scenarios)));
+    } catch (e) {
+      if (!(e instanceof SandboxError)) throw e;
+      problems.push(...e.problems);
+    }
+  } else if (world.requirements.some((r) => r.remoteLinks.some(isFigmaUrl))) {
+    ctx.warnings.push('Figma not checked — set FIGMA_TOKEN and SANDBOX_FIGMA_FILE_KEY to compare the sandbox Figma file and the Figma links');
+  }
+  // Figma node id → world frame id, for links into the sandbox file only.
+  const worldOfNode = new Map([...(figma?.frames ?? [])].map(([id, f]) => [f.nodeId, id]));
+  const inSandboxFile = (u: string) => isFigmaUrl(u) && !!ctx.figma && new URL(u).pathname.split('/')[2] === ctx.figma.fileKey;
 
   let items: RequirementItem[];
   let docs: Awaited<ReturnType<typeof fetchConfluence>>;
@@ -209,6 +242,11 @@ export async function status(ctx: LiveContext, state: SandboxState): Promise<Out
       const wantPages = item.remoteLinks.filter((u) => !isFigmaUrl(u)).flatMap((u) => pageIdOfUrl(u) ?? []);
       const gotPages = got.remoteLinks.flatMap((u) => worldOfPage.get(pageIdOfUrl(u) ?? '') ?? []);
       if (!same(sorted(wantPages), sorted(gotPages))) drift(what, 'links to pages');
+      if (figma) {
+        const wantFrames = item.remoteLinks.filter(isFigmaUrl).flatMap((u) => figmaNodeOfUrl(u) ?? []);
+        const gotFrames = got.remoteLinks.filter(inSandboxFile).map((u) => worldOfNode.get(figmaNodeOfUrl(u) ?? '') ?? `?${figmaNodeOfUrl(u)}`);
+        if (!same(sorted(wantFrames), sorted(gotFrames))) drift(what, 'links to Figma frames');
+      }
     }
     const old = state.issues[item.key];
     const ok = problems.length === before && old?.key === got.key;
@@ -235,6 +273,7 @@ export async function status(ctx: LiveContext, state: SandboxState): Promise<Out
 
   report.push(`${KEY}: ${live.size} issue(s), ${pages.size} page(s); world: ${world.requirements.length} items, ${world.documents.length} documents` +
     (state.scenarios.length ? `, scenarios: ${state.scenarios.join(', ')}` : ''));
+  if (figma) report.push(`Figma: ${figma.frames.size} frame(s) of the plugin in the sandbox file; world: ${world.frames.length} frames`);
   if (!problems.length) report.push('in sync with the world');
   return { state: fresh, report, problems };
 }
