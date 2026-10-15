@@ -280,12 +280,12 @@ Każdy scenariusz opisuje: co zmienić w każdym źródle oraz jakie zdarzenia, 
 - Sekret webhooków to stała, fikcyjna wartość `dummy-webhook-secret` (`DUMMY_WEBHOOK_SECRET`), ustawiana aplikacji jako
   `CI_WEBHOOK_SECRET` tylko w konfiguracji e2e.
 - Testy: SC-01..SC-04 (Vitest, odbiorca webhooków zamiast aplikacji), LM-05 (scenariusz `timeout-change` → webhook
-  Confluence → zdarzenie SSE `analysis` z dryfem → wiersz „PAY-123 regressed: READY → NOT READY” i wpis w audycie)
-  i LM-06 (webhook bez sekretu lub ze złym sekretem → 401, historia bez zmian).
+  Confluence → zdarzenie SSE `analysis` z dryfem → wiersz „PAY-123 regressed: READY → NOT READY” i wpis w audycie),
+  LM-06 (webhook bez sekretu lub ze złym sekretem → 401, historia bez zmian) i LM-07 (scenariusz `figma-remove-error`
+  → webhook Figmy → analiza czyta plik od nowa, mimo że konektor trzyma odpowiedzi Figmy w pamięci podręcznej przez
+  60 s; webhook Figmy czyści tę pamięć, test FW-01).
 - LM-05 wykrył, że `/api/events` wysyłał nagłówki dopiero z pierwszym zdarzeniem lub pingiem (co 25 s); serwer
   wysyła je teraz od razu (test SSE-01).
-- Ograniczenie: konektor Figma trzyma odpowiedzi w pamięci podręcznej przez 60 s, więc analiza po webhooku Figmy może
-  przez minutę widzieć stare ramki. Dlatego LM-05 używa scenariusza Confluence.
 
 ### 6.4. Opcjonalny test na prawdziwym sandboxie
 

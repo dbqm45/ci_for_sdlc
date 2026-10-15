@@ -16,4 +16,4 @@ export * from './hierarchy.js';
 export * from './settings.js';
 export { errorMessage } from './errors.js';
 export { fetchJira, fetchConfluence, jiraIssueToRequirement, adfToText, splitSections, type JiraConfig, type ConfluenceConfig } from './connectors/atlassian.js';
-export { fetchFigma, figmaApiBase, framesFromDocument, FigmaRateLimitError, type FigmaConfig } from './connectors/figma.js';
+export { clearFigmaCache, fetchFigma, figmaApiBase, framesFromDocument, FigmaRateLimitError, type FigmaConfig } from './connectors/figma.js';
