@@ -105,6 +105,32 @@ describe('fetchFigma', () => {
     expect(calls).toHaveLength(4);
   });
 
+  it('FG-20: clearing the cache of one file makes only that file read fresh; without a key every file is', async () => {
+    const calls = fakeFetch(
+      componentMetadata(),
+      json(page([{ id: '1:1', name: 'Pay', type: 'FRAME' }])),
+      componentMetadata(),
+      json(page([{ id: '2:1', name: 'Done', type: 'FRAME' }])),
+      componentMetadata(),
+      json(page([{ id: '1:1', name: 'Pay v2', type: 'FRAME' }])),
+      componentMetadata(),
+      json(page([{ id: '1:1', name: 'Pay v3', type: 'FRAME' }])),
+      componentMetadata(),
+      json(page([{ id: '2:1', name: 'Done v2', type: 'FRAME' }])),
+    );
+    const config = { token: 'clear-token', fileKeys: ['A', 'B'] };
+    expect((await fetchFigma(config)).map((f) => f.name)).toEqual(['Pay', 'Done']);
+    clearFigmaCache('UNRELATED');
+    expect((await fetchFigma(config)).map((f) => f.name)).toEqual(['Pay', 'Done']);
+    expect(calls).toHaveLength(4);
+    clearFigmaCache('A');
+    expect((await fetchFigma(config)).map((f) => f.name)).toEqual(['Pay v2', 'Done']);
+    expect(calls).toHaveLength(6);
+    clearFigmaCache();
+    expect((await fetchFigma(config)).map((f) => f.name)).toEqual(['Pay v3', 'Done v2']);
+    expect(calls).toHaveLength(10);
+  });
+
   it('FG-10: honors Retry-After and uses exponential delays for repeated 429 responses', async () => {
     vi.useFakeTimers();
     const calls = fakeFetch(

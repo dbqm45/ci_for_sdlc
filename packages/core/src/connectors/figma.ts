@@ -32,6 +32,7 @@ interface CachedResponse {
 }
 
 interface CacheEntry {
+  fileKey: string;
   expiresAt: number;
   promise: Promise<CachedResponse>;
 }
@@ -47,9 +48,13 @@ const MAX_CACHE_ENTRIES = 100;
 const MAX_RESPONSE_BYTES = 500_000;
 const responseCache = new Map<string, CacheEntry>();
 
-/** Test seam; the cache is deliberately not part of the public connector API. */
-export function clearFigmaCache(): void {
-  responseCache.clear();
+/**
+ * Drops cached Figma responses — of one file, or all of them without a key — so the next read hits the API.
+ * Call it when Figma reports a change (webhook); scheduled analyses keep the cache to stay within rate limits.
+ */
+export function clearFigmaCache(fileKey?: string): void {
+  if (fileKey === undefined) return responseCache.clear();
+  for (const [key, entry] of responseCache) if (entry.fileKey === fileKey) responseCache.delete(key);
 }
 
 /** Figma's own rate limit, not a connector bug — the HTTP layer maps this to 429, not a generic 500. */
@@ -121,7 +126,7 @@ async function getJson(url: string, token: string, fileKey: string): Promise<Cac
   }
   if (cached) responseCache.delete(key);
 
-  const entry: CacheEntry = { expiresAt: now + CACHE_TTL_MS, promise: requestJson(url, token, fileKey) };
+  const entry: CacheEntry = { fileKey, expiresAt: now + CACHE_TTL_MS, promise: requestJson(url, token, fileKey) };
   responseCache.set(key, entry);
   while (responseCache.size > MAX_CACHE_ENTRIES) {
     const oldest = responseCache.keys().next();

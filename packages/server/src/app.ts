@@ -3,7 +3,7 @@ import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
+import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
 import { Engine } from './engine.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { MUTATION, approveBody, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
@@ -312,6 +312,11 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     if (!Object.hasOwn(sources, req.params.source)) throw httpError(404, 'Unknown source');
     const enabled = sources[req.params.source];
     await store.audit({ at: new Date().toISOString(), kind: 'webhook', actor: req.params.source, summary: `Change notification from ${req.params.source}${enabled ? '' : ' (ignored by settings)'}` });
+    if (enabled && req.params.source === 'figma') {
+      // The connector caches Figma responses for rate limits; the change just announced must not be read from it.
+      const fileKey = (req.body as { file_key?: unknown } | undefined)?.file_key;
+      clearFigmaCache(typeof fileKey === 'string' && fileKey !== '' ? fileKey : undefined);
+    }
     if (enabled) void engine.analyze(`${req.params.source} change`).catch(() => undefined);
     return reply.status(202).send({ accepted: enabled });
   });

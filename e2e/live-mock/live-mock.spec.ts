@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { demoProject } from '../../packages/core/src/index.js';
 import { mockReview } from '../../packages/core/test/mocks/ai-mock.js';
 import { DUMMY_ATLASSIAN_EMAIL } from '../../packages/core/test/mocks/atlassian-mock.js';
@@ -29,6 +29,27 @@ async function configureLive(request: APIRequestContext, atlassianEmail = DUMMY_
   };
   await expect(await request.put('/api/settings', { data: { mode: 'live', integrations, ai }, headers: { 'if-match': '*' } })).toBeOK();
 }
+
+/** Subscribes to live updates (SSE) the way the UI does; resolves once the stream is open. */
+async function listenForNextAnalysis(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((opened) => {
+        const events = new EventSource('/api/events');
+        (window as unknown as { nextAnalysis: Promise<unknown> }).nextAnalysis = new Promise((resolve) =>
+          events.addEventListener('analysis', (e) => {
+            events.close();
+            resolve(JSON.parse((e as MessageEvent<string>).data));
+          }),
+        );
+        events.addEventListener('open', () => opened());
+      }),
+  );
+}
+
+/** The first `analysis` event after listenForNextAnalysis. */
+const nextAnalysis = (page: Page) =>
+  page.evaluate(() => (window as unknown as { nextAnalysis: Promise<unknown> }).nextAnalysis) as Promise<{ reason: string; drift: number }>;
 
 test.describe('Live mode on API mocks @live-mock', () => {
   test.beforeEach(async ({ request }) => {
@@ -99,26 +120,14 @@ test.describe('Live mode on API mocks @live-mock', () => {
     await approveViaApi(request, 'PAY-123');
     await page.goto('/#/drift');
     // Listen to live updates (SSE) the way the UI does, before the change happens.
-    await page.evaluate(
-      () =>
-        new Promise<void>((opened) => {
-          const events = new EventSource('/api/events');
-          (window as unknown as { nextAnalysis: Promise<unknown> }).nextAnalysis = new Promise((resolve) =>
-            events.addEventListener('analysis', (e) => {
-              events.close();
-              resolve(JSON.parse((e as MessageEvent<string>).data));
-            }),
-          );
-          events.addEventListener('open', () => opened());
-        }),
-    );
+    await listenForNextAnalysis(page);
 
     // DEMO_SCENARIOS "timeout-change": Confluence pages now say 60 seconds; the mock sends the Confluence webhook.
     const res = await request.post(`${SANDBOX_CONTROL_URL}/__sandbox/mutate/timeout-change`);
     await expect(res).toBeOK();
     expect((await res.json()) as SandboxMutation).toEqual({ scenario: 'timeout-change', source: 'confluence', webhook: { status: 202, body: { accepted: true } } });
 
-    const analysis = (await page.evaluate(() => (window as unknown as { nextAnalysis: Promise<unknown> }).nextAnalysis)) as { reason: string; drift: number };
+    const analysis = await nextAnalysis(page);
     expect(analysis.reason).toBe('confluence change');
     expect(analysis.drift).toBeGreaterThan(0);
 
@@ -127,6 +136,27 @@ test.describe('Live mode on API mocks @live-mock', () => {
     await expect(row.getByText('DRIFT DETECTED')).toBeVisible();
     const audit = (await (await request.get('/api/audit')).json()) as { kind: string; actor: string; summary: string }[];
     expect(audit.filter((a) => a.kind === 'webhook').at(-1)).toMatchObject({ actor: 'confluence', summary: 'Change notification from confluence' });
+  });
+
+  test('LM-07: a Figma change announced by webhook is read fresh, not from the connector cache', async ({ page, request }) => {
+    // The baseline analysis also fills the Figma connector cache (60 s), so the webhook must bypass it.
+    await expect(await request.post('/api/analyze')).toBeOK();
+    await approveViaApi(request, 'PAY-123');
+    await page.goto('/#/drift');
+    await listenForNextAnalysis(page);
+
+    // DEMO_SCENARIOS "figma-remove-error": the "Add card / Error" frame is deleted; the mock sends the Figma webhook.
+    const res = await request.post(`${SANDBOX_CONTROL_URL}/__sandbox/mutate/figma-remove-error`);
+    await expect(res).toBeOK();
+    expect((await res.json()) as SandboxMutation).toEqual({ scenario: 'figma-remove-error', source: 'figma', webhook: { status: 202, body: { accepted: true } } });
+
+    const analysis = await nextAnalysis(page);
+    expect(analysis.reason).toBe('figma change');
+    expect(analysis.drift).toBeGreaterThan(0);
+
+    await page.reload();
+    const row = card(page, 'Change log').getByRole('row').filter({ hasText: 'PAY-123 regressed: READY → NOT READY' }).first();
+    await expect(row.getByText('DRIFT DETECTED')).toBeVisible();
   });
 
   test('LM-06: a webhook without the shared secret is rejected and starts no analysis', async ({ request }) => {
