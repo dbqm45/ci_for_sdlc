@@ -184,6 +184,7 @@ Konkretna wersja (np. do porównania): `CI_IMAGE_TAG=0.1.0 docker compose up -d`
 | `release.yml` | push do `main`, ręcznie | buduje obraz, uruchamia go i sprawdza (`/api/health`, UI, 401 bez tokenu, 200 z tokenem), publikuje do `ghcr.io/dbqm45/ci_for_sdlc` (`latest`, `sha-<commit>`, a przy nowej wersji także `X.Y.Z`) i tworzy tag `vX.Y.Z` oraz GitHub Release z opisem z CHANGELOG ([`RELEASING.md`](RELEASING.md)) |
 | `pr-title.yml` | każdy PR, także po zmianie tytułu | tytuł PR zgodny z Conventional Commits |
 | `security.yml` | PR zmieniający zależności, poniedziałki, ręcznie | `npm audit`: bramka na podatności high/critical we wszystkich zależnościach, moderate — tylko raport |
+| `deploy-test.yml` | ręcznie | wdrożenie pokazowe: każde uruchomienie tworzy deployment w środowisku `test` (nic nie wdraża); środowisko powstaje samo przy pierwszym uruchomieniu |
 | Dependabot | co tydzień | PR-y z aktualizacjami npm, GitHub Actions i obrazu bazowego Node |
 
 ## 10. Później: produkcja (ograniczona)

@@ -1,0 +1,17 @@
+name: Deploy (test)
+
+# Demo deployment: every run creates a GitHub deployment in the `test` environment (GitHub creates
+# the environment on the first run), so tools that read deployments have data. Deploys nothing.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: test
+    steps:
+      - run: echo "Deployed $GITHUB_SHA to test (demo, nothing is deployed)"
