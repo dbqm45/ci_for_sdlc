@@ -15,6 +15,11 @@ updates:
       # One PR for all minor/patch updates; majors arrive separately so they can be reviewed one by one.
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Types follow the Node runtime (22: CI, Dockerfile); newer types would allow APIs Node 22 lacks.
+      # Raise together with the runtime.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
