@@ -4,9 +4,10 @@ import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
+import { AtlassianConnection, CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import { Engine } from './engine.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
-import { MUTATION, approveBody, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
+import { MUTATION, approveBody, atlassianSiteBody, oauthCallbackQuery, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
 import { deepMerge, Store, type Settings } from './store.js';
 import { APP_VERSION } from './version.js';
 
@@ -41,12 +42,16 @@ export interface AppOptions {
   allowedHosts?: string[];
   /** Defaults to CI_ALLOWED_ORIGINS (comma-separated). */
   allowedOrigins?: string[];
+  /** Defaults to CI_CONNECT_MODE, CI_PUBLIC_URL and the ATLASSIAN_* variables. */
+  connect?: ConnectConfig;
 }
 
 export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store }> {
   const store = new Store(opts.dataDir);
   await store.init();
-  const engine = new Engine(store);
+  const connect = opts.connect ?? connectConfigFromEnv();
+  const atlassian = new AtlassianConnection(store, connect);
+  const engine = new Engine(store, connect.mode === 'oauth' ? atlassian : undefined);
   // Strict bodies: unknown properties and wrong types are rejected, not silently dropped or coerced.
   const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } } });
   const env = guardConfigFromEnv();
@@ -240,7 +245,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
         CUSTOM_AI_API_KEY: !!process.env.CUSTOM_AI_API_KEY,
         AWS_CREDENTIALS: awsCredentialsConfigured(),
         CI_ENCRYPTION_KEY: !!process.env.CI_ENCRYPTION_KEY,
+        ATLASSIAN_CLIENT_ID: !!connect.atlassian.clientId,
+        ATLASSIAN_CLIENT_SECRET: !!connect.atlassian.clientSecret,
       },
+      connectMode: connect.mode,
       defaultModels: DEFAULT_MODELS,
     };
   });
@@ -287,6 +295,53 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       out.error = errorMessage(e);
     }
     return out;
+  });
+
+  // ------------------------------------------------------------------ connections (CI_CONNECT_MODE=oauth)
+  const connectFailed = (e: unknown) => {
+    if (e instanceof ConnectError) throw httpError(e.code === 'mode' || e.code === 'config' ? 409 : 400, e.message);
+    throw e;
+  };
+  app.get('/api/connections', async () => ({ mode: connect.mode, atlassian: await atlassian.status() }));
+
+  app.post('/api/connections/atlassian/start', { schema: { summary: 'Start connecting Atlassian (Jira and Confluence); returns the consent URL to open', response: errors(409, 422), ...MUTATION } }, async (req, reply) => {
+    try {
+      const { url, state } = atlassian.start(who(req).actor);
+      reply.header('set-cookie', stateCookie(state, connect.publicUrl));
+      return { url };
+    } catch (e) {
+      return connectFailed(e);
+    }
+  });
+
+  /** The browser comes back here from Atlassian. Always answers with a redirect to Settings, never with JSON. */
+  app.get<{ Querystring: { code?: string; state?: string; error?: string } }>(CALLBACK_PATH, { schema: { hide: true, querystring: oauthCallbackQuery } }, async (req, reply) => {
+    reply.header('set-cookie', stateCookie('', connect.publicUrl, 0));
+    const back = (q: Record<string, string>) => reply.redirect(`/?${new URLSearchParams(q)}#/settings`);
+    try {
+      const { site, actor } = await atlassian.complete({ ...req.query, cookieState: cookieValue(req.headers.cookie, STATE_COOKIE) });
+      await store.audit({ at: new Date().toISOString(), kind: 'connection', actor, summary: `Atlassian connected (${site?.name ?? 'no site'})` });
+      return back({ connected: 'atlassian' });
+    } catch (e) {
+      if (!(e instanceof ConnectError)) req.log.error(e);
+      return back({ connect_error: e instanceof ConnectError ? e.message : 'Connecting Atlassian failed. Details are in the server log.' });
+    }
+  });
+
+  app.put<{ Body: { cloudId: string } }>('/api/connections/atlassian/site', { schema: { summary: 'Choose the Atlassian site the analysis reads', body: atlassianSiteBody, response: errors(400, 409, 422), ...MUTATION } }, async (req) => {
+    try {
+      const site = await atlassian.selectSite(req.body.cloudId);
+      await store.audit({ at: new Date().toISOString(), kind: 'connection', ...who(req), summary: `Atlassian site changed to ${site.name}` });
+      return atlassian.status();
+    } catch (e) {
+      return connectFailed(e);
+    }
+  });
+
+  app.delete('/api/connections/atlassian', { schema: { summary: 'Forget the Atlassian connection (revoke the app in Atlassian account settings too)', response: errors(409), ...MUTATION } }, async (req) => {
+    await atlassian.disconnect().catch(connectFailed);
+    await store.audit({ at: new Date().toISOString(), kind: 'connection', ...who(req), summary: 'Atlassian disconnected' });
+    return atlassian.status();
   });
 
   // ------------------------------------------------------------------ demo

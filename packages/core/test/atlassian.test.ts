@@ -149,3 +149,32 @@ describe('fetchConfluence', () => {
     expect(calls.filter((c) => c.url.includes('/pages?'))).toHaveLength(1);
   });
 });
+
+describe('OAuth 2.0 (3LO) access', () => {
+  const oauth = { cloudId: 'cloud-1', siteUrl: 'https://acme.atlassian.net/', accessToken: 'dummy-access' };
+
+  it('AT-15: Jira goes through the api.atlassian.com gateway with a bearer token; links point at the site', async () => {
+    const calls = fakeAtlassian([
+      ['/search/jql', json({ issues: [issue('PAY-1', 'Story')] })],
+      ['/issue/PAY-1/remotelink', json([])],
+    ]);
+    const items = await fetchJira({ ...jira, baseUrl: '', email: '', apiToken: '', oauth });
+    expect(calls.every((c) => c.url.startsWith('https://api.atlassian.com/ex/jira/cloud-1/rest/api/3/'))).toBe(true);
+    expect(calls.every((c) => c.auth === 'Bearer dummy-access')).toBe(true);
+    expect(items[0]?.url).toBe('https://acme.atlassian.net/browse/PAY-1');
+  });
+
+  it('AT-16: Confluence goes through the gateway, follows relative next links there and links pages to the site', async () => {
+    const calls = fakeAtlassian([
+      ['/spaces?keys=ARCH', json({ results: [{ id: 7 }] })],
+      ['cursor=c2', json({ results: [{ id: '2', title: 'Two', _links: { webui: '/spaces/ARCH/pages/2' } }] })],
+      ['/spaces/7/pages', json({ results: [{ id: '1', title: 'One' }], _links: { next: '/wiki/api/v2/spaces/7/pages?cursor=c2' } })],
+      ['/labels', json({ results: [] })],
+    ]);
+    const docs = await fetchConfluence({ ...conf, baseUrl: '', email: '', apiToken: '', oauth });
+    expect(docs.map((d) => d.id)).toEqual(['1', '2']);
+    expect(docs[1]?.url).toBe('https://acme.atlassian.net/wiki/spaces/ARCH/pages/2');
+    expect(calls.every((c) => c.url.startsWith('https://api.atlassian.com/ex/confluence/cloud-1/wiki/api/v2/'))).toBe(true);
+    expect(calls.every((c) => c.auth === 'Bearer dummy-access')).toBe(true);
+  });
+});

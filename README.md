@@ -146,6 +146,9 @@ Wszystko poza sekretami ustawiasz w UI (*Settings*). Sekrety — zmienne środow
 | `JIRA_API_TOKEN` | Jira Cloud API token (+ e-mail w Settings) |
 | `CONFLUENCE_API_TOKEN` | opcjonalnie; domyślnie używany `JIRA_API_TOKEN` |
 | `FIGMA_TOKEN` | Figma personal access token |
+| `CI_CONNECT_MODE` | `token` (domyślnie): Jira i Confluence przez `JIRA_API_TOKEN`; `oauth`: przycisk *Connect Atlassian* w Settings zamiast tokenu ([`docs/CONNECT-ATLASSIAN.md`](docs/CONNECT-ATLASSIAN.md)) |
+| `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET` | aplikacja OAuth 2.0 (3LO) z Atlassian Developer Console; potrzebne tylko w trybie `oauth` (razem z `CI_ENCRYPTION_KEY`) |
+| `CI_PUBLIC_URL` | adres, pod którym otwierasz aplikację (domyślnie `http://localhost:4317`); Atlassian wraca na `<CI_PUBLIC_URL>/api/connections/atlassian/callback` |
 | `ANTHROPIC_API_KEY` | dostawca *Anthropic* (domyślny model `claude-opus-5-5`) |
 | AWS credential chain (`AWS_PROFILE`, `AWS_ACCESS_KEY_ID`, `AWS_BEARER_TOKEN_BEDROCK` albo rola IAM w ECS/Fargate, App Runner lub EKS) | dostawca *Amazon Bedrock* (Claude w Twoim koncie AWS); profil instancji EC2 działa, ale Settings pokaże go jako *missing* |
 | `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `CUSTOM_AI_API_KEY` | pozostali dostawcy (OpenAI-compatible) |

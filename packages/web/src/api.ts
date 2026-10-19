@@ -54,6 +54,30 @@ const saveToken = (t: string) => {
   }
 };
 
+/** How Jira and Confluence are reached: an API token from the environment, or a one-click OAuth connection. */
+export type ConnectMode = 'token' | 'oauth';
+
+export interface AtlassianSite {
+  id: string;
+  name: string;
+  url: string;
+  scopes: string[];
+}
+
+/** GET /api/connections → atlassian. Never contains a token. */
+export interface AtlassianStatus {
+  mode: ConnectMode;
+  configured: boolean;
+  missing: string[];
+  callbackUrl: string;
+  connected: boolean;
+  site?: AtlassianSite;
+  sites: AtlassianSite[];
+  connectedAt?: string;
+  connectedBy?: string;
+  lastError?: string;
+}
+
 /** RFC 9457 problem details returned by the API. */
 export interface Problem {
   title?: string;
@@ -142,7 +166,7 @@ export const api = {
   rules: () => req<{ id: string; name: string; description: string; appliesTo: string[] }[]>('GET', '/api/rules'),
   settings: async () => {
     const { json, res } = await send('GET', '/api/settings');
-    return { ...(json as { settings: Settings; secrets: Record<string, boolean>; defaultModels: Record<string, string> }), etag: res.headers.get('etag') ?? '' };
+    return { ...(json as { settings: Settings; secrets: Record<string, boolean>; defaultModels: Record<string, string>; connectMode: ConnectMode }), etag: res.headers.get('etag') ?? '' };
   },
   /** `etag` is the one returned with the settings being edited; a 412 means someone else saved in between. */
   saveSettings: async (patch: DeepPartial<Settings>, etag: string): Promise<SettingsResponse> => {
@@ -150,6 +174,11 @@ export const api = {
     return { settings: (json as { settings: Settings }).settings, etag: res.headers.get('etag') ?? '' };
   },
   testConnections: () => req<Record<string, string>>('POST', '/api/settings/test-connections'),
+  connections: () => req<{ mode: ConnectMode; atlassian: AtlassianStatus }>('GET', '/api/connections'),
+  /** The URL of Atlassian's consent page; the browser goes there and comes back to Settings. */
+  connectAtlassian: () => req<{ url: string }>('POST', '/api/connections/atlassian/start'),
+  selectAtlassianSite: (cloudId: string) => req<AtlassianStatus>('PUT', '/api/connections/atlassian/site', { cloudId }),
+  disconnectAtlassian: () => req<AtlassianStatus>('DELETE', '/api/connections/atlassian'),
   scenarios: () => req<{ id: string; title: string; description: string }[]>('GET', '/api/demo/scenarios'),
   applyScenario: (id: string) => req<AnalysisResult>('POST', `/api/demo/scenarios/${id}`),
   resetDemo: () => req<AnalysisResult>('POST', '/api/demo/reset'),

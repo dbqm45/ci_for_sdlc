@@ -16,6 +16,7 @@ import {
   type ProjectContext,
   type SemanticOutput,
 } from '@ci/core';
+import type { AtlassianConnection } from './connections.js';
 import type { Principal } from './http.js';
 import type { Settings, Store } from './store.js';
 
@@ -38,7 +39,11 @@ export class Engine extends EventEmitter {
   private timer?: NodeJS.Timeout;
   private aiCache?: Map<string, SemanticOutput>;
 
-  constructor(private store: Store) {
+  /** `atlassian`: set in CI_CONNECT_MODE=oauth; Jira and Confluence then use its token instead of JIRA_API_TOKEN. */
+  constructor(
+    private store: Store,
+    private atlassian?: AtlassianConnection,
+  ) {
     super();
   }
 
@@ -55,12 +60,13 @@ export class Engine extends EventEmitter {
       return v;
     };
     // Read every token before the first request starts: a missing one must not leave earlier fetches rejecting unhandled.
-    const jiraToken = jira.enabled ? token('JIRA_API_TOKEN') : '';
-    const confluenceToken = confluence.enabled ? process.env.CONFLUENCE_API_TOKEN ?? token('JIRA_API_TOKEN') : '';
+    const oauth = this.atlassian && (jira.enabled || confluence.enabled) ? await this.atlassian.accessFor() : undefined;
+    const jiraToken = jira.enabled && !oauth ? token('JIRA_API_TOKEN') : '';
+    const confluenceToken = confluence.enabled && !oauth ? process.env.CONFLUENCE_API_TOKEN ?? token('JIRA_API_TOKEN') : '';
     const figmaToken = figma.enabled ? token('FIGMA_TOKEN') : '';
     const tasks: Promise<void>[] = [];
-    if (jira.enabled) tasks.push(fetchJira({ ...jira, apiToken: jiraToken }).then((r) => void (ctx.requirements = r)));
-    if (confluence.enabled) tasks.push(fetchConfluence({ ...confluence, apiToken: confluenceToken }).then((d) => void (ctx.documents = d)));
+    if (jira.enabled) tasks.push(fetchJira({ ...jira, apiToken: jiraToken, oauth }).then((r) => void (ctx.requirements = r)));
+    if (confluence.enabled) tasks.push(fetchConfluence({ ...confluence, apiToken: confluenceToken, oauth }).then((d) => void (ctx.documents = d)));
     if (figma.enabled) tasks.push(fetchFigma({ token: figmaToken, fileKeys: figma.fileKeys, apiBase: process.env.CI_FIGMA_API_BASE }).then((f) => void (ctx.frames = f)));
     await Promise.all(tasks);
     return ctx;
