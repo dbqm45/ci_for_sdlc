@@ -148,18 +148,18 @@ function GraphCanvas({ data, filter, large, onEnlarge }: { data: GraphData; filt
                 href={internal ?? n.url}
                 target={internal ? undefined : '_blank'}
                 rel={internal ? undefined : 'noreferrer'}
-                aria-label={`${n.title} (${n.relation})`}
+                // The name is the visible text, so speech users can say what they see (WCAG 2.5.3).
+                aria-label={`${n.label} ${n.relation}`}
                 className={`node${dim(n.id)}${active === n.id ? ' on' : ''}`}
                 onMouseEnter={() => setActive(n.id)}
                 onMouseLeave={() => setActive(undefined)}
                 onFocus={() => setActive(n.id)}
                 onBlur={() => setActive(undefined)}
               >
-                <title>{n.title}</title>
                 <rect x={left ? n.x - 360 : n.x - 10} y={n.y - ROW_HALF} width={370} height={ROW_HALF * 2} className="hit" />
                 <circle cx={n.x} cy={n.y} r={6.5} fill={COLORS[n.source] ?? 'var(--faint)'} />
                 <text x={tx} y={n.y - 1} textAnchor={anchor} className="label">
-                  {n.label}
+                  {n.label}{' '}
                 </text>
                 <text x={tx} y={n.y + 12} textAnchor={anchor} className="rel">
                   {n.relation}

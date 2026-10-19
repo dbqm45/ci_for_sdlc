@@ -19,9 +19,9 @@ test('GRF-01: every neighbour is shown with its full name and relation, without 
   const graph = await openGraph(page);
   const nodes = graph.getByRole('link');
   await expect(nodes).toHaveCount(10);
-  await expect(graph.getByRole('link', { name: 'PAY-100 — Saved Payment Methods (belongs to · explicit)' })).toBeVisible();
-  await expect(graph.getByRole('link', { name: 'Saved Payment Methods – Business Rules (documented by · explicit)' })).toBeVisible();
-  await expect(graph.getByRole('link', { name: 'Checkout App / Add card / Session expired (designed by · semantic 85%)' })).toBeVisible();
+  await expect(graph.getByRole('link', { name: 'PAY-100 — Saved Payment Methods belongs to · explicit' })).toBeVisible();
+  await expect(graph.getByRole('link', { name: 'Saved Payment Methods – Business Rules documented by · explicit' })).toBeVisible();
+  await expect(graph.getByRole('link', { name: 'Checkout App / Add card / Session expired designed by · semantic 85%' })).toBeVisible();
 
   const boxes = await graph.locator('text.label').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
   expect(boxes).toHaveLength(10);
