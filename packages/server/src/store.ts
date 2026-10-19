@@ -56,7 +56,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export interface AuditEntry {
   at: string;
-  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change';
+  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection';
   /** A display name; `via` is how the change was authorized (admin token or a loopback client). */
   actor: string;
   via?: Principal;
@@ -247,6 +247,18 @@ export class Store {
   }
   async saveAiCache(m: Map<string, SemanticOutput>) {
     return this.write('ai-cache.json', Object.fromEntries([...m].slice(-2000)), await this.encrypt);
+  }
+  /** OAuth connections (refresh tokens): always encrypted with CI_ENCRYPTION_KEY, whatever the at-rest setting says. */
+  connections() {
+    return this.readJson('connections.json', {}, recordOf<unknown>());
+  }
+  updateConnections(fn: (all: Record<string, unknown>) => Record<string, unknown> | void) {
+    return this.serialized(async () => {
+      const current = await this.readJson('connections.json', {}, recordOf<unknown>());
+      const next = fn(current) ?? current;
+      await this.writeJson('connections.json', next, true);
+      return next;
+    });
   }
   driftLog() {
     return this.readJson('drift.json', [], listOf<DriftEvent>());

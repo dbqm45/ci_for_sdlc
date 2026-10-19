@@ -11,6 +11,7 @@
 import { writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AtlassianConnection, connectConfigFromEnv } from './connections.js';
 import { Engine } from './engine.js';
 import { Store } from './store.js';
 
@@ -23,7 +24,8 @@ const arg = (name: string) => {
 const here = dirname(fileURLToPath(import.meta.url));
 const store = new Store(resolve(process.env.CI_DATA_DIR ?? resolve(here, '../../../.ci-data')));
 await store.init();
-const engine = new Engine(store);
+const connect = connectConfigFromEnv();
+const engine = new Engine(store, connect.mode === 'oauth' ? new AtlassianConnection(store, connect) : undefined);
 const result = await engine.analyze('cli');
 
 const only = arg('items')?.split(',').map((s) => s.trim());

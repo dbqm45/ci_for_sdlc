@@ -4,10 +4,20 @@ import { isRecord, records, str, strings } from '../guards.js';
 import { htmlToText } from '../text.js';
 
 /**
- * Jira Cloud + Confluence Cloud connectors (REST, API-token auth).
+ * Jira Cloud + Confluence Cloud connectors (REST). Two ways to authenticate:
+ * an API token (e-mail + token, straight to the site) or an OAuth 2.0 (3LO)
+ * access token (`oauth`, through the api.atlassian.com gateway).
  * Selective fetching: only the configured project / spaces are read, and only
  * the fields the analysis needs.
  */
+
+/** A 3LO access token for one Atlassian site; with it `baseUrl`, `email` and `apiToken` are ignored. */
+export interface AtlassianOAuthAccess {
+  cloudId: string;
+  /** https://your-site.atlassian.net — only for links shown to people. */
+  siteUrl: string;
+  accessToken: string;
+}
 
 export interface JiraConfig {
   baseUrl: string; // https://your-site.atlassian.net
@@ -21,6 +31,7 @@ export interface JiraConfig {
   maxIssues?: number;
   /** Jira issue type name → hierarchy level (P1). Unmapped types use DEFAULT_ISSUE_TYPE_MAP, then become stories. */
   issueTypeMap?: Record<string, string>;
+  oauth?: AtlassianOAuthAccess;
 }
 
 export interface ConfluenceConfig {
@@ -29,9 +40,23 @@ export interface ConfluenceConfig {
   apiToken: string;
   spaceKeys: string[];
   maxPages?: number;
+  oauth?: AtlassianOAuthAccess;
 }
 
+/** The api.atlassian.com gateway that 3LO tokens are sent to. */
+export const ATLASSIAN_API = 'https://api.atlassian.com';
+
 const auth = (email: string, token: string) => `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`;
+
+/** Where requests go (`api`), how they authenticate, and the site URL used in links (`site`). */
+function endpoint(cfg: { baseUrl: string; email: string; apiToken: string; oauth?: AtlassianOAuthAccess }, product: 'jira' | 'confluence') {
+  if (cfg.oauth) {
+    const { cloudId, siteUrl, accessToken } = cfg.oauth;
+    return { api: `${ATLASSIAN_API}/ex/${product}/${encodeURIComponent(cloudId)}`, site: siteUrl.replace(/\/$/, ''), headers: { Authorization: `Bearer ${accessToken}` } };
+  }
+  const base = cfg.baseUrl.replace(/\/$/, '');
+  return { api: base, site: base, headers: { Authorization: auth(cfg.email, cfg.apiToken) } };
+}
 
 /** GETs JSON and hands it to `parse`, which turns the untrusted body into a typed value (or throws). */
 async function getJson<T>(url: string, headers: Record<string, string>, parse: (body: unknown) => T): Promise<T> {
@@ -62,8 +87,7 @@ const toJiraIssue = (v: Record<string, unknown>): JiraIssue[] => {
 };
 
 export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
-  const base = cfg.baseUrl.replace(/\/$/, '');
-  const headers = { Authorization: auth(cfg.email, cfg.apiToken) };
+  const { api: base, site, headers } = endpoint(cfg, 'jira');
   const fields = ['summary', 'description', 'issuetype', 'parent', 'status', 'labels', 'components', 'issuelinks', 'updated', cfg.acceptanceCriteriaField].filter(Boolean).join(',');
   const jql = `project = "${cfg.projectKey}" ${cfg.jqlFilter ?? ''} ORDER BY key ASC`;
   const issues: JiraIssue[] = [];
@@ -76,7 +100,7 @@ export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
     next = page.isLast === false || token ? token : undefined;
   } while (next && issues.length < (cfg.maxIssues ?? 2000));
 
-  const items = issues.map((i) => jiraIssueToRequirement(i, base, cfg));
+  const items = issues.map((i) => jiraIssueToRequirement(i, site, cfg));
 
   // Remote links (Confluence pages / Figma frames) for stories, bugs and epics.
   await pool(items.filter((i) => i.type !== 'task' && i.type !== 'subtask'), 4, async (item) => {
@@ -192,8 +216,7 @@ const bullets = (t: string) =>
 // ---------------------------------------------------------------------------- Confluence
 
 export async function fetchConfluence(cfg: ConfluenceConfig): Promise<DocumentItem[]> {
-  const base = cfg.baseUrl.replace(/\/$/, '');
-  const headers = { Authorization: auth(cfg.email, cfg.apiToken) };
+  const { api: base, site, headers } = endpoint(cfg, 'confluence');
   const docs: DocumentItem[] = [];
   for (const spaceKey of cfg.spaceKeys) {
     const spacesUrl = `${base}/wiki/api/v2/spaces?keys=${encodeURIComponent(spaceKey)}`;
@@ -215,7 +238,7 @@ export async function fetchConfluence(cfg: ConfluenceConfig): Promise<DocumentIt
           body: htmlToText(str(storage.value) ?? ''),
           labels: [],
           updatedAt: (isRecord(p.version) && str(p.version.createdAt)) || new Date().toISOString(),
-          url: webui ? `${base}/wiki${webui}` : undefined,
+          url: webui ? `${site}/wiki${webui}` : undefined,
         });
       }
       const next: string | undefined = isRecord(res._links) ? str(res._links.next) : undefined;

@@ -88,6 +88,11 @@ export const withdrawBody = { ...obj({ by: str(200), reason: str(5000) }), nulla
 
 export const impactQuery = obj({ q: str(500) });
 
+/** Which Atlassian site of the connection the analysis reads. */
+export const atlassianSiteBody = obj({ cloudId: str(100, { minLength: 1 }) }, ['cloudId']);
+/** What Atlassian sends back to the callback; extra parameters are ignored, not refused. */
+export const oauthCallbackQuery = { type: 'object', properties: { code: str(2000), state: str(200), error: str(200), error_description: str(2000) } } as const;
+
 export const problem = {
   $id: 'Problem',
   type: 'object',

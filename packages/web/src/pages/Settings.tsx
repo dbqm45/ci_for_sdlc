@@ -1,7 +1,7 @@
 import type { AiEffort, AiProviderKind, Settings as SettingsData } from '@ci/core';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../App';
-import { api, ApiError, currentUser, errMsg, setCurrentUser } from '../api';
+import { api, ApiError, currentUser, errMsg, setCurrentUser, type AtlassianStatus } from '../api';
 import { Card, Sdot, SourceLogo, Spinner, StatusIcon } from '../components/ui';
 import { parseFigmaFileKey } from '../components/figmaFileKey';
 import { SparkleIcon, SyncIcon } from '../components/icons';
@@ -25,15 +25,24 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [test, setTest] = useState<Record<string, string>>();
   const [user, setUser] = useState(currentUser());
+  const [atlassian, setAtlassian] = useState<AtlassianStatus>();
 
   const load = async () => {
     const d = await api.settings();
     setData(d);
     setS(structuredClone(d.settings));
+    if (d.connectMode === 'oauth') setAtlassian((await api.connections()).atlassian);
   };
   useEffect(() => {
     void load();
     void api.rules().then(setRules);
+    // Back from Atlassian's consent page: say how it went, then drop the parameters from the address.
+    const q = new URLSearchParams(location.search);
+    const outcome = q.get('connect_error') ?? (q.get('connected') === 'atlassian' ? 'Atlassian connected' : undefined);
+    if (outcome) {
+      toast(outcome);
+      history.replaceState(null, '', `${location.pathname}${location.hash}`);
+    }
   }, []);
   if (!s || !data) return <div className="empty"><Spinner /></div>;
 
@@ -70,6 +79,13 @@ export function Settings() {
     </span>
   );
   const origin = location.origin;
+  const oauth = data.connectMode === 'oauth';
+  /** In oauth mode Jira and Confluence show the connection instead of the token badge. */
+  const atlassianBadge = (
+    <span className={`badge ${atlassian?.connected ? 'ok' : 'warn'}`} title="One-click Atlassian connection (OAuth); no token is stored in settings">
+      {atlassian?.connected ? `Connected — ${atlassian.site?.name ?? ''}` : 'Not connected'}
+    </span>
+  );
 
   return (
     <div className="page">
@@ -112,17 +128,18 @@ export function Settings() {
           </div>
         )}
         <div className="col" style={{ gap: 18 }}>
-          <Integration title="Jira" source="jira" enabled={s.integrations.jira.enabled} onToggle={(v) => set('integrations.jira.enabled', v)} badges={secret('JIRA_API_TOKEN')}>
-            <Field label="Site URL"><input className="input" placeholder="https://your-site.atlassian.net" value={s.integrations.jira.baseUrl} onChange={(e) => set('integrations.jira.baseUrl', e.target.value)} /></Field>
-            <Field label="Account e-mail"><input className="input" value={s.integrations.jira.email} onChange={(e) => set('integrations.jira.email', e.target.value)} /></Field>
+          {oauth && <AtlassianConnect status={atlassian} onChange={setAtlassian} toast={toast} />}
+          <Integration title="Jira" source="jira" enabled={s.integrations.jira.enabled} onToggle={(v) => set('integrations.jira.enabled', v)} badges={oauth ? atlassianBadge : secret('JIRA_API_TOKEN')}>
+            {!oauth && <Field label="Site URL"><input className="input" placeholder="https://your-site.atlassian.net" value={s.integrations.jira.baseUrl} onChange={(e) => set('integrations.jira.baseUrl', e.target.value)} /></Field>}
+            {!oauth && <Field label="Account e-mail"><input className="input" value={s.integrations.jira.email} onChange={(e) => set('integrations.jira.email', e.target.value)} /></Field>}
             <Field label="Project key"><input className="input" placeholder="PAY" value={s.integrations.jira.projectKey} onChange={(e) => set('integrations.jira.projectKey', e.target.value)} /></Field>
             <Field label="Acceptance criteria field (optional)"><input className="input" placeholder="customfield_10035 — else parsed from description" value={s.integrations.jira.acceptanceCriteriaField ?? ''} onChange={(e) => set('integrations.jira.acceptanceCriteriaField', e.target.value || undefined)} /></Field>
             <Field label="Additional JQL (optional)"><input className="input" placeholder="AND statusCategory != Done" value={s.integrations.jira.jqlFilter ?? ''} onChange={(e) => set('integrations.jira.jqlFilter', e.target.value || undefined)} /></Field>
             <IssueTypeMap value={s.integrations.jira.issueTypeMap ?? {}} onChange={(m) => set('integrations.jira.issueTypeMap', m)} />
           </Integration>
-          <Integration title="Confluence" source="confluence" enabled={s.integrations.confluence.enabled} onToggle={(v) => set('integrations.confluence.enabled', v)} badges={secret('CONFLUENCE_API_TOKEN')}>
-            <Field label="Site URL"><input className="input" placeholder="https://your-site.atlassian.net" value={s.integrations.confluence.baseUrl} onChange={(e) => set('integrations.confluence.baseUrl', e.target.value)} /></Field>
-            <Field label="Account e-mail"><input className="input" value={s.integrations.confluence.email} onChange={(e) => set('integrations.confluence.email', e.target.value)} /></Field>
+          <Integration title="Confluence" source="confluence" enabled={s.integrations.confluence.enabled} onToggle={(v) => set('integrations.confluence.enabled', v)} badges={oauth ? atlassianBadge : secret('CONFLUENCE_API_TOKEN')}>
+            {!oauth && <Field label="Site URL"><input className="input" placeholder="https://your-site.atlassian.net" value={s.integrations.confluence.baseUrl} onChange={(e) => set('integrations.confluence.baseUrl', e.target.value)} /></Field>}
+            {!oauth && <Field label="Account e-mail"><input className="input" value={s.integrations.confluence.email} onChange={(e) => set('integrations.confluence.email', e.target.value)} /></Field>}
             <Field label="Space keys (comma separated)"><input className="input" placeholder="PAY, CHK" value={s.integrations.confluence.spaceKeys.join(', ')} onChange={(e) => set('integrations.confluence.spaceKeys', e.target.value.split(',').map((x: string) => x.trim()).filter(Boolean))} /></Field>
           </Integration>
           <Integration title="Figma" source="figma" enabled={s.integrations.figma.enabled} onToggle={(v) => set('integrations.figma.enabled', v)} badges={secret('FIGMA_TOKEN')}>
@@ -346,6 +363,73 @@ function Check({ label, v, on }: { label: ReactNode; v: boolean; on: (v: boolean
     <label className="check">
       <input type="checkbox" checked={v} onChange={(e) => on(e.target.checked)} /> <span>{label}</span>
     </label>
+  );
+}
+
+/** CI_CONNECT_MODE=oauth: one button connects Jira and Confluence through Atlassian's consent page. */
+function AtlassianConnect({ status, onChange, toast }: { status?: AtlassianStatus; onChange: (s: AtlassianStatus) => void; toast: (m: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  if (!status) return <Spinner />;
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      toast(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const connect = () => run(async () => location.assign((await api.connectAtlassian()).url));
+  const disconnect = () =>
+    run(async () => {
+      if (!window.confirm('Disconnect Atlassian? Jira and Confluence stop being read until someone connects again. To revoke the app completely, remove it in your Atlassian account settings too.')) return;
+      onChange(await api.disconnectAtlassian());
+      toast('Atlassian disconnected');
+    });
+  const chooseSite = (cloudId: string) => run(async () => onChange(await api.selectAtlassianSite(cloudId)));
+
+  return (
+    <div className="col" style={{ gap: 8 }}>
+      <div className="row wrap">
+        <SourceLogo source="jira" size={17} />
+        <SourceLogo source="confluence" size={17} />
+        <strong>Atlassian account</strong>
+        <span className="right row wrap">
+          {status.connected && (
+            <button className="btn sm" onClick={disconnect} disabled={busy}>
+              Disconnect
+            </button>
+          )}
+          <button className="btn sm primary" onClick={connect} disabled={busy || !status.configured}>
+            {busy ? <Spinner /> : status.connected || status.lastError ? 'Reconnect Atlassian' : 'Connect Atlassian'}
+          </button>
+        </span>
+      </div>
+      {!status.configured && (
+        <div className="banner bad">
+          Set {status.missing.join(', ')} on the server to enable the button. Register <code>{status.callbackUrl}</code> as the callback URL of the Atlassian app.
+        </div>
+      )}
+      {status.lastError && <div className="banner bad">The connection stopped working ({status.lastError}). Connect again.</div>}
+      {status.connected && (
+        <div className="small muted">
+          Connected{status.connectedBy ? ` by ${status.connectedBy}` : ''}
+          {status.connectedAt ? ` on ${new Date(status.connectedAt).toLocaleString()}` : ''}. Jira and Confluence are read from {status.site?.url ?? 'the chosen site'}.
+        </div>
+      )}
+      {status.sites.length > 1 && (
+        <Field label="Atlassian site">
+          <select className="input" value={status.site?.id ?? ''} onChange={(e) => void chooseSite(e.target.value)} disabled={busy}>
+            {status.sites.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name} — {x.url}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+    </div>
   );
 }
 

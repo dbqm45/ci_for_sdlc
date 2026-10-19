@@ -102,6 +102,7 @@ docker compose down
    (np. `PAY`) z regułami biznesowymi.
 3. Token API: https://id.atlassian.com/manage-profile/security/api-tokens → *Create API token* → zapisz w menedżerze
    haseł jako `JIRA_API_TOKEN`. Ten sam token działa dla Confluence (osobny `CONFLUENCE_API_TOKEN` tylko gdy chcesz).
+   Zamiast tokenu możesz połączyć się jednym kliknięciem (`CI_CONNECT_MODE=oauth`): [`CONNECT-ATLASSIAN.md`](CONNECT-ATLASSIAN.md).
 4. W aplikacji: *Settings → Workspace → Mode: Live*, potem *Integrations*:
    - Jira: *Site URL* `https://<nazwa>.atlassian.net`, *Account e-mail* (ten od konta Atlassian), *Project key* `PAY`,
    - Confluence: ten sam *Site URL* i e-mail, *Space keys* `PAY`.

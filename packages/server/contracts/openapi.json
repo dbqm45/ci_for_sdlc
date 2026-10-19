@@ -970,6 +970,132 @@
         }
       }
     },
+    "/api/connections": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/connections/atlassian/start": {
+      "post": {
+        "summary": "Start connecting Atlassian (Jira and Confluence); returns the consent URL to open",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connections/atlassian/site": {
+      "put": {
+        "summary": "Choose the Atlassian site the analysis reads",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "cloudId": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "cloudId"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connections/atlassian": {
+      "delete": {
+        "summary": "Forget the Atlassian connection (revoke the app in Atlassian account settings too)",
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/demo/scenarios": {
       "get": {
         "responses": {
