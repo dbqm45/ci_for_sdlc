@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.10] - 2026-10-23
+
+### Nowe
+
+- add npm run local to start the app with one command (#55)
+
 ## [0.1.9] - 2026-10-19
 
 ### Nowe
