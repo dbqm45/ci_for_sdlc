@@ -107,6 +107,11 @@ Kilka PR-ów zmergowanych szybko po sobie: przebiegi workflow czekają w kolejce
 policzą tej samej wersji dwa razy. Gdy w trakcie wydania na `main` trafi nowy commit, push commitu wydania zostanie
 odrzucony, a wszystkie zmiany wyda przebieg uruchomiony dla nowszego commitu.
 
+Commit wydania trafia na `main` bez PR, więc reguły gałęzi `main` (*Settings → Rules*) nie mogą wymagać pull requesta
+ani przejścia sprawdzeń (*Require a pull request*, *Require status checks*). Gdy GitHub odrzuci push z takiego powodu,
+krok *prepare* kończy się błędem z przyczyną w logu: wyłącz tę regułę i uruchom workflow ponownie (*Run workflow*).
+Zakaz force pusha i usuwania gałęzi nie przeszkadza.
+
 Wdrożenie, które nie jest wydaniem, rozpoznasz po tagu obrazu `sha-<commit>`. Numer wersji w `GET /api/health`
 wskazuje wtedy ostatnie wydanie.
 

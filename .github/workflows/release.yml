@@ -68,9 +68,16 @@ jobs:
           git commit -qam "chore(release): $version"
           # A push with GITHUB_TOKEN starts no new workflow run, so this commit does not release itself again.
           # If main moved on meanwhile, the push is rejected and the queued run for the newer commit releases both.
-          if ! git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/main"; then
-            echo "::warning::main moved on during the release; the next run on main releases these commits"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+          # Any other refusal (a branch rule requiring a pull request or status checks) fails the job, so it is seen.
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if ! git push "$remote" "HEAD:refs/heads/main"; then
+            if [ "$(git ls-remote "$remote" refs/heads/main | cut -f1)" != "$GITHUB_SHA" ]; then
+              echo "::warning::main moved on during the release; the next run on main releases these commits"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::GitHub refused the commit chore(release): $version on main (reason above), most likely a branch rule that requires a pull request or status checks. Turn that rule off for main (Settings → Rules) and run this workflow again; docs/RELEASING.md."
+              exit 1
+            fi
           fi
 
       - id: read
