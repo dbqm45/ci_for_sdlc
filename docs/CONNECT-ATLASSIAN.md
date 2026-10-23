@@ -64,6 +64,11 @@ Konto ma kilka stron Atlassiana? Pod przyciskiem pojawia się lista *Atlassian s
 
 Serwer dostępny pod inną nazwą niż `localhost`: dopisz ją też do `CI_ALLOWED_HOSTS`, tak jak dla każdego innego adresu.
 
+Najprościej lokalnie: `npm run local -- --oauth`. Skrypt ustawia `CI_CONNECT_MODE=oauth` i `CI_PUBLIC_URL`, bierze trzy
+klucze z powyższej tabeli ze zmiennych środowiskowych albo z 1Password (`~/.config/ci-sdlc.env` z odwołaniami `op://`),
+a o brakujące pyta w terminalu bez wyświetlania i zapisywania. Po starcie wypisuje adres aplikacji i *Callback URL* do
+wpisania w konsoli Atlassiana.
+
 ### 3. Połączenie
 
 *Settings → Integrations → Connect Atlassian* → zaloguj się → *Accept*. Po powrocie włącz Jirę i/lub Confluence,
