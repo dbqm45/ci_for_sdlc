@@ -57,6 +57,8 @@ i uruchamiaj:
 op run --env-file ~/.config/ci-sdlc.env -- docker compose up -d
 ```
 
+`npm run local` (uruchomienie bez Dockera) sam korzysta z tego pliku, gdy masz `op`: nie trzeba pisać `op run`.
+
 **Bitwarden Secrets Manager (`bws`)** — `bws run -- docker compose up -d`.
 
 **Bez menedżera haseł** — `export` w bieżącej sesji terminala (znika po jej zamknięciu). Plik `.env` w katalogu

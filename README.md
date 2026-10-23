@@ -24,6 +24,17 @@ npm start
 
 Następnie otwórz http://127.0.0.1:4317 (demo workspace „Checkout”). Przy pierwszym `npm start` interfejs buduje się automatycznie; po zmianach w UI uruchom `npm run build`.
 
+Jedno polecenie, które samo sprawdza Node, instaluje zależności, zbiera klucze i uruchamia aplikację:
+
+```bash
+npm run local
+```
+
+Klucze bierze ze zmiennych środowiskowych, z 1Password (`op run` z plikiem odwołań `~/.config/ci-sdlc.env`, zob.
+[`docs/LOCAL-ENVIRONMENT.md`](docs/LOCAL-ENVIRONMENT.md), sekcja 2) albo pyta o brakujące w terminalu; niczego nie
+zapisuje do pliku. Przycisk *Connect Atlassian*: `npm run local -- --oauth`; tryb deweloperski: `npm run local -- --dev`;
+wszystkie opcje: `npm run local -- --help`.
+
 Tryb deweloperski (hot reload UI + API):
 
 ```bash

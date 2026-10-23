@@ -13,6 +13,7 @@
     "dev": "node scripts/check-path.mjs && concurrently -n server,web -c blue,magenta \"npm run dev -w @ci/server\" \"npm run dev -w @ci/web\"",
     "build": "node scripts/check-path.mjs && npm run build -w @ci/web",
     "start": "node scripts/ensure-web.mjs && npm run start -w @ci/server",
+    "local": "node scripts/local.mjs",
     "test": "npm run test -w @ci/core && npm run test -w @ci/server && npm run test -w @ci/web && npm run test -w @ci/sandbox",
     "test:coverage": "npm run test:coverage -w @ci/core && npm run test:coverage -w @ci/server && npm run test -w @ci/web && npm run test -w @ci/sandbox",
     "test:e2e": "playwright test",
