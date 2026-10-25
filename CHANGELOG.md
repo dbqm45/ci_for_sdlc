@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.14] - 2026-10-25
+
+### Nowe
+
+- **core:** add release plan rules for epics (#61)
+
 ## [0.1.13] - 2026-10-25
 
 ### Nowe
