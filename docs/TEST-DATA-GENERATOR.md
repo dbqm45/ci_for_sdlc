@@ -719,10 +719,20 @@ linki z Jiry do ramek, `status` dla Figmy; testy na Figmie w pamięci. Sprawdzen
 dla `EPIC-004` domknięte tego samego dnia (5.3, „domknięcie strażnika”). Brama `api.atlassian.com/ex/…` dla tokenów z zakresami jest potwierdzona
 w praktyce w E3 (`LOCAL-ENVIRONMENT.md`, rozdział 5).
 
-**Weryfikacja E4 na żywo (15.10.2026):** `status` i `seed --confirm` przeszły: 23 ramki, 7 linków z Jiry do Figmy.
-Mutację `figma-remove-error` wykonano we wtyczce, ale `sandbox:mutate` i reset czekają **do 19.10.2026**: Figma
-zablokowała odczyt pliku na ok. 95 h (`429`, plan Starter, limit `low` — kilka odczytów całego pliku w miesiącu).
-Przypomnienie: `.claude/reminders.json` (hook `reminders.py`).
+**Weryfikacja E4 na żywo (15–25.10.2026):**
+
+- 15.10: `status` i `seed --confirm` przeszły: 23 ramki, 7 linków z Jiry do Figmy.
+- 23.10: mutacja `figma-remove-error` (wtyczka, potem `sandbox:mutate --confirm`) przeszła. Wszystkie 7 linków
+  zostało przy właściwych ramkach, także przy zmienionej ramce 1:1. Do usuniętej ramki 1:4 nie prowadzi żaden link
+  świata, więc żaden nie znika.
+- 25.10: Reset we wtyczce i `sandbox:reset --confirm` usunęły 17 zgłoszeń i 8 stron. Strony trafiają do kosza
+  przestrzeni (bot nie może ich trwale usunąć, 404). Potem `sandbox:seed --confirm` bez Figmy odtworzył zgłoszenia
+  i strony; 7 linków do Figmy czeka na kolejny `seed` z Figmą.
+
+Plan Starter (limit `low`) pozwala na kilka odczytów całego pliku w miesiącu. Każde `status`, `seed`, `mutate`
+i `reset` z ustawioną Figmą zużywa jeden. 23.10 i 25.10 Figma zablokowała odczyt (`429`) na 9 h, a potem na 4 dni.
+Bez zmiennych Figmy seeder pomija linki do niej i nie zużywa limitu. Przypomnienie o brakujących linkach:
+`.claude/reminders.json` (hook `reminders.py`).
 
 **Fakty do potwierdzenia na stronach dostawców:**
 
