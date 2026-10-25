@@ -664,6 +664,29 @@
                             "type": "string",
                             "maxLength": 100
                           },
+                          "releaseLineSource": {
+                            "enum": [
+                              "label",
+                              "fixVersion",
+                              "field"
+                            ]
+                          },
+                          "releaseLabelPrefix": {
+                            "type": "string",
+                            "maxLength": 50
+                          },
+                          "releaseLineField": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "flagLabelPrefix": {
+                            "type": "string",
+                            "maxLength": 50
+                          },
+                          "flagField": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
                           "jqlFilter": {
                             "type": "string",
                             "maxLength": 4000
@@ -920,6 +943,24 @@
                             "type": "integer",
                             "minimum": 1,
                             "maximum": 100
+                          }
+                        }
+                      },
+                      "release": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "maxMvpPercent": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                          },
+                          "requireFlag": {
+                            "enum": [
+                              "user_facing",
+                              "all",
+                              "off"
+                            ]
                           }
                         }
                       }

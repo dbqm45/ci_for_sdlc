@@ -39,6 +39,7 @@ describe('sandbox control endpoint', () => {
       ['story-card-limit', 'jira'],
       ['backlog-intake', 'jira'],
       ['api-idempotency', 'confluence'],
+      ['release-planning', 'jira'],
     ]);
   });
 

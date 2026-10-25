@@ -57,6 +57,8 @@ export function Settings() {
   // Settings saved before the story-shape rules have no storyShape; the server fills in the defaults.
   const shape = s.policy.storyShape ?? {};
   const setShape = (key: string, value: unknown) => set('policy.storyShape', { ...shape, [key]: value });
+  const release = s.policy.release ?? {};
+  const setRelease = (key: string, value: unknown) => set('policy.release', { ...release, [key]: value });
   const save = async () => {
     setSaving(true);
     try {
@@ -137,6 +139,17 @@ export function Settings() {
             {!oauth && <Field label="Account e-mail"><input className="input" value={s.integrations.jira.email} onChange={(e) => set('integrations.jira.email', e.target.value)} /></Field>}
             <Field label="Project key"><input className="input" placeholder="PAY" value={s.integrations.jira.projectKey} onChange={(e) => set('integrations.jira.projectKey', e.target.value)} /></Field>
             <Field label="Acceptance criteria field (optional)"><input className="input" placeholder="customfield_10035 — else parsed from description" value={s.integrations.jira.acceptanceCriteriaField ?? ''} onChange={(e) => set('integrations.jira.acceptanceCriteriaField', e.target.value || undefined)} /></Field>
+            <Field label="Release line R1…Rn from">
+              <select className="input" value={s.integrations.jira.releaseLineSource ?? 'label'} onChange={(e) => set('integrations.jira.releaseLineSource', e.target.value)}>
+                <option value="label">Labels with a prefix (release:R1)</option>
+                <option value="fixVersion">Fix versions named R1, R2…</option>
+                <option value="field">A field</option>
+              </select>
+            </Field>
+            {(s.integrations.jira.releaseLineSource ?? 'label') === 'label' && <Field label="Release label prefix"><input className="input" placeholder="release:" value={s.integrations.jira.releaseLabelPrefix ?? ''} onChange={(e) => set('integrations.jira.releaseLabelPrefix', e.target.value || undefined)} /></Field>}
+            {s.integrations.jira.releaseLineSource === 'field' && <Field label="Release line field"><input className="input" placeholder="customfield_10060" value={s.integrations.jira.releaseLineField ?? ''} onChange={(e) => set('integrations.jira.releaseLineField', e.target.value || undefined)} /></Field>}
+            <Field label="Feature flag field (optional)"><input className="input" placeholder="customfield_10050 — else flag: labels" value={s.integrations.jira.flagField ?? ''} onChange={(e) => set('integrations.jira.flagField', e.target.value || undefined)} /></Field>
+            {!s.integrations.jira.flagField && <Field label="Feature flag label prefix"><input className="input" placeholder="flag:" value={s.integrations.jira.flagLabelPrefix ?? ''} onChange={(e) => set('integrations.jira.flagLabelPrefix', e.target.value || undefined)} /></Field>}
             <Field label="Additional JQL (optional)"><input className="input" placeholder="AND statusCategory != Done" value={s.integrations.jira.jqlFilter ?? ''} onChange={(e) => set('integrations.jira.jqlFilter', e.target.value || undefined)} /></Field>
             <IssueTypeMap value={s.integrations.jira.issueTypeMap ?? {}} onChange={(m) => set('integrations.jira.issueTypeMap', m)} />
           </Integration>
@@ -311,6 +324,19 @@ export function Settings() {
           </Field>
           <Field label="Story points that make a story too large (STORY-002)">
             <input className="input" type="number" min={1} max={100} value={shape.maxStoryPoints ?? 13} onChange={(e) => setShape('maxStoryPoints', Number(e.target.value))} />
+          </Field>
+        </div>
+        <h3 style={{ margin: '18px 0 8px' }}>Release plan</h3>
+        <div className="grid g3">
+          <Field label="Max share of stories in the MVP, % (REL-003)">
+            <input className="input" type="number" min={1} max={100} value={release.maxMvpPercent ?? 60} onChange={(e) => setRelease('maxMvpPercent', Number(e.target.value))} />
+          </Field>
+          <Field label="Stories in a release line need a feature flag (REL-006)">
+            <select className="input" value={release.requireFlag ?? 'user_facing'} onChange={(e) => setRelease('requireFlag', e.target.value)}>
+              <option value="user_facing">User-facing stories</option>
+              <option value="all">All stories</option>
+              <option value="off">Off</option>
+            </select>
           </Field>
         </div>
         <h3 style={{ margin: '18px 0 8px' }}>Rules</h3>

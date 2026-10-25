@@ -9,6 +9,7 @@ export { extractClaims, findConflicts, formatClaimValue, ATTRIBUTE_LABELS } from
 export { RULES } from './analysis/rules.js';
 export { parseAcceptanceCriteria, normalizeAction } from './analysis/acceptance.js';
 export { storyStatement, joinedActions } from './analysis/story-shape.js';
+export { MVP_LINE, releaseLineOf, releasePlanOf } from './analysis/release-plan.js';
 export { STATE_LABELS, JOURNEY_LABELS, TRAIT_LABELS } from './analysis/vocabulary.js';
 export { designCoveragePercent } from './analysis/states.js';
 export * from './ai/types.js';
@@ -17,5 +18,5 @@ export { demoProject, DEMO_SCENARIOS } from './connectors/demo.js';
 export * from './hierarchy.js';
 export * from './settings.js';
 export { errorMessage } from './errors.js';
-export { ATLASSIAN_API, fetchJira, fetchConfluence, jiraIssueToRequirement, adfToText, splitSections, type AtlassianOAuthAccess, type JiraConfig, type ConfluenceConfig } from './connectors/atlassian.js';
+export { ATLASSIAN_API, RELEASE_LINE_SOURCES, type ReleaseLineSource, fetchJira, fetchConfluence, jiraIssueToRequirement, adfToText, splitSections, type AtlassianOAuthAccess, type JiraConfig, type ConfluenceConfig } from './connectors/atlassian.js';
 export { clearFigmaCache, fetchFigma, figmaApiBase, framesFromDocument, FigmaRateLimitError, type FigmaConfig } from './connectors/figma.js';

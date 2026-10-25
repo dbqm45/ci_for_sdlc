@@ -11,12 +11,13 @@ import type {
   RequirementItem,
   Severity,
 } from '../model.js';
-import { DIMENSIONS } from '../model.js';
+import { dimensionsFor } from '../model.js';
 import { hash } from '../text.js';
 import { workItemsUnder } from '../hierarchy.js';
 import { aiFindingsAction, driftReactionOf, type SeverityAction } from '../policy.js';
 import { evJira, itemContext, questionOptions, type AnalysisEnv, type ItemCtx } from './context.js';
 import { RULES, taskCoverage, type FindingDraft } from './rules.js';
+import { releasePlanOf } from './release-plan.js';
 import { challenges, designCoveragePercent, journeyCoverage, stateCoverage } from './states.js';
 import { STATE_LABELS, TRAIT_LABELS } from './vocabulary.js';
 
@@ -77,6 +78,7 @@ export function analyzeItem(env: AnalysisEnv, r: RequirementItem): { analysis: I
     tasks,
     traits: [...c.traits].map((t) => TRAIT_LABELS[t]),
     challenges: ch,
+    ...(isContainer(r.type) && { releasePlan: releasePlanOf(env.childrenOf, r.key) }),
     checklist: [],
   };
   return { analysis, ctx: c };
@@ -120,7 +122,7 @@ export function scoreItem(env: AnalysisEnv, a: ItemAnalysis, ctx?: ItemCtx) {
   const open = a.findings.filter((f) => f.status === 'open');
   const counted = open.filter((f) => action.get(f) !== 'record');
 
-  a.dimensions = DIMENSIONS.map((dimension): DimensionScore => {
+  a.dimensions = dimensionsFor(a.type).map((dimension): DimensionScore => {
     const fs = counted.filter((f) => f.dimension === dimension);
     let score = 100 - fs.reduce((s, f) => s + SEVERITY_PENALTY[f.severity], 0);
     const notes = fs.map((f) => f.title);
@@ -138,7 +140,7 @@ export function scoreItem(env: AnalysisEnv, a: ItemAnalysis, ctx?: ItemCtx) {
   const blocking = open.filter((f) => action.get(f) === 'block');
   for (const f of a.findings) f.blocks = blocking.includes(f) || undefined;
   const notify = open.filter((f) => action.get(f) === 'notify');
-  const weights: Record<Dimension, number> = { requirements: 1.3, design: 1, documentation: 0.8, architecture: 1.2, userJourneys: 1, errorHandling: 1.1, dependencies: 0.6 };
+  const weights: Record<Dimension, number> = { requirements: 1.3, design: 1, documentation: 0.8, architecture: 1.2, userJourneys: 1, errorHandling: 1.1, dependencies: 0.6, delivery: 1 };
   const total = a.dimensions.reduce((s, d) => s + weights[d.dimension], 0);
   let health = Math.round(a.dimensions.reduce((s, d) => s + d.score * weights[d.dimension], 0) / total);
   let status: HealthStatus = 'healthy';

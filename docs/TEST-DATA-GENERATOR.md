@@ -68,7 +68,7 @@ Dlatego część z nich ma oznaczenie **[do sprawdzenia]**: przed etapem E3 potw
 | Element | Gdzie | Co z tego wynika |
 |---|---|---|
 | Dane demo „Checkout” (PAY/CHK, strony 1001–4001, plik Figma `FIGCHK01`) | `packages/core/src/connectors/demo.ts` | Dobry wzór treści; dane są zaszyte w kodzie i nie trafiają do prawdziwych źródeł. |
-| Scenariusze demo (`timeout-change`, `figma-remove-error`, `story-card-limit`, `api-idempotency`) | `DEMO_SCENARIOS` w `demo.ts` | Gotowy model „mutacji”, do przeniesienia na prawdziwe źródła. |
+| Scenariusze demo (`timeout-change`, `figma-remove-error`, `story-card-limit`, `api-idempotency`, `backlog-intake`, `release-planning`) | `DEMO_SCENARIOS` w `demo.ts` | Gotowy model „mutacji”, do przeniesienia na prawdziwe źródła. |
 | 21 reguł (REQ, ERR, ARCH, DES, DOC, CON, COV, BUG, EPIC) i `taskCoverage` | `packages/core/src/analysis/rules.ts` | Każda reguła potrzebuje co najmniej jednego scenariusza „zapala się” i jednego „nie zapala się”. |
 | Konektory Jira i Confluence przyjmują `baseUrl` | `packages/core/src/connectors/atlassian.ts` | Można je skierować na atrapę bez zmian w kodzie. |
 | Adres API Figmy zaszyty na stałe (`const API = 'https://api.figma.com/v1'`) | `packages/core/src/connectors/figma.ts:37` | Do zmiany: nadpisanie adresu zmienną środowiskową, tylko na potrzeby testów (sekcja 8.6). |

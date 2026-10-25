@@ -92,6 +92,12 @@
 | BUG-004 | bug | bug matches an open finding of the related story (root cause) |
 | DEP-001 | all | depends on an item that is not ready |
 | EPIC-001..004 | epic | no goal, no stories, stories without design, inconsistent behaviour across stories |
+| REL-001 | epic, feature | 3 or more stories and none in release line R1 (no MVP) |
+| REL-002 | epic, feature | the "MVP" section is missing, or states no outcome, no metric threshold or no horizon |
+| REL-003 | epic, feature | R1 holds more than `maxMvpPercent` (60%) of the stories |
+| REL-004 | epic, feature | R1 holds a technical-layer story (STORY-003's signal) |
+| REL-005 | epic, feature | a story in R1 is blocked by a story of a later line or without a line (critical) |
+| REL-006 | epic, feature | a story in a release line has no feature flag (`requireFlag`: user-facing stories by default) |
 | DRIFT-001 | approved items | context changed since approval |
 | AI-001 | story, bug | semantic findings from the AI reviewer (evidence required) |
 
@@ -100,6 +106,15 @@ thresholds of `policy.storyShape` (`storyShapeOf`, defaults of the pdi contract 
 `maxScenarios: 6`, `maxActions: 3`, `maxStoryPoints: 13`; set in *Settings → Policy → Story shape*, stored as
 `policy.storyShape`, validated by `settingsBody`). Their expected results are pinned by the contract's
 story-shape set (`packages/core/test/story-shape.test.ts`).
+
+Release-plan rules (REL-*, `analysis/release-plan.ts`, step G1.2) read the plan from Jira conventions (pdi contract
+0.4.0, DG4): each story's `releaseLine` R1…Rn (R1 = MVP) from `release:R1` labels by default, or a fix version or a
+field (`integrations.jira.releaseLineSource`); its `flagKeys` from `flag:` labels or a field, as ShipScope's
+`flag_link`; and the epic's `mvp`, the "MVP" section of its description. Their findings go to the `delivery`
+dimension ("Release plan"), which only epics and features have (`dimensionsFor`), so a REL-005 conflict makes the
+epic NOT READY. Thresholds: `policy.release` (`releaseOf`: `maxMvpPercent: 60`, `requireFlag: user_facing`). Epics
+and features carry `releasePlan` (lines, stories without a line, MVP share), shown in the "Release plan" panel of
+the item page. Not yet: REL-004's AI check of a missing flow step, and REL-007/008 on `release.yaml` (repo mode, G1.4).
 
 ## Decisions feed back into the analysis
 

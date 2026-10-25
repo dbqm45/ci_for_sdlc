@@ -6,6 +6,7 @@ import { OUTDATED_PATTERNS, STATE_LABELS, STATE_PATTERNS, VAGUE_TERMS } from './
 import { tokenize } from '../text.js';
 import { workItemsUnder } from '../hierarchy.js';
 import { STORY_SHAPE_RULES } from './story-shape.js';
+import { RELEASE_RULES } from './release-plan.js';
 
 /**
  * Deterministic rules — the "linter" half of Hybrid Intelligence.
@@ -607,6 +608,8 @@ export const RULES: Rule[] = [
   },
   // ------------------------------------------------------------------ story shape (STORY-001…003, AC-001…004)
   ...STORY_SHAPE_RULES,
+  // ------------------------------------------------------------------ release plan (REL-001…006)
+  ...RELEASE_RULES,
 ];
 
 function groupClaims(cs: Claim[]): Map<string, Claim[]> {

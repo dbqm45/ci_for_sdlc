@@ -9,6 +9,7 @@ export const DIMENSION_LABELS: Record<string, string> = {
   userJourneys: 'User journeys',
   errorHandling: 'Error handling',
   dependencies: 'Dependencies',
+  delivery: 'Release plan',
 };
 
 export const STATE_LABELS: Record<string, string> = {

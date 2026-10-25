@@ -110,3 +110,21 @@ test('ITM-08: an approved story changed in a source system can be re-approved af
   await expect(page.getByRole('button', { name: 'Re-approve after review' })).not.toBeVisible();
   await expect(page.getByRole('button', { name: 'Withdraw approval' })).toBeVisible();
 });
+
+test('ITM-09: an epic shows its release plan; a plan against the dependency order makes it NOT READY', async ({ page, request }) => {
+  await page.goto('/#/item/CHK-200');
+  const plan = card(page, 'Release plan');
+  // No story carries release:R1 yet (REL-001).
+  await expect(plan.getByText('No MVP yet: none of the 4 stories is in release line R1.')).toBeVisible();
+  await expect(plan.getByText('MVP is not designated')).toBeVisible();
+
+  await applyScenarioViaApi(request, 'release-planning');
+  await page.reload();
+  await expect(plan.getByText('MVP (R1) holds 2 of 4 stories (50%).')).toBeVisible();
+  await expect(plan.getByRole('row', { name: /R1 · MVP/ }).getByRole('button')).toHaveText(['CHK-201', 'CHK-202']);
+  await expect(plan.getByRole('row', { name: /^R2/ }).getByRole('button')).toHaveText(['CHK-203', 'CHK-204']);
+
+  await page.goto('/#/item/PAY-110');
+  await expect(card(page, 'Release plan').getByText('PAY-128 (R1) is blocked by PAY-125 (R2)')).toBeVisible();
+  await expect(page.getByText('NOT READY').first()).toBeVisible();
+});

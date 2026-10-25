@@ -113,7 +113,7 @@ export function itemContext(env: AnalysisEnv, r: RequirementItem): ItemCtx {
   const design = frames.flatMap((f) => env.claimsByEntity.get(frameId(f)) ?? []);
   const decs = decisions.flatMap((d) => env.claimsByEntity.get(`decision:${d.id}`) ?? []);
 
-  const ui = !r.labels.some((l) => /^(backend|api|infra|tech[- ]?debt|no[- ]?ui)$/i.test(l));
+  const ui = hasUi(r);
   return {
     r,
     bundle,
@@ -130,6 +130,9 @@ export function itemContext(env: AnalysisEnv, r: RequirementItem): ItemCtx {
     env,
   };
 }
+
+/** False for issues labelled as having no user interface (backend, api, infra, tech debt, no-ui). */
+export const hasUi = (r: Pick<RequirementItem, 'labels'>) => !r.labels.some((l) => /^(backend|api|infra|tech[- ]?debt|no[- ]?ui)$/i.test(l));
 
 // ---------------- evidence helpers ----------------
 
