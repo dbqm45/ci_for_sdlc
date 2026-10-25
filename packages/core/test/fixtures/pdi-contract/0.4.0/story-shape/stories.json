@@ -1,0 +1,316 @@
+{
+  "contract_version": "0.4.0",
+  "stories": [
+    {
+      "id": "SS-01",
+      "lang": "pl",
+      "title": "Klient dodaje kartę płatniczą",
+      "description": "Jako klient chcę dodać kartę płatniczą, aby szybciej płacić.",
+      "acceptance_criteria": "Zakładając, że klient nie ma zapisanych kart\nGdy doda kartę z poprawnymi danymi\nWtedy widzi ją na liście jako domyślną z ostatnimi 4 cyframi\n\nZakładając, że klient jest na formularzu karty\nGdy doda kartę z nieważną datą\nWtedy widzi komunikat „Karta wygasła” przy polu daty"
+    },
+    {
+      "id": "SS-02",
+      "lang": "pl",
+      "title": "Zarządzanie zapisanymi kartami",
+      "description": "Jako klient chcę dodać, edytować i usunąć kartę oraz ustawić kartę domyślną.",
+      "acceptance_criteria": "- Karta jest zapisana poprawnie\n- Zapis do tabeli saved_cards\n- Usunięcie działa\n- Można ustawić domyślną"
+    },
+    {
+      "id": "SS-03",
+      "lang": "pl",
+      "title": "Klient usuwa kartę",
+      "description": "Jako klient chcę usunąć zapisaną kartę, aby nie była używana do płatności.",
+      "acceptance_criteria": "Zakładając, że klient ma dwie zapisane karty\nGdy usunie kartę, która nie jest domyślna\nWtedy widzi prośbę o potwierdzenie\nOraz po potwierdzeniu karta znika z listy"
+    },
+    {
+      "id": "SS-04",
+      "lang": "pl",
+      "title": "BE: endpoint do zapisu karty",
+      "description": "Dodać endpoint POST /cards zapisujący kartę w bazie.",
+      "acceptance_criteria": "- Endpoint zwraca 201\n- Rekord trafia do tabeli cards"
+    },
+    {
+      "id": "SS-05",
+      "lang": "pl",
+      "title": "Migracja tabeli zamówień",
+      "description": "Dodać kolumnę status_v2 do tabeli orders.",
+      "acceptance_criteria": "Zakładając, że baza ma tabelę orders\nGdy administrator uruchomi migrację\nWtedy tabela orders ma kolumnę status_v2"
+    },
+    {
+      "id": "SS-06",
+      "lang": "pl",
+      "title": "Klient filtruje wyniki wyszukiwania",
+      "description": "Jako klient chcę zawęzić wyniki wyszukiwania filtrami, aby szybciej znaleźć produkt.",
+      "acceptance_criteria": "Zakładając, że ustawiono filtr rozmiaru 42\nGdy klient wyszuka produkty\nWtedy widzi tylko produkty w rozmiarze 42\n\nZakładając, że ustawiono filtr koloru czarnego\nGdy klient wyszuka produkty\nWtedy widzi tylko produkty w kolorze czarnym\n\nZakładając, że ustawiono filtr ceny do 200 zł\nGdy klient wyszuka produkty\nWtedy widzi tylko produkty w cenie do 200 zł\n\nZakładając, że ustawiono filtr marki Alfa\nGdy klient wyszuka produkty\nWtedy widzi tylko produkty marki Alfa\n\nZakładając, że ustawiono filtr dostępności „od ręki”\nGdy klient wyszuka produkty\nWtedy widzi tylko produkty dostępne od ręki\n\nZakładając, że ustawiono filtr oceny co najmniej 4\nGdy klient wyszuka produkty\nWtedy widzi tylko produkty z oceną co najmniej 4\n\nZakładając, że ustawiono filtr rozmiaru 42 i koloru czarnego\nGdy klient wyszuka produkty\nWtedy widzi tylko produkty spełniające oba warunki"
+    },
+    {
+      "id": "SS-07",
+      "lang": "pl",
+      "title": "Klient zmienia adres dostawy w zamówieniu",
+      "description": "Jako klient chcę zmienić adres dostawy w złożonym zamówieniu, aby paczka trafiła pod nowy adres.",
+      "acceptance_criteria": "Zakładając, że zamówienie nie zostało jeszcze wysłane\nGdy klient zmieni adres dostawy\nWtedy widzi nowy adres w szczegółach zamówienia",
+      "story_points": 13
+    },
+    {
+      "id": "SS-08",
+      "lang": "pl",
+      "title": "Katalog produktów sprzedawcy",
+      "description": "Jako sprzedawca chcę zarządzać katalogiem produktów.",
+      "acceptance_criteria": "Gdy sprzedawca doda produkt\nWtedy produkt jest widoczny w katalogu\n\nGdy sprzedawca zmieni nazwę produktu\nWtedy katalog pokazuje nową nazwę\n\nGdy sprzedawca usunie produkt\nWtedy produkt znika z katalogu\n\nGdy sprzedawca wyeksportuje produkty\nWtedy otrzymuje plik CSV z listą produktów"
+    },
+    {
+      "id": "SS-09",
+      "lang": "pl",
+      "title": "Klient płaci kartą",
+      "description": "Jako klient chcę zapłacić zapisaną kartą, aby nie wpisywać danych.",
+      "acceptance_criteria": "Zakładając, że klient ma kartę domyślną\nGdy zapłaci za zamówienie\nWtedy płatność jest obsłużona poprawnie"
+    },
+    {
+      "id": "SS-10",
+      "lang": "pl",
+      "title": "Klient zapisuje listę zakupów",
+      "description": "Jako klient chcę zapisać koszyk jako listę zakupów, aby wrócić do niej później.",
+      "acceptance_criteria": "Zakładając, że klient ma produkty w koszyku\nGdy zapisze koszyk jako listę"
+    },
+    {
+      "id": "SS-11",
+      "lang": "pl",
+      "title": "Klient stosuje kod rabatowy",
+      "description": "Jako klient chcę użyć kodu rabatowego, aby zapłacić mniej.",
+      "acceptance_criteria": "Zakładając, że kod RABAT10 jest aktywny\nGdy klient doda produkt do koszyka\nOraz gdy zastosuje kod RABAT10\nWtedy widzi cenę obniżoną o 10%"
+    },
+    {
+      "id": "SS-12",
+      "lang": "pl",
+      "title": "Klient płaci BLIK-iem",
+      "description": "Jako klient chcę zapłacić BLIK-iem, aby nie podawać danych karty.",
+      "acceptance_criteria": "Zakładając, że klient wybrał płatność BLIK\nGdy poda poprawny kod\nWtedy płatność jest zapisana w Stripe ze statusem succeeded"
+    },
+    {
+      "id": "SS-13",
+      "lang": "pl",
+      "title": "Historia zamówienia",
+      "description": "Jako klient lub sprzedawca chcę zobaczyć historię zmian statusu zamówienia.",
+      "acceptance_criteria": "Zakładając, że zamówienie zmieniało status trzy razy\nGdy użytkownik otworzy zamówienie\nWtedy widzi listę zmian statusu z datami"
+    },
+    {
+      "id": "SS-14",
+      "lang": "pl",
+      "title": "Eksport/import listy produktów",
+      "description": "Jako sprzedawca chcę eksportować i importować listę produktów w CSV.",
+      "acceptance_criteria": "Zakładając, że sprzedawca ma 50 produktów\nGdy wyeksportuje listę\nWtedy pobiera plik CSV z 50 wierszami"
+    },
+    {
+      "id": "SS-15",
+      "lang": "pl",
+      "title": "Klient widzi numer i datę zamówienia",
+      "description": "Jako klient chcę zobaczyć numer i datę zamówienia, aby podać je w reklamacji.",
+      "acceptance_criteria": "Zakładając, że klient złożył zamówienie\nGdy otworzy potwierdzenie\nWtedy widzi numer zamówienia i datę złożenia"
+    },
+    {
+      "id": "SS-16",
+      "lang": "pl",
+      "title": "Klient zmienia hasło",
+      "description": "Jako klient chcę zmienić hasło, aby zabezpieczyć konto.",
+      "acceptance_criteria": "Po zmianie hasła klient widzi komunikat „Hasło zmienione” i może zalogować się nowym hasłem."
+    },
+    {
+      "id": "SS-17",
+      "lang": "pl",
+      "title": "Klient edytuje profil",
+      "description": "Jako klient chcę zmienić nazwisko w profilu.",
+      "acceptance_criteria": "- Po zapisaniu zmian profil wyświetla się poprawnie"
+    },
+    {
+      "id": "SS-18",
+      "lang": "pl",
+      "title": "Klient zapisuje się do newslettera",
+      "description": "Jako klient chcę zapisać się do newslettera, aby dostawać informacje o promocjach.",
+      "acceptance_criteria": ""
+    },
+    {
+      "id": "SS-19",
+      "lang": "pl",
+      "title": "Klient sprawdza status paczki",
+      "description": "Jako klient chcę sprawdzić, gdzie jest paczka.",
+      "acceptance_criteria": "Gdy klient otworzy szczegóły zamówienia\nWtedy widzi ostatni status paczki i datę jego zmiany"
+    },
+    {
+      "id": "SS-20",
+      "lang": "pl",
+      "title": "Klient oznacza produkt jako ulubiony",
+      "description": "Jako klient chcę oznaczyć produkt jako ulubiony, aby łatwo do niego wrócić.",
+      "acceptance_criteria": "Mając zalogowanego klienta na stronie produktu\nKiedy kliknie „Dodaj do ulubionych”\nWtedy produkt pojawia się na liście ulubionych"
+    },
+    {
+      "id": "SS-21",
+      "lang": "pl",
+      "title": "Książka adresowa klienta",
+      "description": "Jako klient chcę zarządzać adresami dostawy.",
+      "acceptance_criteria": "Gdy klient doda adres\nWtedy adres pojawia się w książce adresowej\n\nGdy klient usunie adres\nWtedy adres znika z książki adresowej"
+    },
+    {
+      "id": "SS-22",
+      "lang": "pl",
+      "title": "Klient odbiera zwrot",
+      "description": "Jako klient chcę otrzymać zwrot za odesłany towar.",
+      "acceptance_criteria": "Zakładając, że magazyn przyjął zwrot\nGdy klient sprawdzi status zwrotu\nWtedy wszystko działa"
+    },
+    {
+      "id": "SS-23",
+      "lang": "pl",
+      "title": "Klient ocenia produkt",
+      "description": "Jako klient chcę ocenić kupiony produkt, aby pomóc innym w wyborze.",
+      "acceptance_criteria": "Zakładając, że klient kupił produkt\nGdy wystawi ocenę 4 gwiazdki\nWtedy widzi swoją ocenę pod produktem",
+      "story_points": 12
+    },
+    {
+      "id": "SS-24",
+      "lang": "pl",
+      "title": "Klient zmienia ilość w koszyku",
+      "description": "Jako klient chcę zmienić ilość produktu w koszyku.",
+      "acceptance_criteria": "Gdy klient doda produkt i gdy zmieni ilość na 3, wtedy widzi sumę dla 3 sztuk"
+    },
+    {
+      "id": "SS-25",
+      "lang": "en",
+      "title": "Customer adds a payment card",
+      "description": "As a customer I want to add a payment card so that I can pay faster.",
+      "acceptance_criteria": "Given the customer has no saved cards\nWhen they add a card with valid details\nThen they see it in the list as the default card with the last 4 digits\n\nGiven the customer is on the card form\nWhen they add a card with an expired date\nThen they see the message \"Card expired\" next to the date field"
+    },
+    {
+      "id": "SS-26",
+      "lang": "en",
+      "title": "Create, edit and delete saved addresses",
+      "description": "As a customer I want to create, edit and delete my saved addresses.",
+      "acceptance_criteria": "- Address is saved correctly\n- Delete works"
+    },
+    {
+      "id": "SS-27",
+      "lang": "en",
+      "title": "FE: show a loading indicator on checkout",
+      "description": "Add a loading indicator while the payment is confirmed.",
+      "acceptance_criteria": "Given the checkout page is open\nWhen the customer submits the payment\nThen a spinner is shown until the confirmation appears"
+    },
+    {
+      "id": "SS-28",
+      "lang": "en",
+      "title": "Customer retries a failed payment",
+      "description": "As a customer I want to retry a failed payment so that my order is not cancelled.",
+      "acceptance_criteria": "Given the last payment failed\nWhen the customer retries the payment\nThen the error is handled"
+    },
+    {
+      "id": "SS-29",
+      "lang": "en",
+      "title": "Customer places an order",
+      "description": "As a customer I want to place an order so that I receive the goods.",
+      "acceptance_criteria": "Given the cart contains two items\nWhen the customer places the order\nThen the order is stored in PostgreSQL with status NEW"
+    },
+    {
+      "id": "SS-30",
+      "lang": "en",
+      "title": "Customer applies a coupon",
+      "description": "As a customer I want to apply a coupon to pay less.",
+      "acceptance_criteria": "Given coupon SAVE10 is active\nWhen the customer adds an item to the cart\nAnd when the customer applies coupon SAVE10\nThen they see the price reduced by 10%"
+    },
+    {
+      "id": "SS-31",
+      "lang": "en",
+      "title": "Customer downloads invoices",
+      "description": "As a customer I want to download my invoices so that I can file my expenses.",
+      "acceptance_criteria": "Given the customer has three invoices\nWhen they download the invoice for March\nThen they receive a PDF with the March invoice",
+      "story_points": 20
+    },
+    {
+      "id": "SS-32",
+      "lang": "en",
+      "title": "Customer saves a wishlist",
+      "description": "As a customer I want to save items to a wishlist.",
+      "acceptance_criteria": "Given the customer is viewing a product\nWhen they save it to the wishlist"
+    },
+    {
+      "id": "SS-33",
+      "lang": "en",
+      "title": "Customer reorders a past order",
+      "description": "As a customer I want to reorder a past order so that I save time.",
+      "acceptance_criteria": "Given the customer has a delivered order\nAnd all its items are in stock\nWhen they reorder it\nThen the cart contains the same items\nAnd the quantities match the past order\nBut the old discount is not applied"
+    },
+    {
+      "id": "SS-34",
+      "lang": "en",
+      "title": "Customer books a delivery slot",
+      "description": "As a customer I want to choose a delivery slot.",
+      "acceptance_criteria": "Given the customer is at the delivery step\nWhen I select a delivery slot\nAnd I confirm the order\nThen I see the confirmation with the selected slot"
+    },
+    {
+      "id": "SS-35",
+      "lang": "en",
+      "title": "Password reset",
+      "description": "As an admin or a support agent I want to reset a user's password.",
+      "acceptance_criteria": "Given the user cannot log in\nWhen the password is reset\nThen the user receives an email with a reset link"
+    },
+    {
+      "id": "SS-36",
+      "lang": "en",
+      "title": "Customer sees price and delivery date",
+      "description": "As a customer I want to see the price and the delivery date before I pay.",
+      "acceptance_criteria": "Given the cart contains an item\nWhen the customer opens the checkout\nThen they see the total price and the expected delivery date"
+    },
+    {
+      "id": "SS-37",
+      "lang": "en",
+      "title": "API: GET /orders pagination",
+      "description": "Add limit and offset parameters to the GET /orders endpoint.",
+      "acceptance_criteria": "- Endpoint returns 20 items by default"
+    },
+    {
+      "id": "SS-38",
+      "lang": "en",
+      "title": "Session timeout",
+      "description": "As a customer I want my session to end after inactivity so that my account stays safe.",
+      "acceptance_criteria": "While the customer is logged in, when the session expires, the system shall show the login screen."
+    },
+    {
+      "id": "SS-39",
+      "lang": "en",
+      "title": "Session timeout warning",
+      "description": "As a customer I want a warning before my session ends.",
+      "acceptance_criteria": "While the customer is logged in, when 2 minutes of the session remain, the system shall show a warning with a countdown."
+    },
+    {
+      "id": "SS-40",
+      "lang": "en",
+      "title": "Card number masking",
+      "description": "As a customer I want my card number masked so that nobody can read it over my shoulder.",
+      "acceptance_criteria": "The system shall display only the last 4 digits of a saved card number."
+    },
+    {
+      "id": "SS-41",
+      "lang": "en",
+      "title": "Customer searches products",
+      "description": "As a customer I want to search products by name.",
+      "acceptance_criteria": "Given the catalogue contains a red shoe\nWhen the customer searches products for \"red shoe\"\nThen they see the red shoe first\n\nGiven the catalogue contains no matching product\nWhen the customer searches products for \"zzz\"\nThen they see the message \"No results\"\n\nGiven the catalogue contains 50 shoes\nWhen the customer searches products for \"shoe\"\nThen they see the first 20 results and a link to the next page\n\nGiven the catalogue contains a product named Café\nWhen the customer searches products for \"cafe\"\nThen they see the product Café\n\nGiven the catalogue contains a discontinued product\nWhen the customer searches products for \"old lamp\"\nThen they see the product marked as unavailable\n\nGiven the catalogue contains a product with a typo in the query\nWhen the customer searches products for \"shoee\"\nThen they see a suggestion \"Did you mean shoe?\""
+    },
+    {
+      "id": "SS-42",
+      "lang": "en",
+      "title": "Customer tracks a refund",
+      "description": "As a customer I want to track my refund.",
+      "acceptance_criteria": "Given the customer returned an item\nWhen they open the refund page\nThen they see the refund status and the expected payout date"
+    },
+    {
+      "id": "SS-43",
+      "lang": "en",
+      "title": "Customer changes the delivery address",
+      "description": "As a customer I want to change the delivery address of an order.",
+      "acceptance_criteria": "Given the order has not shipped\nWhen the customer changes the delivery address\nThen they see the new address in the order details"
+    },
+    {
+      "id": "SS-44",
+      "lang": "en",
+      "title": "Customer exports order history",
+      "description": "As a customer I want to export my order history.",
+      "acceptance_criteria": "- The export runs in the background\n- The customer receives an email with a link to the CSV file"
+    }
+  ]
+}

@@ -660,6 +660,10 @@
                             "type": "string",
                             "maxLength": 100
                           },
+                          "storyPointsField": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
                           "jqlFilter": {
                             "type": "string",
                             "maxLength": 4000

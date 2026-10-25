@@ -1,0 +1,164 @@
+{
+  "contract_version": "0.4.0",
+  "keywords": {
+    "source": "cucumber/gherkin gherkin-languages.json (main), sprawdzone 2026-10-25; kolejność: dłuższe warianty najpierw",
+    "en": {
+      "given": [
+        "Given"
+      ],
+      "when": [
+        "When"
+      ],
+      "then": [
+        "Then"
+      ],
+      "and": [
+        "And"
+      ],
+      "but": [
+        "But"
+      ]
+    },
+    "pl": {
+      "given": [
+        "Zakładając, że",
+        "Zakładając",
+        "Mając"
+      ],
+      "when": [
+        "Jeżeli",
+        "Jeśli",
+        "Gdy",
+        "Kiedy"
+      ],
+      "then": [
+        "Wtedy"
+      ],
+      "and": [
+        "Oraz",
+        "I"
+      ],
+      "but": [
+        "Ale"
+      ]
+    }
+  },
+  "ears": {
+    "note": "EARS tylko po angielsku (wzorzec Mavin i in.); w PL brak ustalonych słów kluczowych",
+    "en": {
+      "state": [
+        "While"
+      ],
+      "feature": [
+        "Where"
+      ],
+      "event": [
+        "When"
+      ],
+      "unwanted": [
+        "If"
+      ],
+      "response": [
+        "shall"
+      ]
+    }
+  },
+  "weak_results": {
+    "note": "fragmenty dopasowywane bez rozróżniania wielkości liter w treści kryterium",
+    "pl": [
+      "poprawnie",
+      "prawidłowo",
+      "działa",
+      "jest obsłużon",
+      "bez problemów",
+      "zgodnie z oczekiwaniami"
+    ],
+    "en": [
+      "correctly",
+      "properly",
+      "works",
+      "is handled",
+      "as expected",
+      "without issues"
+    ]
+  },
+  "layer_terms": {
+    "note": "całe słowa tytułu (dwukropek na końcu ignorowany)",
+    "case_sensitive": [
+      "BE",
+      "FE",
+      "API",
+      "DB"
+    ],
+    "case_insensitive": [
+      "backend",
+      "frontend",
+      "endpoint",
+      "migracja",
+      "migration",
+      "tabela",
+      "table",
+      "schema",
+      "schemat"
+    ]
+  },
+  "action_conjunctions": {
+    "note": "łączą akcje w tytule albo celu tylko między czasownikami; ukośnik tylko między słowami bez spacji (Eksport/import)",
+    "pl": [
+      "i",
+      "oraz",
+      "lub",
+      "albo"
+    ],
+    "en": [
+      "and",
+      "or"
+    ],
+    "slash_between_words": true
+  },
+  "implementation_terms": [
+    {
+      "category": "dostawca",
+      "pattern": "\\b(Stripe|Supabase|Vercel|Cloudflare|AWS|Azure|GCP|Google Cloud|Firebase|OpenAI|Anthropic|Netlify|Heroku|PostgreSQL|Postgres|MySQL|MongoDB|Redis|Kafka|RabbitMQ|Elasticsearch|React|Angular|Vue|Next\\.js|Django|Spring|Laravel|Rails|Auth0|Clerk|Twilio|SendGrid|Resend|S3)\\w*",
+      "case_sensitive": true,
+      "source": "tf LEAK_PATTERNS"
+    },
+    {
+      "category": "schemat danych",
+      "pattern": "\\(FK\\)|\\bFK\\b|\\bnullable\\b|\\b\\w+_hash\\b|\\bsoft[- ]?delete\\w*|\\bmigracj\\w*|\\bmigration\\w*|\\bklucz\\w* obc\\w*|\\bVARCHAR\\b|\\bforeign key\\b",
+      "case_sensitive": false,
+      "source": "tf LEAK_PATTERNS"
+    },
+    {
+      "category": "struktura danych",
+      "pattern": "\\btabel\\w*|\\btables?\\b|\\bkolumn\\w*|\\bcolumns?\\b",
+      "case_sensitive": false,
+      "source": "nowe w kontrakcie 0.4.0 (przykład PAY-140)"
+    },
+    {
+      "category": "miejsce wykonania",
+      "pattern": "\\bpo stronie (serwera|klienta|przeglądarki|backendu|frontendu)\\b|\\bserver[- ]side\\b|\\bclient[- ]side\\b|\\bna edge\\w*|\\bw cache\\w*|\\bw pamięci podręcznej\\b",
+      "case_sensitive": false,
+      "source": "tf LEAK_PATTERNS"
+    },
+    {
+      "category": "mechanizm",
+      "pattern": "\\bper IP\\b|\\btoken bucket\\b|\\bsliding window\\b|\\bJWT\\b|\\bcron\\w*",
+      "case_sensitive": false,
+      "source": "tf LEAK_PATTERNS"
+    },
+    {
+      "category": "protokół",
+      "pattern": "\\b(WebSocket\\w*|gRPC|GraphQL|webhook\\w*|SSE|REST|MQTT)\\b",
+      "case_sensitive": true,
+      "source": "tf LEAK_PATTERNS"
+    },
+    {
+      "category": "interfejs techniczny",
+      "pattern": "\\bendpoint\\w*",
+      "case_sensitive": false,
+      "source": "nowe w kontrakcie 0.4.0"
+    }
+  ],
+  "excluded": "Kategoria „interfejs” z tf (spinner, toast, modal) nie należy do AC-003: w tf działa tylko w sekcjach jakości."
+}

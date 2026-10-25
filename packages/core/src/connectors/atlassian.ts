@@ -1,5 +1,6 @@
 import type { DocumentItem, IssueType, RequirementItem } from '../model.js';
 import { resolveIssueType } from '../hierarchy.js';
+import { parseAcceptanceCriteria } from '../analysis/acceptance.js';
 import { isRecord, records, str, strings } from '../guards.js';
 import { htmlToText } from '../text.js';
 
@@ -26,6 +27,8 @@ export interface JiraConfig {
   projectKey: string;
   /** Optional custom field id holding acceptance criteria (e.g. customfield_10035). */
   acceptanceCriteriaField?: string;
+  /** Optional custom field id holding the estimate in story points (e.g. customfield_10016). */
+  storyPointsField?: string;
   /** Optional JQL appended to the project filter (e.g. "AND statusCategory != Done"). */
   jqlFilter?: string;
   maxIssues?: number;
@@ -88,7 +91,7 @@ const toJiraIssue = (v: Record<string, unknown>): JiraIssue[] => {
 
 export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
   const { api: base, site, headers } = endpoint(cfg, 'jira');
-  const fields = ['summary', 'description', 'issuetype', 'parent', 'status', 'labels', 'components', 'issuelinks', 'updated', cfg.acceptanceCriteriaField].filter(Boolean).join(',');
+  const fields = ['summary', 'description', 'issuetype', 'parent', 'status', 'labels', 'components', 'issuelinks', 'updated', cfg.acceptanceCriteriaField, cfg.storyPointsField].filter(Boolean).join(',');
   const jql = `project = "${cfg.projectKey}" ${cfg.jqlFilter ?? ''} ORDER BY key ASC`;
   const issues: JiraIssue[] = [];
   let next: string | undefined;
@@ -114,7 +117,7 @@ export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
   return items;
 }
 
-export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: Pick<JiraConfig, 'acceptanceCriteriaField' | 'issueTypeMap'> = {}): RequirementItem {
+export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: Pick<JiraConfig, 'acceptanceCriteriaField' | 'storyPointsField' | 'issueTypeMap'> = {}): RequirementItem {
   const f = i.fields;
   const acField = cfg.acceptanceCriteriaField;
   const issuetype = isRecord(f.issuetype) ? f.issuetype : {};
@@ -126,6 +129,8 @@ export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: Pick<Jir
   const parentFields = isRecord(f.parent) && isRecord(f.parent.fields) ? f.parent.fields : {};
   const parentTypeName = isRecord(parentFields.issuetype) ? str(parentFields.issuetype.name) : undefined;
   const parentIsEpic = !!parentKey && resolveIssueType(parentTypeName ?? '', {}, cfg.issueTypeMap) === 'epic';
+  const acceptanceCriteria = bullets(acRaw);
+  const points = cfg.storyPointsField ? f[cfg.storyPointsField] : undefined;
   const link = (issue: unknown, type: string | undefined) => (isRecord(issue) && str(issue.key) ? [{ type: type ?? 'relates to', key: str(issue.key)! }] : []);
 
   return {
@@ -133,7 +138,9 @@ export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: Pick<Jir
     type,
     title: str(f.summary) ?? i.key,
     description: sections.get('__body') ?? description,
-    acceptanceCriteria: bullets(acRaw),
+    acceptanceCriteria,
+    acScenarios: parseAcceptanceCriteria(acceptanceCriteria),
+    ...(typeof points === 'number' && Number.isFinite(points) && points >= 0 && { storyPoints: points }),
     businessRules: bullets(sections.get('business rules') ?? ''),
     status: (isRecord(f.status) && str(f.status.name)) || 'Unknown',
     epicKey: parentIsEpic ? parentKey : undefined,

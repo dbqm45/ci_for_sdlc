@@ -7,6 +7,7 @@ export * from './impact.js';
 export { tokenize, hash, htmlToText } from './text.js';
 export { extractClaims, findConflicts, formatClaimValue, ATTRIBUTE_LABELS } from './analysis/claims.js';
 export { RULES } from './analysis/rules.js';
+export { parseAcceptanceCriteria, normalizeAction } from './analysis/acceptance.js';
 export { STATE_LABELS, JOURNEY_LABELS, TRAIT_LABELS } from './analysis/vocabulary.js';
 export { designCoveragePercent } from './analysis/states.js';
 export * from './ai/types.js';

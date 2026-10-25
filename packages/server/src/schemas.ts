@@ -23,6 +23,7 @@ export const settingsBody = obj({
       email: str(320),
       projectKey: str(40),
       acceptanceCriteriaField: str(100),
+      storyPointsField: str(100),
       jqlFilter: str(4000),
       issueTypeMap: { type: 'object', maxProperties: 100, propertyNames: { minLength: 1, maxLength: 100, pattern: '\\S' }, additionalProperties: { enum: ISSUE_TYPES } },
     }),

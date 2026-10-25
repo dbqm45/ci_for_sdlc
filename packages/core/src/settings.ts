@@ -11,7 +11,7 @@ export interface Settings {
   mode: (typeof SETTINGS_MODES)[number];
   project: { key: string; name: string };
   integrations: {
-    jira: { enabled: boolean; baseUrl: string; email: string; projectKey: string; acceptanceCriteriaField?: string; jqlFilter?: string; issueTypeMap?: Record<string, IssueType> };
+    jira: { enabled: boolean; baseUrl: string; email: string; projectKey: string; acceptanceCriteriaField?: string; storyPointsField?: string; jqlFilter?: string; issueTypeMap?: Record<string, IssueType> };
     confluence: { enabled: boolean; baseUrl: string; email: string; spaceKeys: string[] };
     figma: { enabled: boolean; fileKeys: string[] };
   };
