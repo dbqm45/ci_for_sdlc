@@ -11,6 +11,11 @@ Lista propozycji, które świadomie odłożono, żeby o nich nie zapomnieć. Ka�
 
 ## Kształt historyjki i kryteria akceptacji (G2)
 
+- **G2.3. Propozycje AI: podział historyjki i przepisanie AC (wstrzymane do decyzji, 2026-10-25).** Krok planu
+  G1/G2 (pdi `docs/plan-g1-g2.md` §4.7): osobne wywołanie AI ze schematem propozycji, odrzucanie propozycji bez
+  cytatu, karta „Proponowany podział” przy ustaleniu, zatwierdzenie jako decyzja (`POST /api/items/:key/proposals/:id/accept`).
+  Przesunięte na koniec listy: nie wiadomo jeszcze, czy go robimy. Bez niego działają reguły G2.2 (STORY-*, AC-*)
+  i plan wydania G1.2 (REL-*); od G2.3 zależy tylko pierwszy punkt G2-L1 poniżej.
 - **G2-L1. AC zapisane jako lista.** Reguły kształtu (G2.2) zakładają GWT jako format domyślny. Lista punktów jest
   czytana (każdy punkt to jednostka `free` z własnym AC-n), ale tylko AC-001 (info), AC-002 i AC-003 oceniają ją
   w pełni. Do zrobienia:
