@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Zestaw wzorcowy: oczekiwane wyniki",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "policy",
+    "rules",
+    "cases"
+  ],
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "acFormat": {
+          "type": "string",
+          "enum": [
+            "gwt",
+            "ears",
+            "any",
+            "off"
+          ]
+        },
+        "maxScenarios": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxActions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxStoryPoints": {
+          "type": "number",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "acFormat",
+        "maxScenarios",
+        "maxActions",
+        "maxStoryPoints"
+      ]
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "cases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fire",
+          "scenarios"
+        ],
+        "properties": {
+          "fire": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^(STORY|AC)-[0-9]{3}$"
+            }
+          },
+          "scenarios": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Liczba jednostek AC po grupowaniu (scenariusz GWT, zdanie EARS, punkt wolnego tekstu)."
+          },
+          "policy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "acFormat": {
+                "type": "string",
+                "enum": [
+                  "gwt",
+                  "ears",
+                  "any",
+                  "off"
+                ]
+              },
+              "maxScenarios": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxActions": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxStoryPoints": {
+                "type": "number",
+                "minimum": 1
+              }
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

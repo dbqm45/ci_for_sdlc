@@ -1,0 +1,319 @@
+{
+  "contract_version": "0.4.0",
+  "policy": {
+    "acFormat": "gwt",
+    "maxScenarios": 6,
+    "maxActions": 3,
+    "maxStoryPoints": 13
+  },
+  "rules": {
+    "STORY-001": "Więcej niż jedna akcja użytkownika w historyjce: akcje połączone spójnikiem w tytule albo celu, więcej niż jeden aktor, albo co najmniej 2 różne akcje główne w scenariuszach.",
+    "STORY-002": "Za duża historyjka: więcej scenariuszy niż maxScenarios, więcej różnych akcji głównych niż maxActions albo estymata >= maxStoryPoints.",
+    "STORY-003": "Historyjka warstwowa: tytuł od słowa warstwy (layer_terms) albo brak aktora i wyniku przy słownictwie technicznym.",
+    "AC-001": "Jednostka AC poza formatem z polityki (acFormat) albo scenariusz GWT bez Then/Wtedy; nie działa przy braku AC i przy acFormat any/off.",
+    "AC-002": "Wynik bez obserwowalnego stanu: słaby wynik z weak_results w kryterium.",
+    "AC-003": "Kryterium opisuje implementację: trafienie implementation_terms.",
+    "AC-004": "Więcej niż jedna akcja w jednym scenariuszu: drugie When/Gdy albo And/Oraz bezpośrednio po When/Gdy."
+  },
+  "cases": {
+    "SS-01": {
+      "fire": [],
+      "scenarios": 2,
+      "note": "dobra: dwa scenariusze tej samej akcji (ścieżka główna i błąd)"
+    },
+    "SS-02": {
+      "fire": [
+        "STORY-001",
+        "AC-001",
+        "AC-002",
+        "AC-003"
+      ],
+      "scenarios": 4,
+      "note": "przykład PAY-140 z planu G1/G2 §4.3"
+    },
+    "SS-03": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "dobra: Oraz po Wtedy to dalszy wynik, nie druga akcja"
+    },
+    "SS-04": {
+      "fire": [
+        "STORY-003",
+        "AC-001",
+        "AC-003"
+      ],
+      "scenarios": 2,
+      "note": "historyjka warstwowa z AC implementacyjnymi"
+    },
+    "SS-05": {
+      "fire": [
+        "STORY-003",
+        "AC-003"
+      ],
+      "scenarios": 1,
+      "note": "warstwowa w formacie GWT"
+    },
+    "SS-06": {
+      "fire": [
+        "STORY-002"
+      ],
+      "scenarios": 7,
+      "note": "7 scenariuszy tej samej akcji (próg 6)"
+    },
+    "SS-07": {
+      "fire": [
+        "STORY-002"
+      ],
+      "scenarios": 1,
+      "note": "estymata 13 (próg)"
+    },
+    "SS-08": {
+      "fire": [
+        "STORY-001",
+        "STORY-002"
+      ],
+      "scenarios": 4,
+      "note": "4 różne akcje w scenariuszach (próg 3)"
+    },
+    "SS-09": {
+      "fire": [
+        "AC-002"
+      ],
+      "scenarios": 1,
+      "note": "słaby wynik w Wtedy"
+    },
+    "SS-10": {
+      "fire": [
+        "AC-001"
+      ],
+      "scenarios": 1,
+      "note": "scenariusz bez Wtedy"
+    },
+    "SS-11": {
+      "fire": [
+        "AC-004"
+      ],
+      "scenarios": 1,
+      "note": "dwie akcje w jednym scenariuszu"
+    },
+    "SS-12": {
+      "fire": [
+        "AC-003"
+      ],
+      "scenarios": 1,
+      "note": "dostawca w kryterium"
+    },
+    "SS-13": {
+      "fire": [
+        "STORY-001"
+      ],
+      "scenarios": 1,
+      "note": "dwóch aktorów"
+    },
+    "SS-14": {
+      "fire": [
+        "STORY-001"
+      ],
+      "scenarios": 1,
+      "note": "dwie akcje w tytule (ukośnik) i w celu"
+    },
+    "SS-15": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "dobra: „i” łączy rzeczowniki, nie akcje"
+    },
+    "SS-16": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "dobra przy polityce any: wolny tekst z obserwowalnym wynikiem",
+      "policy": {
+        "acFormat": "any"
+      }
+    },
+    "SS-17": {
+      "fire": [
+        "AC-002"
+      ],
+      "scenarios": 1,
+      "note": "polityka any: format nieistotny, słaby wynik zostaje",
+      "policy": {
+        "acFormat": "any"
+      }
+    },
+    "SS-18": {
+      "fire": [],
+      "scenarios": 0,
+      "note": "brak AC: to REQ-001 ci_for_sdlc, nie reguła kształtu"
+    },
+    "SS-19": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "dobra: GWT bez Zakładając"
+    },
+    "SS-20": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "dobra: warianty słów kluczowych (Mając, Kiedy)"
+    },
+    "SS-21": {
+      "fire": [
+        "STORY-001"
+      ],
+      "scenarios": 2,
+      "note": "dwie różne akcje w scenariuszach (bez STORY-002)"
+    },
+    "SS-22": {
+      "fire": [
+        "AC-002"
+      ],
+      "scenarios": 1,
+      "note": "słaby wynik „wszystko działa”"
+    },
+    "SS-23": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "dobra: estymata tuż pod progiem"
+    },
+    "SS-24": {
+      "fire": [
+        "AC-004"
+      ],
+      "scenarios": 1,
+      "note": "dwie akcje w scenariuszu zapisanym w jednej linii"
+    },
+    "SS-25": {
+      "fire": [],
+      "scenarios": 2,
+      "note": "good: two scenarios of the same action"
+    },
+    "SS-26": {
+      "fire": [
+        "STORY-001",
+        "AC-001",
+        "AC-002"
+      ],
+      "scenarios": 2,
+      "note": "several actions, free-text AC with weak results"
+    },
+    "SS-27": {
+      "fire": [
+        "STORY-003"
+      ],
+      "scenarios": 1,
+      "note": "layer story; UI words are not AC-003"
+    },
+    "SS-28": {
+      "fire": [
+        "AC-002"
+      ],
+      "scenarios": 1,
+      "note": "weak result"
+    },
+    "SS-29": {
+      "fire": [
+        "AC-003"
+      ],
+      "scenarios": 1,
+      "note": "data store in AC"
+    },
+    "SS-30": {
+      "fire": [
+        "AC-004"
+      ],
+      "scenarios": 1,
+      "note": "two actions in one scenario"
+    },
+    "SS-31": {
+      "fire": [
+        "STORY-002"
+      ],
+      "scenarios": 1,
+      "note": "estimate 20 points"
+    },
+    "SS-32": {
+      "fire": [
+        "AC-001"
+      ],
+      "scenarios": 1,
+      "note": "scenario without Then"
+    },
+    "SS-33": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "good: And/But after Given and Then are not extra actions"
+    },
+    "SS-34": {
+      "fire": [
+        "AC-004"
+      ],
+      "scenarios": 1,
+      "note": "And after When is a second action"
+    },
+    "SS-35": {
+      "fire": [
+        "STORY-001"
+      ],
+      "scenarios": 1,
+      "note": "two actors"
+    },
+    "SS-36": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "good: \"and\" joins nouns, not actions"
+    },
+    "SS-37": {
+      "fire": [
+        "STORY-003",
+        "AC-001",
+        "AC-003"
+      ],
+      "scenarios": 1,
+      "note": "layer story, free-text technical AC"
+    },
+    "SS-38": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "good EARS under ears policy",
+      "policy": {
+        "acFormat": "ears"
+      }
+    },
+    "SS-39": {
+      "fire": [
+        "AC-001"
+      ],
+      "scenarios": 1,
+      "note": "EARS under the default gwt policy"
+    },
+    "SS-40": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "good: ubiquitous EARS requirement",
+      "policy": {
+        "acFormat": "ears"
+      }
+    },
+    "SS-41": {
+      "fire": [],
+      "scenarios": 6,
+      "note": "good: exactly 6 scenarios (boundary)"
+    },
+    "SS-42": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "good"
+    },
+    "SS-43": {
+      "fire": [],
+      "scenarios": 1,
+      "note": "good: same action as PL case with 13 points, but no estimate"
+    },
+    "SS-44": {
+      "fire": [
+        "AC-001"
+      ],
+      "scenarios": 2,
+      "note": "free text with observable results"
+    }
+  }
+}

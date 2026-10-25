@@ -22,6 +22,32 @@ export interface IssueLink {
   key: string;
 }
 
+/** Format of an acceptance-criteria unit (pdi contract 0.4.0, story.schema.json `scenario.format`). */
+export type AcFormat = 'gwt' | 'ears' | 'free';
+
+/**
+ * One acceptance-criteria unit: a GWT scenario, an EARS sentence or a free-text point (analysis/acceptance.ts).
+ * `id`, `format`, `given`, `when`, `then` and `text` follow the pdi contract (story.schema.json `scenario`);
+ * `mainAction` and `extraActions` are derived here and are not part of the contract.
+ */
+export interface AcScenario {
+  /** AC-1…AC-n in the order of the criteria. */
+  id: string;
+  format: AcFormat;
+  /** GWT: conditions; EARS: state (While/Where). */
+  given?: string[];
+  /** GWT: the first action (When/Gdy); EARS: the trigger (When/If). */
+  when?: string;
+  /** Observable result (GWT Then, EARS shall). */
+  then?: string[];
+  /** The original text of the unit. */
+  text: string;
+  /** GWT: the action of `when` as verb + object, without actor and data variants. */
+  mainAction?: string;
+  /** GWT: further actions in the same scenario (second When, or And directly after When). */
+  extraActions?: string[];
+}
+
 /** RequirementContext — one Jira issue. */
 export interface RequirementItem {
   key: string;
@@ -29,6 +55,10 @@ export interface RequirementItem {
   title: string;
   description: string;
   acceptanceCriteria: string[];
+  /** The acceptance criteria grouped into units with AC-n ids; absent when the source does not group them. */
+  acScenarios?: AcScenario[];
+  /** Estimate from the configured story points field. */
+  storyPoints?: number;
   businessRules: string[];
   status: string;
   epicKey?: string;

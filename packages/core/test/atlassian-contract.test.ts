@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { demoProject, fetchConfluence, fetchJira, type DocumentItem, type RequirementItem } from '../src/index.js';
+import { demoProject, fetchConfluence, fetchJira, parseAcceptanceCriteria, type DocumentItem, type RequirementItem } from '../src/index.js';
 import { DUMMY_ATLASSIAN_EMAIL, DUMMY_ATLASSIAN_TOKEN, startAtlassianMock, type AtlassianMock } from './mocks/atlassian-mock.js';
 
 // Contract test: the real Jira and Confluence connectors (real fetch, real HTTP) against the local Atlassian mock built from demo data.
@@ -30,6 +30,8 @@ const PAY_127_BUG = {
 /** The connector reads remote links only for stories, bugs, epics and features; URLs point at the site it was given. */
 const expectedRequirement = (r: RequirementItem, base: string): RequirementItem => ({
   ...r,
+  // The connector groups the AC it read (analysis/acceptance.ts, tested in acceptance.test.ts).
+  acScenarios: parseAcceptanceCriteria(r.acceptanceCriteria),
   ...(r.key === 'PAY-127' ? { bug: PAY_127_BUG } : {}),
   remoteLinks: r.type === 'task' || r.type === 'subtask' ? [] : r.remoteLinks,
   url: r.url?.replace(DEMO_SITE, base),

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Zestaw wzorcowy: historyjki (wejście jak z Jiry)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "stories"
+  ],
+  "properties": {
+    "contract_version": {
+      "type": "string"
+    },
+    "stories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "lang",
+          "title",
+          "description",
+          "acceptance_criteria"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^SS-[0-9]{2,}$"
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "pl",
+              "en"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "acceptance_criteria": {
+            "type": "string"
+          },
+          "story_points": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}
