@@ -46,3 +46,19 @@ test('SET-04: saving over a change made elsewhere reloads the settings instead o
   await expect(page.getByLabel('Project name')).not.toHaveValue('Renamed by e2e');
   await expect(page.getByRole('checkbox', { name: /^Enable CON-001 / })).not.toBeChecked();
 });
+
+test('SET-05: switching the acceptance-criteria format off removes the AC-001 finding', async ({ page }) => {
+  const notGwt = page.getByText(/^Acceptance criteria not in Given\/When\/Then format/);
+  await page.goto('/#/item/PAY-123');
+  // PAY-123 has its criteria as a list, so with the default (GWT) the story gets AC-001.
+  await expect(notGwt.first()).toBeVisible();
+
+  await nav(page, /Settings/).click();
+  await page.getByLabel('Acceptance criteria format (AC-001)').selectOption('off');
+  await page.getByRole('button', { name: 'Save & re-analyze' }).click();
+  await expect(toast(page)).toHaveText('Settings saved');
+
+  await page.goto('/#/item/PAY-123');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('PAY-123');
+  await expect(notGwt).toHaveCount(0);
+});
