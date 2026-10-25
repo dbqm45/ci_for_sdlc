@@ -76,7 +76,8 @@ To tryb domyślny. Pokazuje przykładowy projekt *Checkout* (klucz `CHK`, zgłos
 
 - `timeout-change` — w Confluence timeout płatności zmienia się z 30 s na 60 s;
 - `figma-remove-error` — z Figmy znika ramka „Add card / Error”;
-- `story-card-limit` — w Jira PAY-123 pozwala zapisać 10 kart, a Confluence nie zostaje zaktualizowany.
+- `story-card-limit` — w Jira PAY-123 pozwala zapisać 10 kart, a Confluence nie zostaje zaktualizowany;
+- `release-planning` — w Jira produkt oznacza MVP etykietami `release:R1` i linkuje flagi: *Checkout Experience* dostaje poprawny plan, *Payment Reliability* plan z problemami (`REL-002`…`REL-006`).
 
 **Jak przejść na prawdziwe dane?**
 
@@ -150,6 +151,7 @@ Pełna tabela jest w [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#rules). Rodzi
 | `BUG-*` | kompletność zgłoszenia błędu, powiązana story, test regresji, przyczyna źródłowa |
 | `DEP-001` | zależność od elementu, który nie jest gotowy |
 | `EPIC-*` | cel epica, story, projekt, spójność zachowania |
+| `REL-*` | plan wydania epica: MVP (linia R1) wyznaczone, z wynikiem i metryką, nie za duże, przekrój end-to-end, zależności zgodne z kolejnością linii, flagi na historyjkach |
 | `DRIFT-001` | zmiana po zatwierdzeniu |
 | `AI-001` | ustalenia recenzji AI |
 
@@ -172,6 +174,23 @@ Pełniejsza obsługa listy (propozycja przepisania na GWT przez AI) jest odłoż
 shape*: format AC (GWT, EARS, oba albo wyłączony — wtedy listy i wolny tekst nie dostają `AC-001`), maksymalna liczba
 scenariuszy i akcji w historyjce oraz liczba story points, od której historyjka jest za duża (`STORY-002`). W API to
 pole `policy.storyShape` w `PUT /api/settings`.
+
+**Jak oznaczyć plan wydania (MVP) w Jirze?**
+Reguły `REL-*` czytają plan z konwencji (kontrakt pdi 0.4.0):
+
+| Co | Domyślnie | Inaczej (*Settings → Integrations → Jira*) |
+|---|---|---|
+| Linia wydania historyjki (R1 = MVP, potem R2, R3…) | etykieta `release:R1` | inny prefiks etykiety, fixVersion o nazwie `R1` albo własne pole |
+| Flaga funkcji historyjki | etykieta `flag:payment-retry` (jak w ShipScope) | własne pole z kluczami flag |
+| Wynik i metryka MVP | sekcja „MVP:” w opisie epica, np. „MVP: Klient ponawia płatność. Metryka: co najmniej 25% odzyskanych płatności w ciągu 30 dni.” | — |
+
+Epic z co najmniej 3 historyjkami bez żadnej w R1 dostaje `REL-001`. Gdy MVP jest wyznaczone, `REL-002` sprawdza
+sekcję „MVP” (wynik, próg, horyzont), `REL-003` pilnuje, by R1 nie obejmowało więcej niż 60% historyjek, `REL-004`
+— by w R1 nie było historyjek warstwowych, a `REL-006` — by historyjki z linią wydania miały flagę (domyślnie tylko
+te widoczne dla użytkownika). `REL-005` (krytyczne) wykrywa historyjkę z R1 zablokowaną przez historyjkę z późniejszej
+linii albo bez linii; epic jest wtedy *NOT READY*. Próg MVP i wymóg flag ustawisz w *Settings → Policy → Release plan*
+(`policy.release`). Plan wydania widać na stronie epica w panelu *Release plan*; w trybie demo pokazuje go scenariusz
+`release-planning`.
 
 **Kiedy działa AI i co do niego wysyłamy?**
 

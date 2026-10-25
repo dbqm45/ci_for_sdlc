@@ -1,4 +1,4 @@
-import type { AcScenario } from '../model.js';
+import type { AcScenario, RequirementItem } from '../model.js';
 import { storyShapeOf } from '../policy.js';
 import { parseAcceptanceCriteria } from './acceptance.js';
 import { evJira, type ItemCtx } from './context.js';
@@ -85,6 +85,16 @@ const implementationTerm = (text: string) => {
   return undefined;
 };
 
+/**
+ * STORY-003's signal, also read by REL-004 and REL-006: the title starts with a technical layer, or the story has no
+ * actor and uses technical vocabulary.
+ */
+export function technicalLayer(r: Pick<RequirementItem, 'title' | 'description'>): { layer?: string; tech?: { category: string; term: string } } | undefined {
+  const layer = layerOf(r.title);
+  const tech = !storyStatement(r.description) ? implementationTerm(`${r.title}\n${r.description}`) : undefined;
+  return layer || tech ? { layer, tech } : undefined;
+}
+
 const mainActions = (sc: AcScenario[]) => [...new Set(sc.flatMap((s) => (s.format === 'gwt' && s.mainAction ? [s.mainAction] : [])))];
 
 // ---------------------------------------------------------------------------- rules
@@ -155,10 +165,9 @@ export const STORY_SHAPE_RULES: Rule[] = [
     description: 'A story named after a technical layer, or without an actor while using technical vocabulary, is a task.',
     appliesTo: ['story'],
     run: (c) => {
-      const layer = layerOf(c.r.title);
-      const st = storyStatement(c.r.description);
-      const tech = !st ? implementationTerm(`${c.r.title}\n${c.r.description}`) : undefined;
-      if (!layer && !tech) return [];
+      const signal = technicalLayer(c.r);
+      if (!signal) return [];
+      const { layer, tech } = signal;
       return [
         {
           category: 'GAP',

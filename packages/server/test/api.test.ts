@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_STORY_SHAPE, DEMO_SCENARIOS, RULES } from '@ci/core';
+import { DEFAULT_RELEASE, DEFAULT_STORY_SHAPE, DEMO_SCENARIOS, RULES } from '@ci/core';
 import { buildApp } from '../src/app.js';
 import { putSettings } from './helpers.js';
 
@@ -97,6 +97,18 @@ describe('API', () => {
     ['an unknown field', { maxEpics: 3 }],
   ])('API-03: the story-shape policy refuses %s', async (_, storyShape) => {
     expect((await putSettings(ctx.app, { policy: { storyShape } })).statusCode).toBe(422);
+  });
+
+  it('API-04: the release-plan policy and the Jira release conventions are stored; wrong values are refused', async () => {
+    expect((await json('GET', '/api/settings')).body.settings.policy.release).toEqual(DEFAULT_RELEASE);
+    const res = await putSettings(ctx.app, { policy: { release: { maxMvpPercent: 50 } }, integrations: { jira: { releaseLineSource: 'fixVersion', flagLabelPrefix: 'ff:' } } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().settings.policy.release).toEqual({ ...DEFAULT_RELEASE, maxMvpPercent: 50 });
+    expect(res.json().settings.integrations.jira).toMatchObject({ releaseLineSource: 'fixVersion', flagLabelPrefix: 'ff:' });
+    for (const bad of [{ policy: { release: { maxMvpPercent: 0 } } }, { policy: { release: { requireFlag: 'some' } } }, { integrations: { jira: { releaseLineSource: 'sprint' } } }]) {
+      expect((await putSettings(ctx.app, bad)).statusCode).toBe(422);
+    }
+    await putSettings(ctx.app, { policy: { release: DEFAULT_RELEASE }, integrations: { jira: { releaseLineSource: 'label', flagLabelPrefix: 'flag:' } } });
   });
 
   it('API-01: lists the rules and the demo scenarios', async () => {

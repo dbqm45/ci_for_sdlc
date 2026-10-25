@@ -51,7 +51,7 @@ describe('fetchJira', () => {
   it('AT-02: requests the acceptance-criteria field and appends the JQL filter', async () => {
     const calls = fakeAtlassian([['/search/jql', json({ issues: [] })]]);
     await fetchJira({ ...jira, acceptanceCriteriaField: 'customfield_10035', jqlFilter: 'AND statusCategory != Done' });
-    expect(calls[0]?.url).toContain('fields=summary,description,issuetype,parent,status,labels,components,issuelinks,updated,customfield_10035&');
+    expect(calls[0]?.url).toContain('fields=summary,description,issuetype,parent,status,labels,components,issuelinks,updated,fixVersions,customfield_10035&');
     expect(decodeURIComponent(calls[0]?.url ?? '')).toContain('project = "PAY" AND statusCategory != Done ORDER BY');
   });
 
@@ -105,6 +105,32 @@ describe('jiraIssueToRequirement', () => {
     const r = jiraIssueToRequirement(issue('PAY-1', 'Story', fields), 'https://j');
     expect(r.links).toEqual([{ type: 'is blocked by', key: 'PAY-7' }]);
     expect(r.businessRules).toEqual(['Max 3 retries']);
+  });
+
+  // Release plan conventions (G1.2, pdi contract 0.4.0 DG4); flags as ShipScope's jira_connections.flag_link.
+  it('AT-17: by default the release line comes from a release: label and flags from flag: labels', () => {
+    const r = jiraIssueToRequirement(issue('PAY-1', 'Story', { labels: ['payments', 'Release:r1', 'flag:payment-retry', 'flag:retry-limit', 'flag:'] }), 'https://j');
+    expect([r.releaseLine, r.flagKeys]).toEqual(['R1', ['payment-retry', 'retry-limit']]);
+  });
+
+  it.each([
+    { id: 'AT-18', name: 'fix versions', fields: { fixVersions: [{ name: '2.4.0' }, { name: 'R2' }] }, cfg: { releaseLineSource: 'fixVersion' } as const },
+    { id: 'AT-19', name: 'an option field', fields: { customfield_7: { value: 'R2' } }, cfg: { releaseLineSource: 'field', releaseLineField: 'customfield_7' } as const },
+    { id: 'AT-20', name: 'a custom label prefix', fields: { labels: ['line-R2'] }, cfg: { releaseLabelPrefix: 'line-' } },
+  ])('$id: the release line can come from $name', ({ fields, cfg }) => {
+    expect(jiraIssueToRequirement(issue('PAY-1', 'Story', fields), 'https://j', cfg).releaseLine).toBe('R2');
+  });
+
+  it('AT-21: flags can come from a field; values that are not flag keys and lines that are not R<n> are skipped', () => {
+    const fields = { customfield_9: 'payment-retry, retry-limit; <script>', labels: ['release:MVP'], fixVersions: [{ name: '2.4.0' }] };
+    const r = jiraIssueToRequirement(issue('PAY-1', 'Story', fields), 'https://j', { flagField: 'customfield_9' });
+    expect([r.flagKeys, r.releaseLine, r.fixVersions]).toEqual([['payment-retry', 'retry-limit'], undefined, ['2.4.0']]);
+  });
+
+  it('AT-22: an epic keeps its "MVP" section apart from the description', () => {
+    const description = 'Goal: fewer lost payments.\nMVP: Customers retry a failed payment. Metric: at least 25% recovered within 30 days.';
+    const r = jiraIssueToRequirement(issue('PAY-100', 'Epic', { description }), 'https://j');
+    expect([r.description, r.mvp]).toEqual(['Goal: fewer lost payments.', 'Customers retry a failed payment. Metric: at least 25% recovered within 30 days.']);
   });
 });
 

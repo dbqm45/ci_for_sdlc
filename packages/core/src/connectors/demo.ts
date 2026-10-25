@@ -477,4 +477,48 @@ export const DEMO_SCENARIOS: { id: string; title: string; description: string; a
       }
     },
   },
+  {
+    id: 'release-planning',
+    title: 'Jira: product plans the releases',
+    description: 'Product marks the MVP stories with release:R1 and links feature flags: Checkout Experience gets a sound plan, Payment Reliability one with problems.',
+    apply: (ctx) => {
+      const now = new Date().toISOString();
+      const plan = (key: string, line: string, flag?: string) => {
+        const r = ctx.requirements.find((x) => x.key === key);
+        if (!r) return;
+        r.releaseLine = line;
+        r.labels = [...r.labels, `release:${line}`, ...(flag ? [`flag:${flag}`] : [])];
+        r.flagKeys = flag ? [flag] : [];
+        r.updatedAt = now;
+      };
+      // A sound plan (REL rules silent): half of the stories in R1, every story behind a flag, an MVP with a metric.
+      const checkout = ctx.requirements.find((x) => x.key === 'CHK-200');
+      if (checkout) {
+        checkout.mvp = 'Customers place an order and see its status right after paying. Metric: checkout abandonment at most 18% within 30 days of the release.';
+        checkout.updatedAt = now;
+      }
+      plan('CHK-201', 'R1', 'fast-checkout');
+      plan('CHK-202', 'R1', 'fast-checkout');
+      plan('CHK-203', 'R2', 'promo-codes');
+      plan('CHK-204', 'R2', 'saved-card-checkout');
+      // A plan with problems: no MVP section (REL-002), 3 of 4 stories in R1 (REL-003), an API story in R1
+      // (REL-004), PAY-128 in R1 blocked by PAY-125 in R2 (REL-005), no flags (REL-006).
+      ctx.requirements.push(
+        issue({
+          key: 'PAY-129',
+          type: 'story',
+          title: 'API: expose payment retry state',
+          epicKey: 'PAY-110',
+          components: ['Payments'],
+          description: 'Return the retry attempt count and the last decline code from GET /payments/{id}.',
+          acceptanceCriteria: ['Given a payment with a failed attempt', 'When the client reads the payment', 'Then the response holds the attempt count and the decline code'],
+          updatedAt: now,
+        }),
+      );
+      plan('PAY-126', 'R1');
+      plan('PAY-128', 'R1');
+      plan('PAY-129', 'R1');
+      plan('PAY-125', 'R2');
+    },
+  },
 ];

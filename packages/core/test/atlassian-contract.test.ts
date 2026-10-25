@@ -32,6 +32,9 @@ const expectedRequirement = (r: RequirementItem, base: string): RequirementItem 
   ...r,
   // The connector groups the AC it read (analysis/acceptance.ts, tested in acceptance.test.ts).
   acScenarios: parseAcceptanceCriteria(r.acceptanceCriteria),
+  // The demo has no fix versions or flag labels; the connector always returns both lists.
+  fixVersions: [],
+  flagKeys: [],
   ...(r.key === 'PAY-127' ? { bug: PAY_127_BUG } : {}),
   remoteLinks: r.type === 'task' || r.type === 'subtask' ? [] : r.remoteLinks,
   url: r.url?.replace(DEMO_SITE, base),

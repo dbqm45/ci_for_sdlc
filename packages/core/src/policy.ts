@@ -25,6 +25,19 @@ export type AiFindingsAction = (typeof AI_FINDINGS_ACTIONS)[number];
 export const AC_FORMATS = ['gwt', 'ears', 'any', 'off'] as const;
 export type AcFormatPolicy = (typeof AC_FORMATS)[number];
 
+export const REQUIRE_FLAG = ['user_facing', 'all', 'off'] as const;
+export type RequireFlagPolicy = (typeof REQUIRE_FLAG)[number];
+
+/** Thresholds of the release-plan rules (REL-001…006). */
+export interface ReleasePolicy {
+  /** REL-003: R1 holds more than this share of the epic's stories, in percent. */
+  maxMvpPercent: number;
+  /** REL-006: which stories in a release line need a feature flag. */
+  requireFlag: RequireFlagPolicy;
+}
+
+export const DEFAULT_RELEASE: ReleasePolicy = { maxMvpPercent: 60, requireFlag: 'user_facing' };
+
 /** Thresholds of the story-shape rules (STORY-001…003, AC-001…004). */
 export interface StoryShapePolicy {
   acFormat: AcFormatPolicy;
@@ -55,6 +68,8 @@ export interface AnalysisPolicy {
   driftReaction?: DriftReaction;
   /** Optional in stored settings written before it existed; read through `storyShapeOf`. */
   storyShape?: Partial<StoryShapePolicy>;
+  /** Optional in stored settings written before it existed; read through `releaseOf`. */
+  release?: Partial<ReleasePolicy>;
 }
 
 export const DEFAULT_POLICY: AnalysisPolicy = {
@@ -63,6 +78,7 @@ export const DEFAULT_POLICY: AnalysisPolicy = {
   aiFindings: 'require_confirmation',
   driftReaction: 'review_required',
   storyShape: { ...DEFAULT_STORY_SHAPE },
+  release: { ...DEFAULT_RELEASE },
 };
 
 export const aiFindingsAction = (p: AnalysisPolicy): AiFindingsAction => p.aiFindings ?? 'require_confirmation';
@@ -70,3 +86,5 @@ export const aiFindingsAction = (p: AnalysisPolicy): AiFindingsAction => p.aiFin
 export const driftReactionOf = (p: AnalysisPolicy): DriftReaction => p.driftReaction ?? 'review_required';
 
 export const storyShapeOf = (p: AnalysisPolicy): StoryShapePolicy => ({ ...DEFAULT_STORY_SHAPE, ...p.storyShape });
+
+export const releaseOf = (p: AnalysisPolicy): ReleasePolicy => ({ ...DEFAULT_RELEASE, ...p.release });

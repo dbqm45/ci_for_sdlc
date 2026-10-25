@@ -111,6 +111,7 @@ describe('the guard goes red with a useful message', () => {
       'story-card-limit: source "jira" has no kit — add it to kits/registry.ts',
       'backlog-intake: source "jira" has no kit — add it to kits/registry.ts',
       'api-idempotency: source "confluence" has no kit — add it to kits/registry.ts',
+      'release-planning: source "jira" has no kit — add it to kits/registry.ts',
     ].filter((p) => !p.includes('"figma" has no kit')));
     expect(checkKits([{ ...figma, mock: 'gone.ts', contract: 'gone.test.ts' }], undefined, [], () => undefined)).toEqual([
       'figma: the API mock gone.ts is missing',

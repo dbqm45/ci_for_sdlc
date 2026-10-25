@@ -1,6 +1,7 @@
 import type { DocumentItem, IssueType, RequirementItem } from '../model.js';
 import { resolveIssueType } from '../hierarchy.js';
 import { parseAcceptanceCriteria } from '../analysis/acceptance.js';
+import { releaseLineOf } from '../analysis/release-plan.js';
 import { isRecord, records, str, strings } from '../guards.js';
 import { htmlToText } from '../text.js';
 
@@ -20,6 +21,9 @@ export interface AtlassianOAuthAccess {
   accessToken: string;
 }
 
+export const RELEASE_LINE_SOURCES = ['label', 'fixVersion', 'field'] as const;
+export type ReleaseLineSource = (typeof RELEASE_LINE_SOURCES)[number];
+
 export interface JiraConfig {
   baseUrl: string; // https://your-site.atlassian.net
   email: string;
@@ -29,6 +33,16 @@ export interface JiraConfig {
   acceptanceCriteriaField?: string;
   /** Optional custom field id holding the estimate in story points (e.g. customfield_10016). */
   storyPointsField?: string;
+  /**
+   * Where an issue's release line R1…Rn is read (pdi contract 0.4.0, DG4): `label` (default, labels starting with
+   * `releaseLabelPrefix`, default "release:"), `fixVersion` (a fix version named R<n>) or `field` (`releaseLineField`).
+   */
+  releaseLineSource?: ReleaseLineSource;
+  releaseLabelPrefix?: string;
+  releaseLineField?: string;
+  /** Feature flags of an issue, as ShipScope's flag_link: labels starting with `flagLabelPrefix` (default "flag:"), or the field `flagField`. */
+  flagLabelPrefix?: string;
+  flagField?: string;
   /** Optional JQL appended to the project filter (e.g. "AND statusCategory != Done"). */
   jqlFilter?: string;
   maxIssues?: number;
@@ -91,7 +105,7 @@ const toJiraIssue = (v: Record<string, unknown>): JiraIssue[] => {
 
 export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
   const { api: base, site, headers } = endpoint(cfg, 'jira');
-  const fields = ['summary', 'description', 'issuetype', 'parent', 'status', 'labels', 'components', 'issuelinks', 'updated', cfg.acceptanceCriteriaField, cfg.storyPointsField].filter(Boolean).join(',');
+  const fields = ['summary', 'description', 'issuetype', 'parent', 'status', 'labels', 'components', 'issuelinks', 'updated', 'fixVersions', cfg.acceptanceCriteriaField, cfg.storyPointsField, cfg.releaseLineSource === 'field' && cfg.releaseLineField, cfg.flagField].filter(Boolean).join(',');
   const jql = `project = "${cfg.projectKey}" ${cfg.jqlFilter ?? ''} ORDER BY key ASC`;
   const issues: JiraIssue[] = [];
   let next: string | undefined;
@@ -117,7 +131,29 @@ export async function fetchJira(cfg: JiraConfig): Promise<RequirementItem[]> {
   return items;
 }
 
-export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: Pick<JiraConfig, 'acceptanceCriteriaField' | 'storyPointsField' | 'issueTypeMap'> = {}): RequirementItem {
+type IssueMapping = Pick<JiraConfig, 'acceptanceCriteriaField' | 'storyPointsField' | 'issueTypeMap' | 'releaseLineSource' | 'releaseLabelPrefix' | 'releaseLineField' | 'flagLabelPrefix' | 'flagField'>;
+
+/** Flag keys as ShipScope accepts them (letters, digits, `.`, `_`, `-`). */
+const FLAG_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const MAX_FLAGS = 20;
+
+/** Text values of a field: a string, an option (`{ value }`) or a list of them. */
+const fieldTexts = (v: unknown): string[] => (Array.isArray(v) ? v : [v]).flatMap((x) => (typeof x === 'string' ? [x] : isRecord(x) ? str(x.value) ?? str(x.name) ?? [] : []));
+const withPrefix = (labels: string[], prefix: string) => labels.filter((l) => l.toLowerCase().startsWith(prefix.toLowerCase())).map((l) => l.slice(prefix.length));
+
+/** The issue's release line by the configured convention; with several, the earliest. */
+function releaseLineFrom(f: Record<string, unknown>, labels: string[], fixVersions: string[], cfg: IssueMapping): string | undefined {
+  const source = cfg.releaseLineSource ?? 'label';
+  const values = source === 'fixVersion' ? fixVersions : source === 'field' ? (cfg.releaseLineField ? fieldTexts(f[cfg.releaseLineField]) : []) : withPrefix(labels, cfg.releaseLabelPrefix || 'release:');
+  return values.flatMap((v) => releaseLineOf(v) ?? []).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))[0];
+}
+
+function flagKeysFrom(f: Record<string, unknown>, labels: string[], cfg: IssueMapping): string[] {
+  const raw = cfg.flagField ? fieldTexts(f[cfg.flagField]).flatMap((t) => t.split(/[\s,;]+/)) : withPrefix(labels, cfg.flagLabelPrefix || 'flag:');
+  return [...new Set(raw.filter((k) => FLAG_KEY.test(k)))].slice(0, MAX_FLAGS);
+}
+
+export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: IssueMapping = {}): RequirementItem {
   const f = i.fields;
   const acField = cfg.acceptanceCriteriaField;
   const issuetype = isRecord(f.issuetype) ? f.issuetype : {};
@@ -131,6 +167,10 @@ export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: Pick<Jir
   const parentIsEpic = !!parentKey && resolveIssueType(parentTypeName ?? '', {}, cfg.issueTypeMap) === 'epic';
   const acceptanceCriteria = bullets(acRaw);
   const points = cfg.storyPointsField ? f[cfg.storyPointsField] : undefined;
+  const labels = strings(f.labels);
+  const fixVersions = records(f.fixVersions).flatMap((v) => str(v.name) ?? []);
+  const releaseLine = releaseLineFrom(f, labels, fixVersions, cfg);
+  const mvp = sections.get('mvp');
   const link = (issue: unknown, type: string | undefined) => (isRecord(issue) && str(issue.key) ? [{ type: type ?? 'relates to', key: str(issue.key)! }] : []);
 
   return {
@@ -145,7 +185,11 @@ export function jiraIssueToRequirement(i: JiraIssue, base: string, cfg: Pick<Jir
     status: (isRecord(f.status) && str(f.status.name)) || 'Unknown',
     epicKey: parentIsEpic ? parentKey : undefined,
     parentKey: !parentIsEpic ? parentKey : undefined,
-    labels: strings(f.labels),
+    labels,
+    ...(releaseLine && { releaseLine }),
+    fixVersions,
+    flagKeys: flagKeysFrom(f, labels, cfg),
+    ...(mvp && { mvp }),
     components: records(f.components).flatMap((c) => str(c.name) ?? []),
     links: records(f.issuelinks).flatMap((l) => {
       const t = isRecord(l.type) ? l.type : {};
@@ -197,7 +241,7 @@ export function splitSections(text: string): Map<string, string> {
   const lines = text.split('\n');
   let current = '__body';
   const buf: Record<string, string[]> = { __body: [] };
-  const known = /^(?:##\s*|\*\*)?(acceptance criteria|business rules|steps to reproduce|expected(?: result| behaviou?r)?|actual(?: result| behaviou?r)?|environment)\s*:?\s*(?:\*\*)?\s*(.*)$/i;
+  const known = /^(?:##\s*|\*\*)?(acceptance criteria|business rules|steps to reproduce|expected(?: result| behaviou?r)?|actual(?: result| behaviou?r)?|environment|mvp)\s*:?\s*(?:\*\*)?\s*(.*)$/i;
   for (const line of lines) {
     const m = known.exec(line.trim());
     if (m) {

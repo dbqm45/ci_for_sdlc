@@ -40,7 +40,7 @@ export async function approveViaApi(request: APIRequestContext, key: string) {
   await expect(await request.post(`/api/items/${key}/approve`, { data: { by: 'e2e' } })).toBeOK();
 }
 
-export async function applyScenarioViaApi(request: APIRequestContext, id: 'timeout-change' | 'figma-remove-error' | 'story-card-limit' | 'api-idempotency') {
+export async function applyScenarioViaApi(request: APIRequestContext, id: 'timeout-change' | 'figma-remove-error' | 'story-card-limit' | 'api-idempotency' | 'release-planning') {
   await expect(await request.post(`/api/demo/scenarios/${id}`)).toBeOK();
 }
 

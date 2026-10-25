@@ -59,6 +59,14 @@ export interface RequirementItem {
   acScenarios?: AcScenario[];
   /** Estimate from the configured story points field. */
   storyPoints?: number;
+  /** Release line R1…Rn (R1 = MVP) read by the configured convention, `release:R1` labels by default (pdi contract 0.4.0). */
+  releaseLine?: string;
+  /** Names of the Jira fix versions. */
+  fixVersions?: string[];
+  /** Feature flags linked to the issue, read like ShipScope does (`flag:` labels by default, or a field). */
+  flagKeys?: string[];
+  /** Epics: the "MVP" section of the description (outcome and metric of release R1). */
+  mvp?: string;
   businessRules: string[];
   status: string;
   epicKey?: string;
@@ -225,7 +233,9 @@ export type Dimension =
   | 'architecture'
   | 'userJourneys'
   | 'errorHandling'
-  | 'dependencies';
+  | 'dependencies'
+  /** Release plan: epics and features only (`dimensionsFor`). */
+  | 'delivery';
 
 export const DIMENSIONS: Dimension[] = [
   'requirements',
@@ -235,7 +245,11 @@ export const DIMENSIONS: Dimension[] = [
   'userJourneys',
   'errorHandling',
   'dependencies',
+  'delivery',
 ];
+
+/** The dimensions scored for an item type: `delivery` belongs to epics and features. */
+export const dimensionsFor = (type: IssueType): Dimension[] => (type === 'epic' || type === 'feature' ? DIMENSIONS : DIMENSIONS.filter((d) => d !== 'delivery'));
 
 export const DIMENSION_LABELS: Record<Dimension, string> = {
   requirements: 'Requirements',
@@ -245,6 +259,7 @@ export const DIMENSION_LABELS: Record<Dimension, string> = {
   userJourneys: 'User Journeys',
   errorHandling: 'Error Handling',
   dependencies: 'Dependencies',
+  delivery: 'Release plan',
 };
 
 export interface QuestionOption {
@@ -439,6 +454,8 @@ export interface ItemAnalysis {
   challenges: Challenge[];
   /** For epics: aggregated child stats. */
   rollup?: EpicRollup;
+  /** For epics and features: release lines of their stories. */
+  releasePlan?: ReleasePlan;
   checklist: ChecklistGroup[];
 }
 
@@ -473,6 +490,17 @@ export interface Approval {
 export interface ChecklistGroup {
   group: string;
   items: { label: string; status: 'ok' | 'warn' | 'fail' }[];
+}
+
+/** Release lines of an epic's stories (G1.2): R1 is the MVP. */
+export interface ReleasePlan {
+  /** Lines in release order (R1, R2, …, R10), each with its stories' keys. */
+  lines: { id: string; stories: string[] }[];
+  /** Stories without a release line. */
+  unassigned: string[];
+  stories: number;
+  /** Share of the stories in R1, 0–100; null without stories. */
+  mvpPercent: number | null;
 }
 
 export interface EpicRollup {

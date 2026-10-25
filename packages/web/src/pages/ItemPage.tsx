@@ -234,6 +234,7 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
           )}
 
           {a.rollup && <EpicRollup a={a} children={d.children} navigate={navigate} />}
+          {a.releasePlan && <ReleasePlanPanel a={a} children={d.children} navigate={navigate} />}
 
           <section className="card">
             <div className="tabs">
@@ -617,6 +618,45 @@ function EpicRollup({ a, children, navigate }: { a: ItemAnalysis; children: Item
           ))}
         </tbody>
       </table>
+    </Card>
+  );
+}
+
+/** G1.2: the epic's release lines R1…Rn (R1 = MVP) from its stories, with the open REL findings. */
+function ReleasePlanPanel({ a, children, navigate }: { a: ItemAnalysis; children: ItemDetail['children']; navigate: (p: string) => void }) {
+  const p = a.releasePlan!;
+  const titleOf = new Map(children.map((c) => [c.key, c.title]));
+  const warnings = a.findings.filter((f) => f.status === 'open' && f.dimension === 'delivery');
+  const mvp = p.lines.find((l) => l.id === 'R1');
+  const rows = [...p.lines.map((l) => ({ id: l.id, label: l.id === 'R1' ? 'R1 · MVP' : l.id, stories: l.stories })), ...(p.unassigned.length ? [{ id: '-', label: 'No release line', stories: p.unassigned }] : [])];
+  return (
+    <Card title="Release plan">
+      <p className="small muted" style={{ marginTop: 0 }}>
+        {p.stories === 0 ? 'No stories yet.' : mvp ? `MVP (R1) holds ${mvp.stories.length} of ${p.stories} stories (${p.mvpPercent}%).` : `No MVP yet: none of the ${p.stories} stories is in release line R1.`} Lines come from the stories&apos; release:R1… labels.
+      </p>
+      {warnings.map((f) => (
+        <div key={f.id} className="small row" style={{ gap: 6, color: f.severity === 'critical' ? 'var(--bad)' : 'var(--warn)' }}>
+          <StatusIcon status={f.severity === 'critical' ? 'bad' : 'warn'} /> {f.title}
+        </div>
+      ))}
+      {rows.length > 0 && (
+        <table className="table" style={{ marginTop: 12 }} aria-label="Release lines">
+          <tbody>
+            {rows.map((l) => (
+              <tr key={l.id}>
+                <th scope="row" className="mono small" style={{ width: 120, textAlign: 'left' }}>{l.label}</th>
+                <td>
+                  {l.stories.map((k) => (
+                    <button key={k} className="btn sm" style={{ margin: '2px 6px 2px 0' }} title={titleOf.get(k)} onClick={() => navigate(`/item/${k}`)}>
+                      {k}
+                    </button>
+                  ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </Card>
   );
 }

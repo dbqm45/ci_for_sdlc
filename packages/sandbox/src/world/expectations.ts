@@ -25,6 +25,7 @@ export interface DerivedRuleExpectation extends RuleExpectation {
 }
 
 const intake = (item: string): Case => ({ item, after: 'backlog-intake' });
+const planned = (item: string): Case => ({ item, after: 'release-planning' });
 
 export const EXPECTATIONS: RuleExpectation[] = [
   { rule: 'REQ-001', fires: [intake('GFT-401')], silent: ['PAY-123'] },
@@ -59,6 +60,14 @@ export const EXPECTATIONS: RuleExpectation[] = [
   { rule: 'AC-002', fires: [intake('GFT-405')], silent: ['PAY-123'] },
   { rule: 'AC-003', fires: [intake('GFT-404')], silent: ['PAY-123'] },
   { rule: 'AC-004', fires: [intake('GFT-405')], silent: [intake('GFT-403')] },
+  // Release plan (G1.2): epics of 3+ stories have no R1 in the base world; release-planning gives Checkout Experience
+  // a sound plan and Payment Reliability one that breaks REL-002…006.
+  { rule: 'REL-001', fires: ['CHK-200'], silent: [planned('CHK-200')] },
+  { rule: 'REL-002', fires: [planned('PAY-110')], silent: [planned('CHK-200')] },
+  { rule: 'REL-003', fires: [planned('PAY-110')], silent: [planned('CHK-200')] },
+  { rule: 'REL-004', fires: [planned('PAY-110')], silent: [planned('CHK-200')] },
+  { rule: 'REL-005', fires: [planned('PAY-110')], silent: [planned('CHK-200')] },
+  { rule: 'REL-006', fires: [planned('PAY-110')], silent: [planned('CHK-200')] },
 ];
 
 export const DERIVED_EXPECTATIONS: DerivedRuleExpectation[] = [

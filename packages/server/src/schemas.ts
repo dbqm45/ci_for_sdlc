@@ -2,7 +2,7 @@
  * JSON Schemas for request validation and the OpenAPI document. Bodies reject
  * unknown properties; the server still trims and caps free text.
  */
-import { AC_FORMATS, AI_EFFORTS, AI_FINDINGS_ACTIONS, AI_PROVIDERS, AI_RUN_ON, DECISION_EFFECTS, DRIFT_REACTIONS, ISSUE_TYPES, SCHEDULE_MODES, SETTINGS_MODES, SEVERITY_ACTIONS } from '@ci/core';
+import { AC_FORMATS, AI_EFFORTS, AI_FINDINGS_ACTIONS, AI_PROVIDERS, AI_RUN_ON, DECISION_EFFECTS, DRIFT_REACTIONS, ISSUE_TYPES, SCHEDULE_MODES, SETTINGS_MODES, SEVERITY_ACTIONS, REQUIRE_FLAG, RELEASE_LINE_SOURCES } from '@ci/core';
 
 const str = (maxLength: number, extra: object = {}) => ({ type: 'string', maxLength, ...extra }) as const;
 const bool = { type: 'boolean' } as const;
@@ -24,6 +24,11 @@ export const settingsBody = obj({
       projectKey: str(40),
       acceptanceCriteriaField: str(100),
       storyPointsField: str(100),
+      releaseLineSource: { enum: RELEASE_LINE_SOURCES },
+      releaseLabelPrefix: str(50),
+      releaseLineField: str(100),
+      flagLabelPrefix: str(50),
+      flagField: str(100),
       jqlFilter: str(4000),
       issueTypeMap: { type: 'object', maxProperties: 100, propertyNames: { minLength: 1, maxLength: 100, pattern: '\\S' }, additionalProperties: { enum: ISSUE_TYPES } },
     }),
@@ -66,6 +71,10 @@ export const settingsBody = obj({
       maxScenarios: { type: 'integer', minimum: 1, maximum: 50 },
       maxActions: { type: 'integer', minimum: 1, maximum: 20 },
       maxStoryPoints: { type: 'integer', minimum: 1, maximum: 100 },
+    }),
+    release: obj({
+      maxMvpPercent: { type: 'integer', minimum: 1, maximum: 100 },
+      requireFlag: { enum: REQUIRE_FLAG },
     }),
   }),
 });
