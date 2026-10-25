@@ -21,6 +21,24 @@ export type DriftReaction = (typeof DRIFT_REACTIONS)[number];
 export const AI_FINDINGS_ACTIONS = ['block', 'require_confirmation', 'notify'] as const;
 export type AiFindingsAction = (typeof AI_FINDINGS_ACTIONS)[number];
 
+/** Accepted format of acceptance criteria (pdi contract 0.4.0): any unit outside it fires AC-001; any/off never do. */
+export const AC_FORMATS = ['gwt', 'ears', 'any', 'off'] as const;
+export type AcFormatPolicy = (typeof AC_FORMATS)[number];
+
+/** Thresholds of the story-shape rules (STORY-001…003, AC-001…004). */
+export interface StoryShapePolicy {
+  acFormat: AcFormatPolicy;
+  /** STORY-002: more scenarios than this. */
+  maxScenarios: number;
+  /** STORY-002: more distinct main actions than this. */
+  maxActions: number;
+  /** STORY-002: an estimate at or above this many story points. */
+  maxStoryPoints: number;
+}
+
+/** The pdi contract 0.4.0 default (story-shape expected.json `policy`). */
+export const DEFAULT_STORY_SHAPE: StoryShapePolicy = { acFormat: 'gwt', maxScenarios: 6, maxActions: 3, maxStoryPoints: 13 };
+
 /**
  * Organization policy: what each severity does to readiness.
  *  block  — open finding makes the item NOT READY
@@ -35,6 +53,8 @@ export interface AnalysisPolicy {
   aiFindings?: AiFindingsAction;
   /** Optional in stored settings written before it existed; read through `driftReactionOf`. */
   driftReaction?: DriftReaction;
+  /** Optional in stored settings written before it existed; read through `storyShapeOf`. */
+  storyShape?: Partial<StoryShapePolicy>;
 }
 
 export const DEFAULT_POLICY: AnalysisPolicy = {
@@ -47,3 +67,5 @@ export const DEFAULT_POLICY: AnalysisPolicy = {
 export const aiFindingsAction = (p: AnalysisPolicy): AiFindingsAction => p.aiFindings ?? 'require_confirmation';
 
 export const driftReactionOf = (p: AnalysisPolicy): DriftReaction => p.driftReaction ?? 'review_required';
+
+export const storyShapeOf = (p: AnalysisPolicy): StoryShapePolicy => ({ ...DEFAULT_STORY_SHAPE, ...p.storyShape });

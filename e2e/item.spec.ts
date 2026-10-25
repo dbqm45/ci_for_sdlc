@@ -81,7 +81,8 @@ test('ITM-05: the analysis tabs show findings, states, context, claims and drift
 
 test('ITM-06: "WHY?" reveals the evidence behind a finding', async ({ page }) => {
   await page.goto('/#/item/PAY-123');
-  const why = page.getByRole('button', { name: 'WHY? — 3 sources' });
+  // The first finding with three sources; AC-001 (AC not in GWT) cites three criteria too.
+  const why = page.getByRole('button', { name: 'WHY? — 3 sources' }).first();
   await expect(page.locator('.evidence .ev')).toHaveCount(0);
   await why.click();
   await expect(page.locator('.evidence .ev')).toHaveCount(3);

@@ -145,6 +145,8 @@ Pełna tabela jest w [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#rules). Rodzi
 | `DOC-*` | brak dokumentacji albo dokumentacja nieaktualna lub zastąpiona |
 | `CON-001` | sprzeczne twierdzenia w różnych źródłach albo sprzeczność z decyzją |
 | `COV-001` | kryterium akceptacji bez taska |
+| `STORY-*` | kształt historyjki: jedna akcja jednego aktora, rozmiar, wartość zamiast warstwy technicznej |
+| `AC-*` | kryteria akceptacji: format (domyślnie GWT), obserwowalny wynik, brak szczegółów implementacji, jedna akcja na scenariusz |
 | `BUG-*` | kompletność zgłoszenia błędu, powiązana story, test regresji, przyczyna źródłowa |
 | `DEP-001` | zależność od elementu, który nie jest gotowy |
 | `EPIC-*` | cel epica, story, projekt, spójność zachowania |
@@ -152,6 +154,22 @@ Pełna tabela jest w [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#rules). Rodzi
 | `AI-001` | ustalenia recenzji AI |
 
 Pojedyncze reguły można wyłączyć w *Settings → Policy → Disabled rules*.
+
+**W jakim formacie pisać kryteria akceptacji?**
+Opis historyjki („Jako … chcę … aby …”) mówi, kto, co i po co. Kryteria akceptacji pod nim mówią, kiedy historyjka
+jest gotowa. Domyślnym formatem jest **GWT** (Given/When/Then, po polsku Zakładając/Gdy/Wtedy): każdy scenariusz
+ma warunek początkowy, jedną akcję i wynik, który da się zobaczyć. Taki scenariusz jest gotowym przypadkiem testowym
+i pozwala policzyć zachowania historyjki.
+
+| Zapis | Jak go czyta ci_for_sdlc |
+|---|---|
+| Scenariusze GWT (EN albo PL, także w jednej linii) | każdy scenariusz to jedna jednostka `AC-n`; z „When/Gdy” powstaje akcja główna; działają wszystkie reguły `STORY-*` i `AC-*` |
+| Zdania EARS („The system shall …”) | jedna jednostka na zdanie; przy domyślnym formacie GWT zgłasza je `AC-001` |
+| Lista punktów | każdy punkt to jednostka `AC-n` (wolny tekst); `AC-001` (info, nie blokuje) sugeruje przepisanie na GWT, `AC-002` i `AC-003` działają, akcji z punktów nie liczymy |
+
+Pełniejsza obsługa listy (propozycja przepisania na GWT przez AI) jest odłożona:
+[`docs/BACKLOG-DEFERRED.md`](docs/BACKLOG-DEFERRED.md), G2-L1. Format i progi są w polityce (`storyShape`); ekran
+ustawień dla nich to kolejny krok.
 
 **Kiedy działa AI i co do niego wysyłamy?**
 

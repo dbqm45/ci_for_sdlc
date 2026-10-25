@@ -81,12 +81,24 @@
 | DOC-002 | story, epic, bug | outdated / superseded documentation in context |
 | CON-001 | story, epic, bug | conflicting claims across sources (or sources contradicting a decision) |
 | COV-001 | story | acceptance criterion without implementation task |
+| STORY-001 | story | more than one user action: actions joined in the title or goal, several actors, or ≥ 2 different main actions in the scenarios |
+| STORY-002 | story | too large: more GWT/EARS scenarios than `maxScenarios`, more distinct main actions than `maxActions`, or an estimate ≥ `maxStoryPoints` |
+| STORY-003 | story | technical layer instead of value: title starts with a layer word, or no actor with technical vocabulary |
+| AC-001 | story | an AC unit outside `acFormat` (GWT by default) or a GWT scenario without Then |
+| AC-002 | story | result that is not observable ("works", "poprawnie"); skipped where REQ-003 already fired |
+| AC-003 | story | AC describes implementation (provider, table, protocol, mechanism) |
+| AC-004 | story | more than one action in one scenario |
 | BUG-001..003 | bug | incomplete report, no related story, no regression test |
 | BUG-004 | bug | bug matches an open finding of the related story (root cause) |
 | DEP-001 | all | depends on an item that is not ready |
 | EPIC-001..004 | epic | no goal, no stories, stories without design, inconsistent behaviour across stories |
 | DRIFT-001 | approved items | context changed since approval |
 | AI-001 | story, bug | semantic findings from the AI reviewer (evidence required) |
+
+Story-shape rules (STORY-*, AC-*, `analysis/story-shape.ts`) read the AC units of `analysis/acceptance.ts` and the
+thresholds of `policy.storyShape` (`storyShapeOf`, defaults of the pdi contract 0.4.0: `acFormat: gwt`,
+`maxScenarios: 6`, `maxActions: 3`, `maxStoryPoints: 13`). Their expected results are pinned by the contract's
+story-shape set (`packages/core/test/story-shape.test.ts`).
 
 ## Decisions feed back into the analysis
 

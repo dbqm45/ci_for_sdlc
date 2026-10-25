@@ -137,3 +137,29 @@ export const JOURNEY_PATTERNS: Record<Journey, RegExp> = {
 
 /** Doc labels / phrases that mark content as stale. */
 export const OUTDATED_PATTERNS = /\b(deprecated|obsolete|legacy|superseded by|no longer (?:valid|used|applies)|archived|outdated|old version|v1 \(old\))\b/i;
+
+// ---------------------------------------------------------------------------- story shape (pdi contract 0.4.0)
+// From contract/fixtures/story-shape/vocabulary.json; GWT keywords live with the parser (acceptance.ts).
+
+/** AC-002: results that are not an observable state (substring, any case). */
+export const WEAK_RESULTS = ['poprawnie', 'prawidłowo', 'działa', 'jest obsłużon', 'bez problemów', 'zgodnie z oczekiwaniami', 'correctly', 'properly', 'works', 'is handled', 'as expected', 'without issues'];
+
+/** STORY-003: a title starting with one of these words names a layer, not a user outcome. */
+export const LAYER_TERMS = {
+  caseSensitive: ['BE', 'FE', 'API', 'DB'],
+  caseInsensitive: ['backend', 'frontend', 'endpoint', 'migracja', 'migration', 'tabela', 'table', 'schema', 'schemat'],
+};
+
+/** STORY-001: conjunctions that join actions (only between verbs) in a title or a goal. */
+export const ACTION_CONJUNCTIONS = { pl: ['i', 'oraz', 'lub', 'albo'], en: ['and', 'or'] };
+
+/** AC-003: implementation detail in a criterion. */
+export const IMPLEMENTATION_TERMS: { category: string; pattern: RegExp }[] = [
+  { category: 'provider', pattern: /\b(Stripe|Supabase|Vercel|Cloudflare|AWS|Azure|GCP|Google Cloud|Firebase|OpenAI|Anthropic|Netlify|Heroku|PostgreSQL|Postgres|MySQL|MongoDB|Redis|Kafka|RabbitMQ|Elasticsearch|React|Angular|Vue|Next\.js|Django|Spring|Laravel|Rails|Auth0|Clerk|Twilio|SendGrid|Resend|S3)\w*/ },
+  { category: 'data schema', pattern: /\(FK\)|\bFK\b|\bnullable\b|\b\w+_hash\b|\bsoft[- ]?delete\w*|\bmigracj\w*|\bmigration\w*|\bklucz\w* obc\w*|\bVARCHAR\b|\bforeign key\b/i },
+  { category: 'data structure', pattern: /\btabel\w*|\btables?\b|\bkolumn\w*|\bcolumns?\b/i },
+  { category: 'place of execution', pattern: /\bpo stronie (serwera|klienta|przeglądarki|backendu|frontendu)\b|\bserver[- ]side\b|\bclient[- ]side\b|\bna edge\w*|\bw cache\w*|\bw pamięci podręcznej\b/i },
+  { category: 'mechanism', pattern: /\bper IP\b|\btoken bucket\b|\bsliding window\b|\bJWT\b|\bcron\w*/i },
+  { category: 'protocol', pattern: /\b(WebSocket\w*|gRPC|GraphQL|webhook\w*|SSE|REST|MQTT)\b/ },
+  { category: 'technical interface', pattern: /\bendpoint\w*/i },
+];

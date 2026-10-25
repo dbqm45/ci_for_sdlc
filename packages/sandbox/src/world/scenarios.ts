@@ -17,6 +17,6 @@ export const SCENARIOS: Scenario[] = [
   // The error frame goes away and the Saved cards page frame gets a new modification date.
   { id: 'figma-remove-error', source: 'figma', touches: { frames: ['1:1', '1:4'] } },
   { id: 'story-card-limit', source: 'jira', touches: { requirements: ['PAY-123'] } },
-  { id: 'backlog-intake', source: 'jira', touches: { requirements: ['GFT-400', 'GFT-401', 'GFT-402', 'GFT-410', 'GFT-420', 'GFT-421'] } },
+  { id: 'backlog-intake', source: 'jira', touches: { requirements: ['GFT-400', 'GFT-401', 'GFT-402', 'GFT-403', 'GFT-404', 'GFT-405', 'GFT-410', 'GFT-420', 'GFT-421'] } },
   { id: 'api-idempotency', source: 'confluence', touches: { documents: ['1002'] } },
 ];

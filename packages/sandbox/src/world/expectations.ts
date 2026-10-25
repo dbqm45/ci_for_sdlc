@@ -51,6 +51,14 @@ export const EXPECTATIONS: RuleExpectation[] = [
   { rule: 'BUG-003', fires: ['PAY-127'], silent: [intake('GFT-420')] },
   { rule: 'EPIC-001', fires: ['PAY-110'], silent: ['PAY-100'] },
   { rule: 'EPIC-002', fires: [intake('GFT-410')], silent: ['PAY-100'] },
+  // Story shape (pdi contract 0.4.0): draft stories of the backlog intake; the base world writes AC as lists (AC-001).
+  { rule: 'STORY-001', fires: [intake('GFT-403')], silent: ['PAY-123'] },
+  { rule: 'STORY-002', fires: [intake('GFT-405')], silent: ['PAY-123'] },
+  { rule: 'STORY-003', fires: [intake('GFT-404')], silent: ['PAY-123'] },
+  { rule: 'AC-001', fires: ['PAY-123'], silent: [intake('GFT-403')] },
+  { rule: 'AC-002', fires: [intake('GFT-405')], silent: ['PAY-123'] },
+  { rule: 'AC-003', fires: [intake('GFT-404')], silent: ['PAY-123'] },
+  { rule: 'AC-004', fires: [intake('GFT-405')], silent: [intake('GFT-403')] },
 ];
 
 export const DERIVED_EXPECTATIONS: DerivedRuleExpectation[] = [
