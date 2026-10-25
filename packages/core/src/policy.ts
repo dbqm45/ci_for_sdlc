@@ -62,6 +62,7 @@ export const DEFAULT_POLICY: AnalysisPolicy = {
   disabledRules: [],
   aiFindings: 'require_confirmation',
   driftReaction: 'review_required',
+  storyShape: { ...DEFAULT_STORY_SHAPE },
 };
 
 export const aiFindingsAction = (p: AnalysisPolicy): AiFindingsAction => p.aiFindings ?? 'require_confirmation';

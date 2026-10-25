@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DEMO_SCENARIOS, RULES } from '@ci/core';
+import { DEFAULT_STORY_SHAPE, DEMO_SCENARIOS, RULES } from '@ci/core';
 import { buildApp } from '../src/app.js';
 import { putSettings } from './helpers.js';
 
@@ -75,6 +75,28 @@ describe('API', () => {
     const res = await putSettings(ctx.app, { schedule: { mode: 'interval', intervalMinutes: 30 } });
     expect(res.json().settings.schedule.mode).toBe('interval');
     expect((await json('POST', '/api/items/PAY-125/ai-review')).status).toBe(400);
+  });
+
+  it('API-02: the story-shape policy is stored, merged with the defaults and used by the next analysis', async () => {
+    expect((await json('GET', '/api/settings')).body.settings.policy.storyShape).toEqual(DEFAULT_STORY_SHAPE);
+    const ac001 = async () => (await json('GET', '/api/items/PAY-123')).body.item.findings.some((f: any) => f.ruleId === 'AC-001');
+    expect(await ac001()).toBe(true);
+
+    const res = await putSettings(ctx.app, { policy: { storyShape: { acFormat: 'off' } } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().settings.policy.storyShape).toEqual({ ...DEFAULT_STORY_SHAPE, acFormat: 'off' });
+    await json('POST', '/api/analyze');
+    expect(await ac001()).toBe(false);
+    await putSettings(ctx.app, { policy: { storyShape: { acFormat: 'gwt' } } });
+  });
+
+  it.each([
+    ['an unknown AC format', { acFormat: 'list' }],
+    ['zero scenarios', { maxScenarios: 0 }],
+    ['a fractional threshold', { maxActions: 2.5 }],
+    ['an unknown field', { maxEpics: 3 }],
+  ])('API-03: the story-shape policy refuses %s', async (_, storyShape) => {
+    expect((await putSettings(ctx.app, { policy: { storyShape } })).statusCode).toBe(422);
   });
 
   it('API-01: lists the rules and the demo scenarios', async () => {

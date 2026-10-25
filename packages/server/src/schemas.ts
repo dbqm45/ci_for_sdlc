@@ -2,7 +2,7 @@
  * JSON Schemas for request validation and the OpenAPI document. Bodies reject
  * unknown properties; the server still trims and caps free text.
  */
-import { AI_EFFORTS, AI_FINDINGS_ACTIONS, AI_PROVIDERS, AI_RUN_ON, DECISION_EFFECTS, DRIFT_REACTIONS, ISSUE_TYPES, SCHEDULE_MODES, SETTINGS_MODES, SEVERITY_ACTIONS } from '@ci/core';
+import { AC_FORMATS, AI_EFFORTS, AI_FINDINGS_ACTIONS, AI_PROVIDERS, AI_RUN_ON, DECISION_EFFECTS, DRIFT_REACTIONS, ISSUE_TYPES, SCHEDULE_MODES, SETTINGS_MODES, SEVERITY_ACTIONS } from '@ci/core';
 
 const str = (maxLength: number, extra: object = {}) => ({ type: 'string', maxLength, ...extra }) as const;
 const bool = { type: 'boolean' } as const;
@@ -61,6 +61,12 @@ export const settingsBody = obj({
     disabledRules: strings,
     aiFindings: { enum: AI_FINDINGS_ACTIONS },
     driftReaction: { enum: DRIFT_REACTIONS },
+    storyShape: obj({
+      acFormat: { enum: AC_FORMATS },
+      maxScenarios: { type: 'integer', minimum: 1, maximum: 50 },
+      maxActions: { type: 'integer', minimum: 1, maximum: 20 },
+      maxStoryPoints: { type: 'integer', minimum: 1, maximum: 100 },
+    }),
   }),
 });
 

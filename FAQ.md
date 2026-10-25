@@ -168,8 +168,10 @@ i pozwala policzyć zachowania historyjki.
 | Lista punktów | każdy punkt to jednostka `AC-n` (wolny tekst); `AC-001` (info, nie blokuje) sugeruje przepisanie na GWT, `AC-002` i `AC-003` działają, akcji z punktów nie liczymy |
 
 Pełniejsza obsługa listy (propozycja przepisania na GWT przez AI) jest odłożona:
-[`docs/BACKLOG-DEFERRED.md`](docs/BACKLOG-DEFERRED.md), G2-L1. Format i progi są w polityce (`storyShape`); ekran
-ustawień dla nich to kolejny krok.
+[`docs/BACKLOG-DEFERRED.md`](docs/BACKLOG-DEFERRED.md), G2-L1. Format i progi ustawisz w *Settings → Policy → Story
+shape*: format AC (GWT, EARS, oba albo wyłączony — wtedy listy i wolny tekst nie dostają `AC-001`), maksymalna liczba
+scenariuszy i akcji w historyjce oraz liczba story points, od której historyjka jest za duża (`STORY-002`). W API to
+pole `policy.storyShape` w `PUT /api/settings`.
 
 **Kiedy działa AI i co do niego wysyłamy?**
 

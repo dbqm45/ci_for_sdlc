@@ -97,7 +97,8 @@
 
 Story-shape rules (STORY-*, AC-*, `analysis/story-shape.ts`) read the AC units of `analysis/acceptance.ts` and the
 thresholds of `policy.storyShape` (`storyShapeOf`, defaults of the pdi contract 0.4.0: `acFormat: gwt`,
-`maxScenarios: 6`, `maxActions: 3`, `maxStoryPoints: 13`). Their expected results are pinned by the contract's
+`maxScenarios: 6`, `maxActions: 3`, `maxStoryPoints: 13`; set in *Settings → Policy → Story shape*, stored as
+`policy.storyShape`, validated by `settingsBody`). Their expected results are pinned by the contract's
 story-shape set (`packages/core/test/story-shape.test.ts`).
 
 ## Decisions feed back into the analysis

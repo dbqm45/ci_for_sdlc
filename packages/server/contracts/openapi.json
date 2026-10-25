@@ -893,6 +893,35 @@
                           "review_required",
                           "invalidate"
                         ]
+                      },
+                      "storyShape": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "acFormat": {
+                            "enum": [
+                              "gwt",
+                              "ears",
+                              "any",
+                              "off"
+                            ]
+                          },
+                          "maxScenarios": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          "maxActions": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 20
+                          },
+                          "maxStoryPoints": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                          }
+                        }
                       }
                     }
                   }

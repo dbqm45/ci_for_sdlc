@@ -54,6 +54,9 @@ export function Settings() {
     o[keys.at(-1)!] = value;
     setS(next);
   };
+  // Settings saved before the story-shape rules have no storyShape; the server fills in the defaults.
+  const shape = s.policy.storyShape ?? {};
+  const setShape = (key: string, value: unknown) => set('policy.storyShape', { ...shape, [key]: value });
   const save = async () => {
     setSaving(true);
     try {
@@ -288,6 +291,26 @@ export function Settings() {
               <option value="warn">Warn only (NEEDS ATTENTION)</option>
               <option value="invalidate">Revoke the approval</option>
             </select>
+          </Field>
+        </div>
+        <h3 style={{ margin: '18px 0 8px' }}>Story shape</h3>
+        <div className="grid g3">
+          <Field label="Acceptance criteria format (AC-001)">
+            <select className="input" value={shape.acFormat ?? 'gwt'} onChange={(e) => setShape('acFormat', e.target.value)}>
+              <option value="gwt">Given / When / Then</option>
+              <option value="ears">EARS</option>
+              <option value="any">Any of the two</option>
+              <option value="off">Off (lists and free text accepted)</option>
+            </select>
+          </Field>
+          <Field label="Max scenarios per story (STORY-002)">
+            <input className="input" type="number" min={1} max={50} value={shape.maxScenarios ?? 6} onChange={(e) => setShape('maxScenarios', Number(e.target.value))} />
+          </Field>
+          <Field label="Max actions per story (STORY-002)">
+            <input className="input" type="number" min={1} max={20} value={shape.maxActions ?? 3} onChange={(e) => setShape('maxActions', Number(e.target.value))} />
+          </Field>
+          <Field label="Story points that make a story too large (STORY-002)">
+            <input className="input" type="number" min={1} max={100} value={shape.maxStoryPoints ?? 13} onChange={(e) => setShape('maxStoryPoints', Number(e.target.value))} />
           </Field>
         </div>
         <h3 style={{ margin: '18px 0 8px' }}>Rules</h3>
