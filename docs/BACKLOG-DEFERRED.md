@@ -9,6 +9,20 @@ Lista propozycji, które świadomie odłożono, żeby o nich nie zapomnieć. Ka�
 - **P7b. Osobne zatwierdzanie feature i epic.** Odrzucone na teraz (gotowość jest wyliczana ze story). Do ponownej oceny, jeśli zespoły będą chciały zatwierdzać całe funkcjonalności.
 - **P1b. Mapowanie hierarchii poza typem zgłoszenia.** Np. po etykiecie, komponencie albo polu niestandardowym Jira.
 
+## Kształt historyjki i kryteria akceptacji (G2)
+
+- **G2-L1. AC zapisane jako lista.** Reguły kształtu (G2.2) zakładają GWT jako format domyślny. Lista punktów jest
+  czytana (każdy punkt to jednostka `free` z własnym AC-n), ale tylko AC-001 (info), AC-002 i AC-003 oceniają ją
+  w pełni. Do zrobienia:
+  - przepisanie listy na GWT jako propozycja AI z cytatem punktu i pytaniem tam, gdzie brakuje warunku albo
+    akcji (G2.3, `rewrite_ac`); bez automatycznej podmiany, bo dopisane warunki zmieniałyby gotowość bez decyzji
+    człowieka;
+  - akcje z punktów listy dla STORY-001 i STORY-002 (dziś liczone tylko ze scenariuszy GWT);
+  - czy STORY-002 ma liczyć punkty listy jako scenariusze (dziś nie, pytanie do kontraktu pdi: `scenarios`
+    w `expected.json` obejmuje jednostki `free`, ale w zestawie wzorcowym nie ma listy dłuższej niż próg);
+  - `COV-001` po scenariuszach zamiast po liniach (zmienia identyfikatory ustaleń `ac<i>`, do których są przypięte
+    decyzje, więc wymaga migracji decyzji).
+
 ## Kolejne kroki naprawcze z raportu
 
 - **Krok 3.** Lista dozwolonych hostów `*.atlassian.net`, adresy dostawców AI tylko ze zmiennych środowiskowych, błędy bez treści odpowiedzi zewnętrznej, webhook domyślnie zamknięty z podpisem HMAC (API-12, API-13).

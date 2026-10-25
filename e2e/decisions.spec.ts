@@ -51,7 +51,9 @@ test('DEC-03: accepting the risk closes the finding and keeps the story ready', 
   const finding = page.locator('.finding').filter({ hasText: 'Session expiry behavior undefined' });
   await finding.getByRole('button', { name: 'Accept risk' }).click();
 
-  await expect(page.getByText('No open findings.', { exact: false })).toBeVisible();
+  // The accepted finding leaves the open list; the story's AC-001 (info: AC not in GWT) stays open and does not block.
+  await expect(page.locator('.finding').filter({ hasText: 'Session expiry behavior undefined' }).getByRole('button', { name: 'Accept risk' })).toHaveCount(0);
+  await expect(page.getByText('READY FOR IMPLEMENTATION', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /resolved \/ accepted finding/ }).click();
   await expect(page.getByText('Risk accepted: Risk accepted')).toBeVisible();
 

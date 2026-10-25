@@ -31,8 +31,9 @@ test('SET-03: the reviewer name is recorded on decisions', async ({ page }) => {
   await expect(toast(page)).toHaveText('Settings saved');
 
   await page.goto('/#/item/CHK-201');
-  await expect(page.getByText('Decision by E2E Tester')).toBeVisible();
-  await expect(page.getByText('the human owns the decision')).toBeVisible();
+  // Every open question shows the reviewer; CHK-201 has several.
+  await expect(page.getByText('Decision by E2E Tester').first()).toBeVisible();
+  await expect(page.getByText('the human owns the decision').first()).toBeVisible();
 });
 
 test('SET-04: saving over a change made elsewhere reloads the settings instead of overwriting them', async ({ page, request }) => {
