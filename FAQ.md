@@ -198,6 +198,12 @@ linii albo bez linii; epic jest wtedy *NOT READY*. Próg MVP i wymóg flag ustaw
 (`policy.release`). Plan wydania widać na stronie epica w panelu *Release plan*; w trybie demo pokazuje go scenariusz
 `release-planning`.
 
+Zmiany trzymane w repo (`docs/project/changes/CHG-n`, [`docs/REPO-CHANGES.md`](docs/REPO-CHANGES.md)) sprawdzają
+jeszcze dwie reguły. `REL-007` (info) zgłasza flagę z `release.yaml` bez planu: bez etapów wdrażania, z etapem bez
+kryterium wyjścia (`exit`), bez właściciela albo bez daty usunięcia (`remove_by`). `REL-008` (ostrzeżenie) to
+samokontrola planu z tf: fundament bez „Odblokowuje” (albo odblokowujący zadanie, którego w zmianie nie ma) i cięcie
+bez wymagania (bez weryfikacji i bez ID typu `US-02`). W Jirze obie milczą.
+
 **Kiedy działa AI i co do niego wysyłamy?**
 
 - Dostawcy: Anthropic, Amazon Bedrock, OpenAI, Azure OpenAI albo własny endpoint zgodny z OpenAI.
@@ -445,6 +451,7 @@ npm run analyze -- --json report.json      # dodatkowo pełny wynik w JSON
 npm run analyze -- --fail-on critical      # kod wyjścia 1, gdy któryś element jest NOT READY
 npm run analyze -- --fail-on warning       # kod wyjścia 1, gdy któryś element nie jest READY
 npm run analyze -- --items PAY-125,PAY-126 # tylko wybrane elementy
+npm run analyze -- --repo . --fail-on critical  # tylko zmiany z docs/project/changes (bramka na PR)
 ```
 
 CLI używa ustawień i decyzji z `CI_DATA_DIR`.

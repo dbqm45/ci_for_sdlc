@@ -1,10 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DEMO_SCENARIOS, RULES, analyzeProject, demoProject } from '../src/index.js';
+import { DEMO_SCENARIOS, RULES, analyzeProject, demoProject, readRepoChanges, type ProjectContext } from '../src/index.js';
 
 /**
  * Coverage guard for the test data world: every rule must have demo data where it fires
  * and an applicable item where it stays silent. A new rule without such data fails here,
- * so the demo world (and later the sandbox seeder built on it) grows with the rules.
+ * so the demo world (and later the sandbox seeder built on it) grows with the rules. Rules of repository mode only
+ * (REL-007, REL-008) are covered by the changes in fixtures/repo-changes, read as `analyze --repo` reads a checkout.
  */
 
 const NOW = new Date('2026-10-05T10:00:00Z');
@@ -20,9 +22,18 @@ async function observe() {
   const fires = new Set<string>();
   const silent = new Set<string>();
   const worlds = [{ id: 'baseline', apply: () => {} }, ...DEMO_SCENARIOS];
-  for (const w of worlds) {
-    const ctx = demoProject();
-    w.apply(ctx);
+  const repo = await readRepoChanges(fileURLToPath(new URL('fixtures/repo-changes', import.meta.url)));
+  expect(repo.problems).toEqual([]);
+  const repoCtx: ProjectContext = { project: { key: 'PAY', name: 'Payments' }, requirements: repo.requirements, documents: [], frames: [], fetchedAt: NOW.toISOString() };
+  const contexts = [
+    ...worlds.map((w) => {
+      const ctx = demoProject();
+      w.apply(ctx);
+      return ctx;
+    }),
+    repoCtx,
+  ];
+  for (const ctx of contexts) {
     const run = await analyzeProject(ctx, { now: NOW });
     for (const item of run.result.items) {
       const fired = new Set(item.findings.map((f) => f.ruleId));

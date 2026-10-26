@@ -1,0 +1,11 @@
+change: CHG-2
+releases:
+  - { id: R1, tasks: [TSK-11, TSK-12] }
+flags:
+  - key: saved-cards
+    tasks: [TSK-12]
+    owner: PO Payments
+    remove_by: 2027-03-31
+    rollout:
+      - { stage: internal, min_days: 3, exit: no failed charge in 3 days }
+      - { stage: "100%", exit: saved-card payments at least 30% }

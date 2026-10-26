@@ -99,6 +99,8 @@
 | REL-004 | epic, feature | R1 holds a technical-layer story (STORY-003's signal) |
 | REL-005 | epic, feature | a story in R1 is blocked by a story of a later line or without a line (critical) |
 | REL-006 | epic, feature | a story in a release line has no feature flag (`requireFlag`: user-facing stories by default) |
+| REL-007 | epic, feature | repo mode: a flag in `release.yaml` has no rollout stages, a stage without exit criterion, no owner or no `remove_by` (info) |
+| REL-008 | epic, feature | repo mode: a foundation in `plan.md` without "Unblocks" or unblocking a task not in the change, a slice without a requirement |
 | DRIFT-001 | approved items | context changed since approval |
 | AI-001 | story, bug | semantic findings from the AI reviewer (evidence required) |
 
@@ -115,7 +117,14 @@ field (`integrations.jira.releaseLineSource`); its `flagKeys` from `flag:` label
 dimension ("Release plan"), which only epics and features have (`dimensionsFor`), so a REL-005 conflict makes the
 epic NOT READY. Thresholds: `policy.release` (`releaseOf`: `maxMvpPercent: 60`, `requireFlag: user_facing`). Epics
 and features carry `releasePlan` (lines, stories without a line, MVP share), shown in the "Release plan" panel of
-the item page. Not yet: REL-004's AI check of a missing flow step, and REL-007/008 on `release.yaml` (repo mode, G1.4).
+the item page. Not yet: REL-004's AI check of a missing flow step.
+
+REL-007 and REL-008 (step G1.4) run only on changes read from a repository (`connectors/repo.ts`): they read
+`RequirementItem.repo`, which Jira items do not have — each flag's plan from `release.yaml` on the change, and each
+slice's `kind`, `unblocks` and `requirements` from `plan.md`'s "Rodzaj/Kind", "Odblokowuje/Unblocks" and
+"Wymagania/Requirements" columns. Their evidence carries the change file and line (`Evidence.path`/`line`), which the
+gate (`packages/server/src/gate.ts`) uses for GitHub Actions annotations. The demo world is Jira, so the rule-coverage
+test also reads the changes in `packages/core/test/fixtures/repo-changes`.
 
 ## Code as the current state (tf reconstruction)
 

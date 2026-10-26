@@ -10,14 +10,15 @@
  *                                                    # a pull request's docs/project/changes only (F2)
  *
  * With `--repo`, a change file that cannot be read fails the gate whatever the threshold. In GitHub Actions
- * (`GITHUB_ACTIONS=true`) the problems and the blocking findings are also annotations on their files, and the report is
- * appended to `$GITHUB_STEP_SUMMARY`. Uses the persisted settings / decisions in CI_DATA_DIR (default .ci-data).
+ * (`GITHUB_ACTIONS=true`) the problems and the findings that fail the gate are also error annotations on their files
+ * (the file and line of the finding's evidence, else the item's), other open findings on a change file (REL-007,
+ * REL-008) are warning or notice annotations, and the report is appended to `$GITHUB_STEP_SUMMARY`. Uses the persisted settings / decisions in CI_DATA_DIR (default .ci-data).
  * Exit codes: 0 passed, 1 failed, 2 could not run (e.g. no changes folder).
  */
 import { appendFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CHANGES_DIR, type ItemAnalysis, type RepoProblem } from '@ci/core';
+import { CHANGES_DIR, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem } from '@ci/core';
 import { AtlassianConnection, connectConfigFromEnv } from './connections.js';
 import { Engine } from './engine.js';
 import { Store } from './store.js';
@@ -35,11 +36,27 @@ const escData = (s: string) => s.replace(/%/g, '%25').replace(/\r/g, '%0D').repl
 const escProp = (s: string) => escData(s).replace(/:/g, '%3A').replace(/,/g, '%2C');
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
-/** The change file an item of a repository comes from. */
-const fileOf = (i: ItemAnalysis, epicOf: Map<string, string | undefined>) => {
-  const change = i.type === 'epic' ? i.key : epicOf.get(i.key);
-  return change ? `${CHANGES_DIR}/${change}/${i.type === 'epic' ? 'intent.md' : 'plan.md'}` : undefined;
+interface Place {
+  file?: string;
+  line?: number;
+}
+
+/** The change file (and line) an item of a repository comes from. */
+const placeOf = (i: ItemAnalysis, byKey: Map<string, RequirementItem>): Place => {
+  const r = byKey.get(i.key);
+  if (r?.repo) return { file: r.repo.path, line: r.repo.line };
+  const change = i.type === 'epic' ? i.key : r?.epicKey;
+  return change ? { file: `${CHANGES_DIR}/${change}/${i.type === 'epic' ? 'intent.md' : 'plan.md'}` } : {};
 };
+
+/** Where a finding points: its evidence's change file, else the item's. */
+const placeOfFinding = (f: Finding, item: Place): Place => {
+  const e = f.evidence.find((x) => x.path);
+  return e ? { file: e.path, line: e.line } : item;
+};
+
+const annotation = (level: 'error' | 'warning' | 'notice', at: Place, title: string, message: string) =>
+  `::${level} ${at.file ? `file=${escProp(at.file)},` : ''}${at.line ? `line=${at.line},` : ''}title=${escProp(title)}::${escData(message)}`;
 
 /** Runs one analysis and reports it; returns the exit code. */
 export async function runGate(args: string[], io: GateIo): Promise<number> {
@@ -87,11 +104,27 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
   const failing = items.filter((i) => (failOn === 'critical' && i.readiness === 'not_ready') || (failOn === 'warning' && i.readiness !== 'ready'));
 
   if (repoPath && io.env.GITHUB_ACTIONS === 'true') {
-    const epicOf = new Map(engine.state.context?.requirements.map((r) => [r.key, r.epicKey]) ?? []);
+    const byKey = new Map(engine.state.context?.requirements.map((r) => [r.key, r]) ?? []);
+    const { actions } = (await store.settings()).policy;
     for (const p of problems) io.out(`::error file=${escProp(p.path)},title=Change file::${escData(p.message)}`);
-    for (const i of failing) {
-      const file = fileOf(i, epicOf);
-      io.out(`::error ${file ? `file=${escProp(file)},` : ''}title=${escProp(`${i.key} not ready`)}::${escData(i.blockingIssues.join('; ') || `readiness ${i.readiness}`)}`);
+    for (const i of items) {
+      const at = placeOf(i, byKey);
+      const open = i.findings.filter((f) => f.status === 'open');
+      // The findings that make this item fail the gate: blocking ones, and with --fail-on warning those that notify.
+      const fails = failing.includes(i) ? open.filter((f) => f.blocks || (failOn === 'warning' && actions[f.severity] === 'notify')) : [];
+      const groups = new Map<string, { at: Place; titles: string[] }>();
+      for (const f of fails) {
+        const p = placeOfFinding(f, at);
+        const k = `${p.file}:${p.line}`;
+        (groups.get(k) ?? groups.set(k, { at: p, titles: [] }).get(k)!).titles.push(f.title);
+      }
+      for (const g of groups.values()) io.out(annotation('error', g.at, `${i.key} not ready`, g.titles.join('; ')));
+      if (failing.includes(i) && !groups.size) io.out(annotation('error', at, `${i.key} not ready`, i.blockingIssues.join('; ') || `readiness ${i.readiness}`));
+      for (const f of open) {
+        const e = f.evidence.find((x) => x.path);
+        if (!e || fails.includes(f)) continue;
+        io.out(annotation(f.severity === 'info' ? 'notice' : 'warning', { file: e.path, line: e.line }, `${f.ruleId} ${i.key}`, f.title));
+      }
     }
     const summary = io.env.GITHUB_STEP_SUMMARY;
     if (summary) {
