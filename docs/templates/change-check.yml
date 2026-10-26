@@ -1,0 +1,41 @@
+# Definition check for changes kept in the repository (ci_for_sdlc, F2 of the pdi one-flow plan).
+# Copy to .github/workflows/change-check.yml in a repository with docs/project/changes/ (tf's mode-pdi writes them).
+# A pull request that changes a change's intent.md, plan.md or release.yaml gets a red check when an item is not
+# ready or a file cannot be read; the findings are annotations on the files and a table in the run's summary.
+name: Definition check
+
+on:
+  pull_request:
+    paths: ['docs/project/changes/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: change-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # ci_for_sdlc itself, next to the checkout. Pin `ref` to a release tag (vX.Y.Z) rather than main.
+      - uses: actions/checkout@v7
+        with:
+          repository: dbqm45/ci_for_sdlc
+          ref: main
+          path: .ci_for_sdlc
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci --workspace @ci/core --workspace @ci/server
+        working-directory: .ci_for_sdlc
+      - name: Check the changes
+        working-directory: .ci_for_sdlc
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          CI_DATA_DIR: ${{ runner.temp }}/ci-data
+        run: npm run analyze -- --repo "$GITHUB_WORKSPACE" --repo-url "$REPO_URL" --fail-on critical

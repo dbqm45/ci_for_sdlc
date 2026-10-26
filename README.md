@@ -145,6 +145,8 @@ Workspace „Checkout” odtwarza przykłady z koncepcji produktu:
 - **Decision Debt, Project Health, Domain Detection, metryki** (Specification Health, Design Coverage, Journey Coverage, Documentation Consistency, Readiness, Drift).
 - **Enterprise security** — sekrety tylko w zmiennych środowiskowych, redakcja danych osobowych przed wysłaniem do AI, limit znaków na źródło, szyfrowanie stanu at-rest (AES-256-GCM), audit log z listą źródeł wysłanych do modelu, możliwość pracy bez AI.
 - **CLI / quality gate** — `npm run analyze -- --fail-on critical` zwraca kod 1, gdy coś jest NOT READY (do pipeline'ów CI).
+  Z `--repo <checkout>` sprawdza zmiany z `docs/project/changes/` repozytorium (intent, plan, `release.yaml`) — bramka na PR:
+  [`docs/REPO-CHANGES.md`](docs/REPO-CHANGES.md), szablon workflow w `docs/templates/change-check.yml`.
 
 ---
 
