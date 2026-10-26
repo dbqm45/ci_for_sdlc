@@ -145,6 +145,14 @@ reconstructed, each with evidence `path:line`. `connectors/reconstruction.ts` re
 
 The fixture in `packages/core/test/fixtures/tf-reconstruction/` was produced by tf's exporter; regenerate it, never edit it.
 
+## Claude as the interface (MCP, K-1)
+
+`packages/mcp` is a local MCP server (stdio, newline-delimited JSON-RPC 2.0, no dependencies, plain JavaScript checked
+by `tsc` with `checkJs`) that Claude runs next to pdi's and ShipScope's. It reads the REST API only (`GET /api/analysis`,
+`/api/items/:key`, `/graph`, `/api/decisions`, `/api/drift`, `/api/rules`, `/api/pdi`) and summarizes answers before
+the model sees them; there is no MCP endpoint in the server and no write tool. It sends no credential: reads are open
+today and `CI_ADMIN_TOKEN` guards only changes. Plan: `docs/MCP-K1-PLAN.md`; setup: `packages/mcp/README.md`.
+
 ## Claim packs per domain
 
 The claim vocabulary (`ClaimPack` in `analysis/claims.ts`: ordered subjects and attribute extractors) is chosen per

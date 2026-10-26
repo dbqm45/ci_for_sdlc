@@ -474,6 +474,12 @@ npm run analyze -- --repo . --fail-on critical  # tylko zmiany z docs/project/ch
 
 CLI używa ustawień i decyzji z `CI_DATA_DIR`.
 
+**Czy mogę pytać o gotowość w Claude?**
+Tak. Serwer MCP z `packages/mcp` daje Claude Code i Claude Desktop narzędzia tylko do odczytu: podsumowanie gotowości
+(też dla jednej zmiany, np. `CHG-12`), gotowość elementu z ustaleniami, dowodami i otwartymi pytaniami, graf kontekstu,
+decyzje, dryf, reguły i stan połączenia z pdi. Nie zatwierdza, nie zapisuje decyzji i nie uruchamia analizy.
+Konfiguracja i przykładowe pytania: [`packages/mcp/README.md`](packages/mcp/README.md).
+
 **Czy jest opis API?**
 Tak. Kontrakt OpenAPI 3 jest pod `GET /api/openapi.json`, a skrót w [`README.md`](README.md#api-skrót). Błędy mają format `application/problem+json` (RFC 9457). Błąd walidacji to `422` z listą pól.
 

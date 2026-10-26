@@ -1,0 +1,20 @@
+{
+  "name": "@ci/mcp",
+  "version": "0.1.20",
+  "private": true,
+  "description": "MCP server (stdio) for Claude over ci_for_sdlc's read-only REST API",
+  "type": "module",
+  "bin": {
+    "ci-sdlc-mcp": "src/ci-sdlc-mcp.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "vitest": "^5.0.5"
+  }
+}
