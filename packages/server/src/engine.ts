@@ -11,6 +11,8 @@ import {
   fetchFigma,
   fetchJira,
   readReconstruction,
+  readRepoChanges,
+  type RepoProblem,
   type AnalysisResult,
   type Approval,
   type ContextGraph,
@@ -28,6 +30,14 @@ export interface EngineState {
   running: boolean;
   lastError?: string;
   lastReason?: string;
+  /** With a repository source: the change files that could not be read in the last analysis. */
+  repoProblems?: RepoProblem[];
+}
+
+/** Changes read from a checkout's docs/project/changes instead of the configured sources (F2, the PR gate). */
+export interface RepoSource {
+  path: string;
+  repoUrl?: string;
 }
 
 /**
@@ -44,16 +54,23 @@ export class Engine extends EventEmitter {
   constructor(
     private store: Store,
     private atlassian?: AtlassianConnection,
+    private repo?: RepoSource,
   ) {
     super();
   }
 
   async loadContext(settings: Settings): Promise<ProjectContext> {
-    const ctx = settings.mode === 'demo' ? ((await this.store.demoContext()) ?? demoProject()) : await this.loadSources(settings);
+    const ctx = this.repo ? await this.loadRepo(settings, this.repo) : settings.mode === 'demo' ? ((await this.store.demoContext()) ?? demoProject()) : await this.loadSources(settings);
     // tf's reconstruction from code is the current state of the code, next to the specification in either mode.
     const { code } = settings.integrations;
     if (!code.enabled) return ctx;
     return { ...ctx, documents: [...ctx.documents, ...(await readReconstruction(code.reconstructionPath, { repoUrl: code.repoUrl }))] };
+  }
+
+  private async loadRepo(settings: Settings, repo: RepoSource): Promise<ProjectContext> {
+    const { requirements, problems } = await readRepoChanges(repo.path, { repoUrl: repo.repoUrl });
+    this.state.repoProblems = problems;
+    return { project: settings.project, requirements, documents: [], frames: [], fetchedAt: new Date().toISOString() };
   }
 
   private async loadSources(settings: Settings): Promise<ProjectContext> {
@@ -152,7 +169,7 @@ export class Engine extends EventEmitter {
       });
       await this.store.audit({ at: result.analyzedAt, kind: 'analysis', actor: 'system', summary: `Analysis (${reason}): ${result.counts.critical} critical, ${result.counts.needsAttention} need attention, ${result.drift.length} drift events in ${result.durationMs} ms` });
 
-      this.state = { result, graph, context, running: false, lastReason: reason };
+      this.state = { result, graph, context, running: false, lastReason: reason, repoProblems: this.state.repoProblems };
       this.emit('analysis', { at: result.analyzedAt, reason, drift: result.drift.length });
       this.emit('status', { running: false });
       return result;
