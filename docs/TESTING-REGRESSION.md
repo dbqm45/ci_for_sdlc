@@ -47,7 +47,7 @@ Zrzuty całych stron: overview, backlog, PAY-123, impact, settings, na czystym d
 („Last analysis”, „Analyzed … in N ms”, „Approved …”) są zamaskowane, animacje i kursor wyłączone, tolerancja 1% pikseli.
 
 Czcionki i renderowanie różnią się między maszynami, dlatego wzorce **powstają i są porównywane wyłącznie** w obrazie
-`mcr.microsoft.com/playwright:v1.63.0-noble` (job `visual` w przebiegu nocnym). Wzorców z laptopa nie commitujemy.
+`mcr.microsoft.com/playwright:v1.64.1-noble` (job `visual` w przebiegu nocnym). Wzorców z laptopa nie commitujemy.
 
 Procedura wzorców (pierwszy raz i po zamierzonej zmianie wyglądu):
 1. *Actions → Regression (nightly) → Run workflow*, zaznacz `update_snapshots`.

@@ -61,7 +61,7 @@ jobs:
     # Baselines are created and compared only in this image, so fonts and rendering always match.
     # Keep the tag equal to the @playwright/test version in package-lock.json.
     container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
     steps:
       - uses: actions/checkout@v7
       - run: npm ci
