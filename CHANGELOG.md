@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.16] - 2026-10-26
+
+### Poprawione
+
+- **deps:** update zod and fast-uri to fix npm audit findings (#67)
+
 ## [0.1.15] - 2026-10-26
 
 ### Nowe
