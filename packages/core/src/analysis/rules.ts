@@ -4,6 +4,7 @@ import { evDoc, evFrame, evJira, type ItemCtx } from './context.js';
 import { requiredStates, statesIn, designStates } from './states.js';
 import { OUTDATED_PATTERNS, STATE_LABELS, STATE_PATTERNS, VAGUE_TERMS } from './vocabulary.js';
 import { tokenize } from '../text.js';
+import { docId } from '../graph.js';
 import { workItemsUnder } from '../hierarchy.js';
 import { STORY_SHAPE_RULES } from './story-shape.js';
 import { RELEASE_RULES } from './release-plan.js';
@@ -411,7 +412,7 @@ export const RULES: Rule[] = [
       const out: FindingDraft[] = [];
       for (const d of c.docs) {
         const label = d.labels.find((l) => /deprecated|archived|obsolete|outdated/i.test(l));
-        const superseded = c.env.built.graph.in(`confluence:${d.id}`).find((r) => r.type === 'supersedes');
+        const superseded = c.env.built.graph.in(docId(d)).find((r) => r.type === 'supersedes');
         if (!label && !OUTDATED_PATTERNS.test(d.body) && !superseded) continue;
         const by = superseded ? c.env.built.graph.entities.get(superseded.from)?.title : undefined;
         out.push({
@@ -431,11 +432,11 @@ export const RULES: Rule[] = [
   {
     id: 'CON-001',
     name: 'Cross-source conflicts',
-    description: 'Two sources state different values for the same fact (timeout, retry limit, idempotency, …).',
+    description: 'Two sources state different values for the same fact (timeout, retry limit, idempotency, …), including the code as tf reconstructed it.',
     appliesTo: ['story', 'epic', 'feature', 'bug'],
     run: (c) => {
       const out: FindingDraft[] = [];
-      for (const conflict of findConflicts(c.claims.all)) {
+      for (const conflict of findConflicts([...c.claims.all, ...c.claims.code])) {
         const decided = conflict.claims.filter((x) => x.evidence.source === 'decision');
         // A human decision settles the question — only sources disagreeing with it remain a problem.
         const latestDecision = decided.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))[0];

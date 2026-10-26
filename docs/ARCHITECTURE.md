@@ -7,6 +7,7 @@
                    └──────────┬───────┴──────────────────┘
                               ↓
                 ProjectContext  (RequirementContext · DocumentationContext · DesignContext)
+                  + tf's reconstruction from code (connectors/reconstruction.ts, documents with source "code")
                               ↓
                 graph.ts — Context Graph
                   entities + explicit relations (epic link, parent, issue links, remote links,
@@ -115,6 +116,25 @@ dimension ("Release plan"), which only epics and features have (`dimensionsFor`)
 epic NOT READY. Thresholds: `policy.release` (`releaseOf`: `maxMvpPercent: 60`, `requireFlag: user_facing`). Epics
 and features carry `releasePlan` (lines, stories without a line, MVP share), shown in the "Release plan" panel of
 the item page. Not yet: REL-004's AI check of a missing flow step, and REL-007/008 on `release.yaml` (repo mode, G1.4).
+
+## Code as the current state (tf reconstruction)
+
+ci_for_sdlc does not read code. tf does: its `recon_export.py` writes `reconstruction.json` (format
+`tf-reconstruction`, version 1; pdi plan "one SDLC flow", F2) with the rules, requirements and domain terms it
+reconstructed, each with evidence `path:line`. `connectors/reconstruction.ts` reads that file from the server's disk
+(*Settings → Integrations → Code*, `integrations.code`) in demo and live mode and turns each item into a document with
+`source: 'code'` and `code` facts. Such documents:
+
+- state claims only when tf backed them with evidence it could confirm (`isClaimable`: status `evidence`, no
+  evidence `verified: false`); assumptions and questions are context only;
+- join an item's context when linked by the graph, or when they state a fact (subject + attribute) the item's
+  sources also state, since a one-line rule rarely matches a story by text;
+- are kept apart from documentation (`ItemCtx.code`, `claims.code`): CON-001 compares them with the specification
+  ("Jira says 30 s, the code waits 45 s", evidence `Code src/payments/gateway.ts:1`, linked to the commit when
+  `repoUrl` is set), but they never satisfy rules that ask the specification for something (REQ-004, DOC-001,
+  the challenges).
+
+The fixture in `packages/core/test/fixtures/tf-reconstruction/` was produced by tf's exporter; regenerate it, never edit it.
 
 ## Decisions feed back into the analysis
 

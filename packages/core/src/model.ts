@@ -7,7 +7,7 @@
  * building?", not "is the code correct?".
  */
 
-export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision';
+export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision' | 'code';
 
 // ---------------------------------------------------------------------------
 // Normalized source contexts (output of connectors + normalizer)
@@ -87,7 +87,7 @@ export interface RequirementItem {
   url?: string;
 }
 
-/** DocumentationContext — one Confluence page. */
+/** DocumentationContext — one Confluence page, or one item of tf's reconstruction from code (`source: 'code'`). */
 export interface DocumentItem {
   id: string;
   title: string;
@@ -96,6 +96,24 @@ export interface DocumentItem {
   labels: string[];
   updatedAt: string;
   url?: string;
+  /** Where the item comes from; absent means Confluence. */
+  source?: 'confluence' | 'code';
+  /** Set for `source: 'code'`: what tf's reconstruction says about the item (connectors/reconstruction.ts). */
+  code?: CodeFacts;
+}
+
+/** One rule, requirement or domain term reconstructed from code by tf, with its evidence `path:line`. */
+export interface CodeFacts {
+  kind: 'rules' | 'requirements' | 'domain';
+  /** `evidence`: backed by code; `assumption`, `unverified` and `question` are context only, never claims. */
+  status: 'evidence' | 'assumption' | 'unverified' | 'question';
+  module: string | null;
+  evidence: { path: string; line: number; lineEnd: number; verified?: boolean }[];
+  quote?: string;
+  /** tf's confidence, e.g. "test", "kod". */
+  confidence?: string;
+  /** Commit of the code the reconstruction describes. */
+  commit: string | null;
 }
 
 /** DesignContext — one Figma frame / screen / component set. */

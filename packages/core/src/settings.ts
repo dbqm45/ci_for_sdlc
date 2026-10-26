@@ -15,6 +15,8 @@ export interface Settings {
     jira: { enabled: boolean; baseUrl: string; email: string; projectKey: string; acceptanceCriteriaField?: string; storyPointsField?: string; releaseLineSource?: ReleaseLineSource; releaseLabelPrefix?: string; releaseLineField?: string; flagLabelPrefix?: string; flagField?: string; changeLabelPrefix?: string; jqlFilter?: string; issueTypeMap?: Record<string, IssueType> };
     confluence: { enabled: boolean; baseUrl: string; email: string; spaceKeys: string[] };
     figma: { enabled: boolean; fileKeys: string[] };
+    /** tf's reconstruction from code (`reconstruction.json`, connectors/reconstruction.ts), read from the server's disk. */
+    code: { enabled: boolean; reconstructionPath: string; repoUrl?: string };
   };
   ai: AiProviderConfig & { runOn: (typeof AI_RUN_ON)[number] };
   security: {

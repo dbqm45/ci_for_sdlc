@@ -4,7 +4,7 @@ import type { Dimension, FindingCategory, Severity } from '../model.js';
 export interface SemanticSource {
   ref: string;
   entityId: string;
-  source: 'jira' | 'confluence' | 'figma' | 'decision';
+  source: 'jira' | 'confluence' | 'figma' | 'decision' | 'code';
   title: string;
   content: string;
 }

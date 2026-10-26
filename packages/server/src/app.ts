@@ -307,7 +307,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     try {
       const ctx = await engine.loadContext({ ...s, mode: 'live' });
       if (s.integrations.jira.enabled) out.jira = `OK — ${ctx.requirements.length} issues`;
-      if (s.integrations.confluence.enabled) out.confluence = `OK — ${ctx.documents.length} pages`;
+      const code = ctx.documents.filter((d) => d.source === 'code').length;
+      if (s.integrations.confluence.enabled) out.confluence = `OK — ${ctx.documents.length - code} pages`;
+      if (s.integrations.code.enabled) out.code = `OK — ${code} items reconstructed from code`;
       if (s.integrations.figma.enabled) out.figma = `OK — ${ctx.frames.length} frames`;
     } catch (e) {
       out.error = errorMessage(e);

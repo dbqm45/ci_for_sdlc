@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { resolve } from 'node:path';
 import { card, heading1, nav, resetWorkspace, disableRuleViaApi, toast } from './support/helpers';
 
 // User path: configuring the workspace — integrations, policy rules, the reviewer's name, concurrent edits.
@@ -61,4 +62,19 @@ test('SET-05: switching the acceptance-criteria format off removes the AC-001 fi
   await page.goto('/#/item/PAY-123');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('PAY-123');
   await expect(notGwt).toHaveCount(0);
+});
+
+test('SET-06: tf reconstruction from code shows where the code contradicts the specification', async ({ page }) => {
+  // Playwright runs from the repository root; the server reads the file from the same disk.
+  const reconstruction = resolve('packages/core/test/fixtures/tf-reconstruction/reconstruction.json');
+  const integrations = card(page, 'Integrations');
+  await integrations.getByRole('checkbox', { name: /Code \(tf reconstruction\)/ }).check();
+  await integrations.getByLabel('Path to reconstruction.json on the server').fill(reconstruction);
+  await page.getByRole('button', { name: 'Save & re-analyze' }).click();
+  await expect(toast(page)).toHaveText('Settings saved');
+
+  await page.goto('/#/item/PAY-123');
+  // PAY-123 says the payment service times out after 30 seconds; the code waits 45 seconds.
+  await expect(page.getByText('Conflicting payment timeout: 30 s vs 45 s').first()).toBeVisible();
+  await expect(page.getByText('Code src/payments/gateway.ts:1').first()).toBeAttached();
 });

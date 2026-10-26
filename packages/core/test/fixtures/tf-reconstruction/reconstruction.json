@@ -1,0 +1,148 @@
+{
+  "format": "tf-reconstruction",
+  "format_version": 1,
+  "generated_at": "2026-10-26",
+  "commit": "3f2a9c1",
+  "modules": [
+    {
+      "module": "payments",
+      "purpose": "Charges cards and stores saved cards.",
+      "card": "modules/payments.json"
+    }
+  ],
+  "rules": [
+    {
+      "text": "The payment timeout is 45 seconds.",
+      "section": "payments",
+      "module": "payments",
+      "evidence": [
+        {
+          "path": "src/payments/gateway.ts",
+          "line": 1,
+          "line_end": 1,
+          "verified": true
+        }
+      ],
+      "status": "evidence",
+      "source": "rules.md:4",
+      "quote": "PAYMENT_TIMEOUT_MS = 45_000",
+      "confidence": "kod",
+      "id": "rules-48c91a76d4"
+    },
+    {
+      "text": "A declined payment is retried at most 2 times.",
+      "section": "payments",
+      "module": "payments",
+      "evidence": [
+        {
+          "path": "src/payments/gateway.ts",
+          "line": 2,
+          "line_end": 2,
+          "verified": true
+        }
+      ],
+      "status": "evidence",
+      "source": "rules.md:5",
+      "quote": "MAX_RETRIES = 2",
+      "confidence": "kod",
+      "id": "rules-8c7b62005e"
+    },
+    {
+      "text": "A customer can store a maximum of 5 cards.",
+      "section": "payments",
+      "module": "payments",
+      "evidence": [
+        {
+          "path": "src/payments/cards.ts",
+          "line": 1,
+          "line_end": 4,
+          "verified": true
+        }
+      ],
+      "status": "evidence",
+      "source": "rules.md:6",
+      "quote": "MAX_SAVED_CARDS = 5",
+      "confidence": "test",
+      "id": "rules-a9b6944b02"
+    },
+    {
+      "text": "The payment session lasts 10 minutes.",
+      "section": "payments",
+      "module": "payments",
+      "evidence": [
+        {
+          "path": "src/payments/gateway.ts",
+          "line": 6,
+          "line_end": 6,
+          "verified": false
+        }
+      ],
+      "status": "evidence",
+      "source": "rules.md:7",
+      "quote": "SESSION_TTL = 600",
+      "confidence": "kod",
+      "id": "rules-b77ec6f9ec"
+    },
+    {
+      "text": "Card data is stored by the payment provider",
+      "section": "Reguły przekrojowe",
+      "module": null,
+      "evidence": [],
+      "status": "assumption",
+      "source": "rules.md:10",
+      "id": "rules-4e0ec99b34"
+    }
+  ],
+  "requirements": [
+    {
+      "text": "The system rejects a sixth saved card",
+      "section": "Saved cards",
+      "module": null,
+      "evidence": [
+        {
+          "path": "tests/cards.test.ts",
+          "line": 1,
+          "line_end": 2,
+          "verified": true
+        }
+      ],
+      "status": "evidence",
+      "source": "requirements.md:4",
+      "quote": "cannot store a sixth card",
+      "confidence": "test",
+      "id": "requirements-9fdcafa4d4"
+    },
+    {
+      "text": "Expired cards are removed automatically — no code found for expiry handling",
+      "section": "Saved cards",
+      "module": null,
+      "evidence": [],
+      "status": "question",
+      "source": "requirements.md:5",
+      "id": "requirements-3f6b8af49d"
+    }
+  ],
+  "domain": [
+    {
+      "text": "saved card · Card",
+      "section": "Słownik",
+      "module": null,
+      "evidence": [
+        {
+          "path": "src/payments/cards.ts",
+          "line": 3,
+          "line_end": 3,
+          "verified": true
+        }
+      ],
+      "status": "evidence",
+      "source": "domain.md:6",
+      "cells": {
+        "Termin": "saved card",
+        "Nazwa w kodzie": "Card",
+        "Dowód": ""
+      },
+      "id": "domain-d097918074"
+    }
+  ]
+}

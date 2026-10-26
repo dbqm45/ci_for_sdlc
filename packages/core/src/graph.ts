@@ -15,7 +15,8 @@ import { TfIdf, cosine, hash, sharedTerms, type Vector } from './text.js';
 import { documentMeaning, frameMeaning, requirementMeaning } from './analysis/fingerprint.js';
 
 export const issueId = (key: string) => `jira:${key}`;
-export const docId = (id: string) => `confluence:${id}`;
+/** Entity id of a document: `confluence:<page id>`, or `code:<reconstruction item id>` for tf's reconstruction. */
+export const docId = (d: { id: string; source?: 'confluence' | 'code' }) => `${d.source ?? 'confluence'}:${d.id}`;
 export const frameId = (f: { fileKey: string; id: string }) => `figma:${f.fileKey}:${f.id}`;
 export const domainId = (name: string) => `domain:${name}`;
 
@@ -119,7 +120,7 @@ export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = [
   }
   for (const d of ctx.documents) {
     const text = documentText(d);
-    g.addEntity({ id: docId(d.id), kind: 'document', source: 'confluence', title: d.title, url: d.url, updatedAt: d.updatedAt, text, contentHash: hash(text), meaningHash: documentMeaning(d, docId(d.id)) });
+    g.addEntity({ id: docId(d), kind: 'document', source: d.source ?? 'confluence', title: d.title, url: d.url, updatedAt: d.updatedAt, text, contentHash: hash(text), meaningHash: documentMeaning(d, docId(d)) });
   }
   for (const f of ctx.frames) {
     const text = frameText(f);
@@ -165,7 +166,7 @@ export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = [
     }
     for (const url of r.remoteLinks) {
       const doc = ctx.documents.find((d) => (d.url && url.startsWith(d.url)) || url.includes(`/pages/${d.id}`));
-      if (doc) g.addRelation({ from: id, to: docId(doc.id), type: 'documented_by', confidence: 1, via: 'explicit', reason: 'Linked from Jira issue' });
+      if (doc) g.addRelation({ from: id, to: docId(doc), type: 'documented_by', confidence: 1, via: 'explicit', reason: 'Linked from Jira issue' });
       const node = /node-id=([\w%:-]+)/.exec(url)?.[1]?.replace('%3A', ':').replace('-', ':');
       const frame = node ? ctx.frames.find((f) => url.includes(f.fileKey) && f.id === node) : undefined;
       if (frame) g.addRelation({ from: id, to: frameId(frame), type: 'designed_by', confidence: 1, via: 'explicit', reason: 'Figma link on Jira issue' });
@@ -175,17 +176,17 @@ export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = [
   const keyRegex = new RegExp(`\\b(${[...reqByKey.keys()].map(escapeRe).join('|') || '$^'})\\b`, 'g');
   for (const d of ctx.documents) {
     for (const m of new Set(d.body.match(keyRegex) ?? [])) {
-      g.addRelation({ from: issueId(m), to: docId(d.id), type: 'documented_by', confidence: 0.95, via: 'explicit', reason: `Page mentions ${m}` });
+      g.addRelation({ from: issueId(m), to: docId(d), type: 'documented_by', confidence: 0.95, via: 'explicit', reason: `Page mentions ${m}` });
     }
     for (const other of ctx.documents) {
       if (other.id !== d.id && other.title.length > 6 && d.body.toLowerCase().includes(other.title.toLowerCase())) {
-        g.addRelation({ from: docId(d.id), to: docId(other.id), type: 'references', confidence: 0.9, via: 'explicit', reason: `"${d.title}" links to "${other.title}"` });
+        g.addRelation({ from: docId(d), to: docId(other), type: 'references', confidence: 0.9, via: 'explicit', reason: `"${d.title}" links to "${other.title}"` });
       }
     }
     const sup = /superseded by[:\s]+["“]?([^"”\n.]+)/i.exec(d.body);
     if (sup) {
       const target = ctx.documents.find((x) => x.id !== d.id && x.title.toLowerCase().includes(sup[1]!.trim().toLowerCase()));
-      if (target) g.addRelation({ from: docId(target.id), to: docId(d.id), type: 'supersedes', confidence: 0.95, via: 'explicit', reason: `"${d.title}" says it is superseded` });
+      if (target) g.addRelation({ from: docId(target), to: docId(d), type: 'supersedes', confidence: 0.95, via: 'explicit', reason: `"${d.title}" says it is superseded` });
     }
   }
   for (const f of ctx.frames) {
@@ -220,13 +221,13 @@ export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = [
     const titleV = tfidf.vector(`${r.title} ${r.title} ${r.acceptanceCriteria.join(' ')}`);
 
     const docScores = ctx.documents
-      .map((d) => ({ d, s: cosine(v, vectors.get(docId(d.id))!) }))
+      .map((d) => ({ d, s: cosine(v, vectors.get(docId(d))!) }))
       .filter((x) => x.s >= DOC_THRESHOLD)
       .sort((a, b) => b.s - a.s)
       .slice(0, 4);
     for (const { d, s } of docScores) {
-      const terms = sharedTerms(v, vectors.get(docId(d.id))!);
-      g.addRelation({ from: id, to: docId(d.id), type: 'documented_by', confidence: round(Math.min(0.9, 0.35 + s)), via: 'semantic', reason: `Semantic match (${terms.join(', ')})` });
+      const terms = sharedTerms(v, vectors.get(docId(d))!);
+      g.addRelation({ from: id, to: docId(d), type: 'documented_by', confidence: round(Math.min(0.9, 0.35 + s)), via: 'semantic', reason: `Semantic match (${terms.join(', ')})` });
     }
 
     // A linked frame defines the flow ("Add card / …"): its siblings belong to the story,
@@ -310,7 +311,7 @@ function bundleFor(g: ContextGraph, r: RequirementItem, reqByKey: Map<string, Re
   const all = [...refs.values()].sort((a, b) => b.confidence - a.confidence);
   return {
     requirements: all.filter((x) => x.source === 'jira' || x.source === 'decision'),
-    documents: all.filter((x) => x.source === 'confluence'),
+    documents: all.filter((x) => x.source === 'confluence' || x.source === 'code'),
     frames: all.filter((x) => x.source === 'figma'),
   };
 }
