@@ -687,6 +687,10 @@
                             "type": "string",
                             "maxLength": 100
                           },
+                          "changeLabelPrefix": {
+                            "type": "string",
+                            "maxLength": 50
+                          },
                           "jqlFilter": {
                             "type": "string",
                             "maxLength": 4000
@@ -1239,6 +1243,15 @@
             "adminToken": []
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/pdi": {
+      "get": {
         "responses": {
           "200": {
             "description": "Default Response"

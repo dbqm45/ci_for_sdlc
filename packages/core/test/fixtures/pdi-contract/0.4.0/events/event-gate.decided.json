@@ -1,0 +1,13 @@
+{
+  "id": "evt-gate.decided",
+  "type": "gate.decided",
+  "occurred_at": "2026-10-23T10:00:00Z",
+  "source": "pdi",
+  "contract_version": "0.4.0",
+  "payload": {
+    "change": "CHG-12",
+    "gate": "B1",
+    "outcome": "approved",
+    "decision": "DEC-42"
+  }
+}

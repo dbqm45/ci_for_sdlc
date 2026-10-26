@@ -1,0 +1,12 @@
+{
+  "id": "evt-readiness.changed",
+  "type": "readiness.changed",
+  "occurred_at": "2026-10-23T10:00:00Z",
+  "source": "ci_for_sdlc",
+  "contract_version": "0.4.0",
+  "payload": {
+    "change": "CHG-12",
+    "readiness": "not_ready",
+    "open_questions": 2
+  }
+}

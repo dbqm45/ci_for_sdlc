@@ -165,6 +165,7 @@ Wszystko poza sekretami ustawiasz w UI (*Settings*). Sekrety — zmienne środow
 | `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY`, `CUSTOM_AI_API_KEY` | pozostali dostawcy (OpenAI-compatible) |
 | `CI_ENCRYPTION_KEY` | szyfrowanie stanu at-rest |
 | `CI_WEBHOOK_SECRET` | zabezpieczenie `/api/webhooks/{jira,confluence,figma}` (nagłówek `x-ci-webhook-secret`) |
+| `PDI_EVENTS_URL`, `PDI_SIGNING_SECRET` | połączenie z pdi (F4, [`docs/PDI-F4-PLAN.md`](docs/PDI-F4-PLAN.md)): adres odbiornika pdi (`pdi-receiver`, https albo http tylko dla localhost) i sekret podpisu wspólny z pdi (tam `PDI_CI_FOR_SDLC_SIGNING_SECRET`). Z obiema zmiennymi gotowość każdej zmiany (historyjki z etykietą `change:CHG-n`, prefiks w Settings → Jira) trafia do pdi jako `readiness.changed`; sam sekret wystarcza do przyjmowania decyzji z pdi na `/api/webhooks/pdi` |
 | `CI_ADMIN_TOKEN` | token administratora; gdy ustawiony, każda zmiana przez API wymaga `Authorization: Bearer <token>` (UI zapyta o niego raz na sesję). Bez tokenu zmiany przyjmowane są tylko z tej samej maszyny (loopback) |
 | `CI_ALLOWED_HOSTS` | dodatkowe wartości nagłówka `Host` (po przecinku, np. `ci.firma.local:4317`), gdy serwer jest dostępny pod inną nazwą niż `localhost` — ochrona przed DNS rebinding |
 | `CI_ALLOWED_ORIGINS` | dodatkowe originy przeglądarki, które mogą zmieniać dane (po przecinku, np. `https://ci.firma.pl`) — ochrona przed CSRF |
@@ -203,6 +204,8 @@ Szczegóły i mapowanie koncepcji produktu na kod: [`docs/ARCHITECTURE.md`](docs
 | GET | `/api/drift` · `/api/history` · `/api/audit` · `/api/rules` | drift log · trend · audyt · reguły |
 | GET / PUT | `/api/settings` | ustawienia |
 | POST | `/api/webhooks/:source` | powiadomienie o zmianie (jira / confluence / figma) |
+| POST | `/api/webhooks/pdi` | `gate.decided` z pdi (podpis `X-PDI-Signature`); „Approve for implementation” zatwierdza historyjki zmiany bez blokujących ustaleń, z numerem decyzji pdi |
+| GET | `/api/pdi` | połączenie z pdi: konfiguracja (bez sekretu), ostatnio wysłana gotowość zmian, kolejka zdarzeń |
 | GET | `/api/events` | Server-Sent Events (`analysis`, `status`) |
 | GET | `/api/openapi.json` | kontrakt API (OpenAPI 3) |
 
@@ -211,7 +214,7 @@ Zasady kontraktu:
 - **Błędy** zwracane są jako `application/problem+json` (RFC 9457): `{type, title, status, detail, instance}`; błędy walidacji to `422` z listą `errors: [{field, message}]`. Odpowiedzi `5xx` nie ujawniają szczegółów — przyczyna jest w logu serwera.
 - **Walidacja**: ciała żądań mają schematy JSON i odrzucają nieznane pola.
 - **Ustawienia**: `GET /api/settings` zwraca `ETag`; `PUT` wymaga nagłówka `If-Match` (`428` bez niego, `412` gdy ktoś zmienił ustawienia w międzyczasie).
-- **Kto działa**: nagłówek `X-CI-Actor` (nazwa wyświetlana, URL-encoded) trafia do audytu razem ze sposobem autoryzacji (`via`: `admin_token` albo `loopback`).
+- **Kto działa**: nagłówek `X-CI-Actor` (nazwa wyświetlana, URL-encoded) trafia do audytu razem ze sposobem autoryzacji (`via`: `admin_token`, `loopback` albo `pdi_signature` dla zatwierdzeń z pdi).
 
 ## Wersjonowanie i wydania
 

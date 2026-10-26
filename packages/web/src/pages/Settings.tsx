@@ -150,6 +150,7 @@ export function Settings() {
             {s.integrations.jira.releaseLineSource === 'field' && <Field label="Release line field"><input className="input" placeholder="customfield_10060" value={s.integrations.jira.releaseLineField ?? ''} onChange={(e) => set('integrations.jira.releaseLineField', e.target.value || undefined)} /></Field>}
             <Field label="Feature flag field (optional)"><input className="input" placeholder="customfield_10050 — else flag: labels" value={s.integrations.jira.flagField ?? ''} onChange={(e) => set('integrations.jira.flagField', e.target.value || undefined)} /></Field>
             {!s.integrations.jira.flagField && <Field label="Feature flag label prefix"><input className="input" placeholder="flag:" value={s.integrations.jira.flagLabelPrefix ?? ''} onChange={(e) => set('integrations.jira.flagLabelPrefix', e.target.value || undefined)} /></Field>}
+            <Field label="pdi change label prefix"><input className="input" placeholder="change:" value={s.integrations.jira.changeLabelPrefix ?? ''} onChange={(e) => set('integrations.jira.changeLabelPrefix', e.target.value || undefined)} /></Field>
             <Field label="Additional JQL (optional)"><input className="input" placeholder="AND statusCategory != Done" value={s.integrations.jira.jqlFilter ?? ''} onChange={(e) => set('integrations.jira.jqlFilter', e.target.value || undefined)} /></Field>
             <IssueTypeMap value={s.integrations.jira.issueTypeMap ?? {}} onChange={(m) => set('integrations.jira.issueTypeMap', m)} />
           </Integration>

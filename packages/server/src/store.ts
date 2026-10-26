@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_POLICY, errorMessage, normalizeDecision, type Approval, type Decision, type StoredDecision, type DriftEvent, type IssueType, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, errorMessage, normalizeDecision, type Approval, type Decision, type StoredDecision, type DriftEvent, type IssueType, type PdiEvent, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
 import type { Principal } from './http.js';
 import { pruneToSchema, settingsBody } from './schemas.js';
 
@@ -32,6 +32,18 @@ const isEncEnvelope = (v: unknown): v is EncEnvelope =>
 /** Shown in Settings (P1); unmapped Jira types still fall back to the core defaults and then to story. */
 export const DEFAULT_JIRA_ISSUE_TYPES: Record<string, IssueType> = { Epic: 'epic', Feature: 'feature', Story: 'story' };
 
+export interface PdiState {
+  sent: Record<string, string>;
+  seen: string[];
+}
+const pdiStateShape: Shape<PdiState> = (v): v is PdiState => isRecord(v);
+export interface PdiOutboxEntry {
+  event: PdiEvent;
+  attempts: number;
+  nextAt: string;
+  lastError?: string;
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   mode: 'demo',
   project: { key: 'CHK', name: 'Checkout' },
@@ -56,7 +68,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export interface AuditEntry {
   at: string;
-  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection';
+  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection' | 'pdi';
   /** A display name; `via` is how the change was authorized (admin token or a loopback client). */
   actor: string;
   via?: Principal;
@@ -271,6 +283,21 @@ export class Store {
   }
   appendHistory(point: HistoryPoint) {
     return this.update('history.json', [], listOf<HistoryPoint>(), (h) => [...h, point].slice(-200), false);
+  }
+
+  /** pdi link (F4): readiness last sent per change and the ids of gate.decided events already handled. */
+  pdiState() {
+    return this.readJson('pdi-state.json', { sent: {}, seen: [] }, pdiStateShape);
+  }
+  updatePdiState(fn: (s: PdiState) => PdiState | void) {
+    return this.update('pdi-state.json', { sent: {}, seen: [] }, pdiStateShape, fn, false);
+  }
+  /** Events waiting for delivery to pdi, with their retry state. */
+  pdiOutbox() {
+    return this.readJson('pdi-outbox.json', [], listOf<PdiOutboxEntry>());
+  }
+  updatePdiOutbox(fn: (all: PdiOutboxEntry[]) => PdiOutboxEntry[] | void) {
+    return this.update('pdi-outbox.json', [], listOf<PdiOutboxEntry>(), fn, false);
   }
 
   async audit(e: AuditEntry) {

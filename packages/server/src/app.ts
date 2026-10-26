@@ -3,9 +3,10 @@ import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { DEMO_SCENARIOS, DEFAULT_MODELS, RULES, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
+import { APPROVE_GATE, changeReadiness, parseGateDecided, DEMO_SCENARIOS, DEFAULT_MODELS, RULES, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
 import { AtlassianConnection, CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import { Engine } from './engine.js';
+import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { MUTATION, approveBody, atlassianSiteBody, oauthCallbackQuery, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
 import { deepMerge, Store, type Settings } from './store.js';
@@ -44,14 +45,17 @@ export interface AppOptions {
   allowedOrigins?: string[];
   /** Defaults to CI_CONNECT_MODE, CI_PUBLIC_URL and the ATLASSIAN_* variables. */
   connect?: ConnectConfig;
+  /** pdi link (F4); defaults to PDI_EVENTS_URL and PDI_SIGNING_SECRET. */
+  pdi?: PdiOptions;
 }
 
-export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store }> {
+export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink }> {
   const store = new Store(opts.dataDir);
   await store.init();
   const connect = opts.connect ?? connectConfigFromEnv();
   const atlassian = new AtlassianConnection(store, connect);
   const engine = new Engine(store, connect.mode === 'oauth' ? atlassian : undefined);
+  const pdi = new PdiLink(store, opts.pdi);
   // Strict bodies: unknown properties and wrong types are rejected, not silently dropped or coerced.
   const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } } });
   const env = guardConfigFromEnv();
@@ -67,6 +71,20 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   app.addSchema(problem);
   registerProblemHandler(app);
   registerGuards(app, guard);
+
+  // After every analysis: readiness of the labelled changes to pdi, then whatever is due in the queue (F4).
+  engine.on('analysis', () => {
+    const { result, context } = engine.state;
+    if (!pdi.enabled || !result || !context) return;
+    pdi.schedule(async () => pdi.enqueue(result, context.requirements, (await store.settings()).integrations.jira.changeLabelPrefix));
+    void pdi.deliver().catch((e) => app.log.error(e));
+  });
+  const pdiTimer = pdi.enabled ? setInterval(() => void pdi.deliver().catch(() => undefined), 60_000) : undefined;
+  pdiTimer?.unref();
+  app.addHook('onClose', async () => {
+    if (pdiTimer) clearInterval(pdiTimer);
+    await pdi.deliver().catch(() => undefined);
+  });
 
   const ensure = async () => engine.state.result ?? (await engine.analyze('initial'));
   /** Who acted and how they were authorized, for audit entries. */
@@ -357,6 +375,57 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     return engine.analyze('demo reset');
   });
 
+  // ------------------------------------------------------------------ pdi (F4, docs/PDI-F4-PLAN.md)
+  app.get('/api/pdi', async () => pdi.status());
+
+  /**
+   * gate.decided from pdi. Outside the admin-token guard like the other webhooks, but signed: the raw body is needed
+   * for the HMAC, so this route parses JSON itself. Without PDI_SIGNING_SECRET the route does not exist (404).
+   */
+  await app.register(async (scope) => {
+    scope.addContentTypeParser('application/json', { parseAs: 'string', bodyLimit: 64 * 1024 }, (_req, body, done) => done(null, body));
+    scope.post('/api/webhooks/pdi', { schema: { hide: true } }, async (req, reply) => {
+      if (!pdi.secret) return notFound(req, reply);
+      const raw = typeof req.body === 'string' ? req.body : '';
+      const header = (name: string) => (typeof req.headers[name] === 'string' ? (req.headers[name] as string) : undefined);
+      const problemWithSignature = pdiSignatureProblem(pdi.secret, header('x-pdi-timestamp'), raw, header('x-pdi-signature'), pdi.now());
+      if (problemWithSignature) throw httpError(401, problemWithSignature);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        throw httpError(400, 'The body is not valid JSON');
+      }
+      const event = parseGateDecided(parsed);
+      if (typeof event === 'string') throw httpError(400, event);
+      if (header('x-pdi-event') !== 'gate.decided') throw httpError(400, 'X-PDI-Event does not match the event type');
+      if (!(await pdi.firstTime(event.id))) return { duplicate: true, approved: [], skipped: [] };
+      const at = pdi.now().toISOString();
+      if (event.gate !== APPROVE_GATE || event.outcome !== 'approved') {
+        await store.audit({ at, kind: 'pdi', actor: 'pdi', via: 'pdi_signature', summary: `pdi decision ${event.decision} on ${event.change}: ${event.gate} ${event.outcome} (nothing to approve here)` });
+        return { recorded: true, approved: [], skipped: [] };
+      }
+      const result = await ensure();
+      const settings = await store.settings();
+      const change = changeReadiness(result.items, engine.state.context?.requirements ?? [], settings.integrations.jira.changeLabelPrefix || undefined).find((c) => c.change === event.change);
+      const approved: string[] = [];
+      const skipped: { key: string; reason: string }[] = [];
+      for (const key of change?.items ?? []) {
+        const item = result.items.find((i) => i.key === key)!;
+        // Same rule as POST /api/items/:key/approve without force: forcing stays a human decision here.
+        if (item.readiness === 'not_ready' && item.findings.some((f) => f.blocks && f.origin !== 'drift')) {
+          skipped.push({ key, reason: `blocking issues: ${item.blockingIssues.join('; ') || 'see the item'}` });
+          continue;
+        }
+        await engine.approve(key, { actor: 'pdi', via: 'pdi_signature' }, undefined, event.decision);
+        approved.push(key);
+      }
+      await store.audit({ at, kind: 'pdi', actor: 'pdi', via: 'pdi_signature', summary: `pdi decision ${event.decision}: ${event.change} approved for implementation — approved ${approved.join(', ') || 'none'}${skipped.length ? `, skipped ${skipped.map((s) => s.key).join(', ')}` : ''}` });
+      if (approved.length) await engine.analyze(`approval of ${event.change} from pdi (${event.decision})`);
+      return { approved, skipped };
+    });
+  });
+
   // ------------------------------------------------------------------ webhooks (Jira / Confluence / Figma)
   app.post<{ Params: { source: string } }>('/api/webhooks/:source', async (req, reply) => {
     const secret = process.env.CI_WEBHOOK_SECRET;
@@ -416,5 +485,5 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
 
   await engine.reschedule();
   app.addHook('onClose', async () => engine.stop());
-  return { app, engine, store };
+  return { app, engine, store, pdi };
 }

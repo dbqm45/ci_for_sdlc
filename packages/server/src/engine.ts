@@ -159,15 +159,15 @@ export class Engine extends EventEmitter {
     }
   }
 
-  async approve(key: string, { actor: by, via }: { actor: string; via?: Principal }, forced?: { reason: string }) {
+  async approve(key: string, { actor: by, via }: { actor: string; via?: Principal }, forced?: { reason: string }, pdiDecision?: string) {
     const { result, graph } = this.state;
     const item = result?.items.find((i) => i.key === key);
     if (!item || !graph) throw new Error(`Unknown item ${key}`);
-    const approval: Approval = { itemKey: key, approvedAt: new Date().toISOString(), approvedBy: by, ...approvalBaseline(graph, item), ...(forced && { forced: true, reason: forced.reason }) };
+    const approval: Approval = { itemKey: key, approvedAt: new Date().toISOString(), approvedBy: by, ...approvalBaseline(graph, item), ...(forced && { forced: true, reason: forced.reason }), ...(pdiDecision && { decision: pdiDecision }) };
     await this.store.updateApprovals((all) => [...all.filter((a) => a.itemKey !== key), approval]);
     const summary = forced
       ? `${key} force-approved despite blocking issues (${item.blockingIssues.join('; ') || 'none'}). Reason: ${forced.reason}`
-      : `${key} approved as ready for implementation (health ${item.health})`;
+      : `${key} approved as ready for implementation (health ${item.health})${pdiDecision ? ` by pdi decision ${pdiDecision}` : ''}`;
     await this.store.audit({ at: approval.approvedAt, kind: 'approval', actor: by, via, summary });
   }
 
