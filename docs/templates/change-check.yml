@@ -1,7 +1,8 @@
 # Definition check for changes kept in the repository (ci_for_sdlc, F2 of the pdi one-flow plan).
 # Copy to .github/workflows/change-check.yml in a repository with docs/project/changes/ (tf's mode-pdi writes them).
 # A pull request that changes a change's intent.md, plan.md or release.yaml gets a red check when an item is not
-# ready or a file cannot be read; the findings are annotations on the files and a table in the run's summary.
+# ready or a file cannot be read; the findings are annotations on the files (REL-007 on the flag in release.yaml,
+# REL-008 on the row in plan.md) and a table in the run's summary. Use --fail-on warning to fail on REL-008 too.
 name: Definition check
 
 on:

@@ -68,6 +68,9 @@ export const EXPECTATIONS: RuleExpectation[] = [
   { rule: 'REL-004', fires: [planned('PAY-110')], silent: [planned('CHK-200')] },
   { rule: 'REL-005', fires: [planned('PAY-110')], silent: [planned('CHK-200')] },
   { rule: 'REL-006', fires: [planned('PAY-110')], silent: [planned('CHK-200')] },
+  // G1.4: repository mode only (a change's release.yaml and plan.md); the world is Jira, where both stay silent.
+  { rule: 'REL-007', fires: [], silent: [planned('CHK-200')], gap: 'repository mode only; fires on packages/core/test/fixtures/repo-changes (CHG-1)' },
+  { rule: 'REL-008', fires: [], silent: [planned('CHK-200')], gap: 'repository mode only; fires on packages/core/test/fixtures/repo-changes (CHG-1)' },
 ];
 
 export const DERIVED_EXPECTATIONS: DerivedRuleExpectation[] = [

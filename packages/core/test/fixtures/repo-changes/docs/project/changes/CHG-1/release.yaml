@@ -1,0 +1,9 @@
+# Breaks REL-007: the flag has no owner, no removal date and a stage without an exit criterion.
+change: CHG-1
+releases:
+  - { id: R1, tasks: [TSK-1, TSK-2] }
+flags:
+  - key: payment-retry
+    tasks: [TSK-2]
+    rollout:
+      - { stage: internal, min_days: 3 }

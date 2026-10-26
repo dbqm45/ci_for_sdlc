@@ -85,6 +85,44 @@ export interface RequirementItem {
   };
   updatedAt: string;
   url?: string;
+  /** Items read from a repository's `docs/project/changes/CHG-n` (pdi contract 0.5.0); absent in Jira mode. */
+  repo?: RepoFacts;
+}
+
+/** A change file, relative to the repository root, with its link when the repository URL is known. */
+export interface RepoFile {
+  path: string;
+  url?: string;
+}
+
+/** A feature flag of `release.yaml` with its plan (REL-007). */
+export interface FlagPlan {
+  key: string;
+  tasks: string[];
+  owner?: string;
+  /** The day the flag is to be removed, YYYY-MM-DD. */
+  removeBy?: string;
+  rollout: { stage: string; minDays?: number; exit?: string }[];
+  /** The line of its `key:` in `release.yaml`. */
+  line?: number;
+}
+
+/** What only a change from a repository gives (REL-007, REL-008). */
+export interface RepoFacts {
+  /** The file the item is read from: `intent.md` for a change, `plan.md` (else `release.yaml`) for a slice. */
+  path: string;
+  /** Slices: the line of their row in `plan.md`. */
+  line?: number;
+  /** Changes: their `plan.md`, when they have one. */
+  plan?: RepoFile;
+  /** Changes: their `release.yaml`, when they have one, with its flags. */
+  release?: RepoFile & { flags: FlagPlan[] };
+  /** Slices in `plan.md`: a vertical slice (S-NN in tf) or a foundation (F-NN). */
+  kind?: 'slice' | 'foundation';
+  /** Slices in `plan.md`: the "Odblokowuje"/"Unblocks" column, as written. */
+  unblocks?: string;
+  /** Slices in `plan.md`: requirement ids of the "Wymagania"/"Requirements" column (US-02, FR-007, AC-1). */
+  requirements?: string[];
 }
 
 /** DocumentationContext — one Confluence page, or one item of tf's reconstruction from code (`source: 'code'`). */
@@ -205,6 +243,9 @@ export interface Evidence {
   url?: string;
   /** Short excerpt that supports the statement. */
   excerpt?: string;
+  /** A change file of a repository the evidence points at (relative to its root), and the line in it. */
+  path?: string;
+  line?: number;
 }
 
 /**

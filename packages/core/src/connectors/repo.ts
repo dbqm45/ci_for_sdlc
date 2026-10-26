@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { RequirementItem } from '../model.js';
+import type { FlagPlan, RepoFacts, RequirementItem } from '../model.js';
 import { isRecord, records, str } from '../guards.js';
 import { CHANGE_LABEL_PREFIX } from '../pdi.js';
 
@@ -9,7 +9,9 @@ import { CHANGE_LABEL_PREFIX } from '../pdi.js';
  * Connector for changes kept in a repository (pdi plan "one SDLC flow", step F2; docs/PDI-F2-PLAN.md):
  * `docs/project/changes/CHG-n/` with `intent.md`, `plan.md` and `release.yaml` as tf writes them (pdi contract 0.5.0),
  * read from a checkout. A change is an epic; its slices (TSK) are stories under it, with the release line and flags
- * of `release.yaml` (else of the plan's columns), so the release rules REL-001…006 work on it as on a Jira epic. Every
+ * of `release.yaml` (else of the plan's columns), so the release rules REL-001…006 work on it as on a Jira epic. What only
+ * a repository gives (each flag's plan, each slice's kind, "Unblocks" and requirement ids, the files and lines) is in
+ * `repo`, read by REL-007 and REL-008 (step G1.4). Every
  * item is labelled `change:CHG-n`, so the change's readiness goes to pdi as in Jira mode (F4). A file that cannot be
  * read is a problem naming the file and why, never its content, and only that change is left out.
  */
@@ -47,8 +49,8 @@ export interface RepoChanges {
   problems: RepoProblem[];
 }
 
-/** The YAML header (`---` … `---`) and the body after it. */
-function frontMatter(text: string, file: ChangeFile): { header: Record<string, unknown>; body: string } {
+/** The YAML header (`---` … `---`) and the body after it; `bodyLine` is the file's line the body starts on. */
+function frontMatter(text: string, file: ChangeFile): { header: Record<string, unknown>; body: string; bodyLine: number } {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
   if (!m) throw new RepoFileError(file, 'no YAML header (--- … ---) at the top');
   let header: unknown;
@@ -58,7 +60,8 @@ function frontMatter(text: string, file: ChangeFile): { header: Record<string, u
     throw new RepoFileError(file, 'the header is not valid YAML');
   }
   if (!isRecord(header)) throw new RepoFileError(file, 'the header is not a YAML mapping');
-  return { header, body: m[2] ?? '' };
+  const body = m[2] ?? '';
+  return { header, body, bodyLine: text.slice(0, text.length - body.length).split('\n').length };
 }
 
 function checkHeader(header: Record<string, unknown>, file: ChangeFile, folder: string): void {
@@ -87,6 +90,11 @@ interface PlanRow {
   value?: string;
   verification?: string;
   status: (typeof TASK_STATUSES)[number];
+  kind: 'slice' | 'foundation';
+  unblocks?: string;
+  requirements: string[];
+  /** The row's line number in the file. */
+  lineNo: number;
 }
 
 const COLUMNS: Record<string, RegExp> = {
@@ -96,12 +104,20 @@ const COLUMNS: Record<string, RegExp> = {
   value: /^(wartość|wartosc|value|title|tytuł)$/i,
   verification: /^(weryfikacja|verification)$/i,
   status: /^status$/i,
+  kind: /^(rodzaj|kind|typ|type)$/i,
+  unblocks: /^(odblokowuje|unblocks)$/i,
+  requirements: /^(wymagania|wymaganie|requirements|requirement)$/i,
 };
 const cells = (row: string) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
 const NONE = /^(—|-|–|none|brak)?$/i;
+/** tf's F-NN, or the kind written out; anything else (S-NN, slice, cięcie, empty) is a slice. */
+const FOUNDATION = /^(foundation|fundament|f|f-\d+)$/i;
+/** tf writes a foundation's outcome as "(fundament) … jest gotowe". */
+const FOUNDATION_OUTCOME = /^\((fundament|foundation)\)/i;
+const REQUIREMENT_ID = /\b[A-Z][A-Z0-9]*-\d+\b/g;
 
-/** The slices of plan.md's table: the first table whose header names a slice column. */
-function planRows(body: string): PlanRow[] {
+/** The slices of plan.md's table: the first table whose header names a slice column. `firstLine`: the body's line. */
+function planRows(body: string, firstLine = 1): PlanRow[] {
   const lines = body.split(/\r?\n/);
   for (let i = 0; i < lines.length - 1; i++) {
     const line = lines[i] ?? '';
@@ -110,7 +126,7 @@ function planRows(body: string): PlanRow[] {
     const col: Record<string, number> = Object.fromEntries(Object.entries(COLUMNS).map(([k, re]) => [k, head.findIndex((h) => re.test(h))]));
     if ((col.key ?? -1) < 0) continue;
     const rows: PlanRow[] = [];
-    for (const l of lines.slice(i + 2)) {
+    for (const [j, l] of lines.slice(i + 2).entries()) {
       if (!l.trim().startsWith('|')) break;
       const c = cells(l);
       const at = (k: string) => {
@@ -121,13 +137,19 @@ function planRows(body: string): PlanRow[] {
       if (!key || !KEY.test(key)) continue;
       const line = at('line');
       const status = at('status')?.toLowerCase().replace(/\s+/g, '_');
+      const value = at('value');
+      const unblocks = at('unblocks');
       rows.push({
         key,
         line: line && LINE.test(line) ? line : undefined,
         flags: (at('flag') ?? '').split(/[,;\s]+/).filter((f) => f && !NONE.test(f)),
-        value: at('value'),
+        value,
         verification: at('verification'),
         status: TASK_STATUSES.find((s) => s === status) ?? 'planned',
+        kind: FOUNDATION.test(at('kind') ?? '') || FOUNDATION_OUTCOME.test(value ?? '') ? 'foundation' : 'slice',
+        unblocks: unblocks && !NONE.test(unblocks) ? unblocks : undefined,
+        requirements: at('requirements')?.match(REQUIREMENT_ID) ?? [],
+        lineNo: firstLine + i + 2 + j,
       });
     }
     return rows;
@@ -138,7 +160,15 @@ function planRows(body: string): PlanRow[] {
 interface ReleasePlan {
   mvp?: { release: string; outcome?: string; metric?: { name: string; target: string; horizon_days?: number }; guardrails: string[] };
   releases: { id: string; tasks: string[] }[];
-  flags: { key: string; tasks: string[] }[];
+  flags: FlagPlan[];
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** The line of a flag's `key:` in release.yaml (block or flow style), for annotations. */
+function keyLine(text: string, key: string): number | undefined {
+  const re = new RegExp(`(^|[{,\\s-])key:\\s*["']?${escapeRe(key)}["']?\\s*($|[,}#])`);
+  const i = text.split(/\r?\n/).findIndex((l) => re.test(l));
+  return i >= 0 ? i + 1 : undefined;
 }
 
 /** release.yaml checked on the fields this connector reads (the contract's release-plan schema for them). */
@@ -184,7 +214,21 @@ function releasePlan(text: string, folder: string): ReleasePlan {
     if (!isRecord(f) || !str(f.key)) return fail(`flags[${i}].key: required`);
     if (f.remove_by !== undefined && !DATE.test(String(f.remove_by))) fail(`flags[${i}].remove_by: not a day YYYY-MM-DD`);
     if (f.rollout !== undefined && (!Array.isArray(f.rollout) || records(f.rollout).length !== f.rollout.length || !records(f.rollout).every((s) => str(s.stage)))) fail(`flags[${i}].rollout: each stage needs a name`);
-    return { key: str(f.key)!, tasks: f.tasks === undefined ? [] : keys(f.tasks, `flags[${i}].tasks`) };
+    if (f.owner !== undefined && typeof f.owner !== 'string') fail(`flags[${i}].owner: not a text`);
+    const rollout = records(f.rollout ?? []).map((st, k) => {
+      if (st.min_days !== undefined && !(Number.isInteger(st.min_days) && (st.min_days as number) >= 0)) fail(`flags[${i}].rollout[${k}].min_days: a whole number of days`);
+      if (st.exit !== undefined && typeof st.exit !== 'string') fail(`flags[${i}].rollout[${k}].exit: not a text`);
+      return { stage: String(st.stage), ...(st.min_days !== undefined && { minDays: st.min_days as number }), ...(str(st.exit) && { exit: str(st.exit) }) };
+    });
+    const key = str(f.key)!;
+    return {
+      key,
+      tasks: f.tasks === undefined ? [] : keys(f.tasks, `flags[${i}].tasks`),
+      ...(str(f.owner) && { owner: str(f.owner) }),
+      ...(f.remove_by !== undefined && { removeBy: String(f.remove_by) }),
+      rollout,
+      line: keyLine(text, key),
+    };
   });
   return { mvp, releases, flags };
 }
@@ -218,6 +262,16 @@ export function parseChange(folder: string, files: { intent: string; plan?: stri
   const metrics = section(intent.body, /^(metryki sukcesu|success metrics|metryki|metrics)$/i);
   const mvp = (release?.mvp && mvpText(release.mvp)) ?? (metrics.length ? metrics.join(' ') : undefined);
   const intentUrl = opts.urlOf?.('intent.md');
+  const pathOf = (file: ChangeFile) => `${CHANGES_DIR}/${folder}/${file}`;
+  const fileOf = (file: ChangeFile) => {
+    const url = opts.urlOf?.(file);
+    return { path: pathOf(file), ...(url && { url }) };
+  };
+  const epicRepo: RepoFacts = {
+    path: pathOf('intent.md'),
+    ...(plan && { plan: fileOf('plan.md') }),
+    ...(release && { release: { ...fileOf('release.yaml'), flags: release.flags } }),
+  };
   const epic: RequirementItem = {
     ...base,
     key: folder,
@@ -228,13 +282,14 @@ export function parseChange(folder: string, files: { intent: string; plan?: stri
     ...(mvp && { mvp }),
     updatedAt: updatedAt(intent.header),
     ...(intentUrl && { url: intentUrl }),
+    repo: epicRepo,
   };
 
   const lineOf = new Map<string, string>();
   for (const r of release?.releases ?? []) for (const t of r.tasks) if (!lineOf.has(t)) lineOf.set(t, r.id);
   const flagsOf = new Map<string, string[]>();
   for (const f of release?.flags ?? []) for (const t of f.tasks) flagsOf.set(t, [...(flagsOf.get(t) ?? []), f.key]);
-  const rows = plan ? planRows(plan.body) : [];
+  const rows = plan ? planRows(plan.body, plan.bodyLine) : [];
   const planUrl = opts.urlOf?.('plan.md');
   const releaseUrl = opts.urlOf?.('release.yaml');
   const story = (row: PlanRow | undefined, key: string): RequirementItem => ({
@@ -252,6 +307,7 @@ export function parseChange(folder: string, files: { intent: string; plan?: stri
     flagKeys: release ? flagsOf.get(key) ?? [] : row?.flags ?? [],
     updatedAt: updatedAt(plan?.header ?? intent.header),
     ...((row ? planUrl : releaseUrl) && { url: row ? planUrl : releaseUrl }),
+    repo: row ? { path: pathOf('plan.md'), line: row.lineNo, kind: row.kind, ...(row.unblocks && { unblocks: row.unblocks }), requirements: row.requirements } : { path: pathOf('release.yaml') },
   });
   const stories = rows.filter((r) => r.status !== 'dropped').map((r) => story(r, r.key));
   const listed = new Set(rows.map((r) => r.key));

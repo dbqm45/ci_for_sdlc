@@ -1,4 +1,4 @@
-import type { ReleasePlan, RequirementItem } from '../model.js';
+import type { Evidence, FlagPlan, ReleasePlan, RepoFile, RequirementItem } from '../model.js';
 import { workItemsUnder } from '../hierarchy.js';
 import { releaseOf } from '../policy.js';
 import { evJira, hasUi, type ItemCtx } from './context.js';
@@ -10,7 +10,10 @@ import { technicalLayer } from './story-shape.js';
  * from conventions (pdi contract 0.4.0, DG4): each story's release line R1…Rn (R1 = MVP, `release:R1` labels by
  * default), the "MVP" section of the epic's description, and the stories' feature flags (as ShipScope links them).
  * Findings land in the `delivery` dimension ("Release plan") of the epic. REL-004 checks only the technical-layer
- * signal; the AI check of a missing flow step and REL-007/008 (repo mode) come later.
+ * signal; the AI check of a missing flow step comes later.
+ *
+ * REL-007 and REL-008 (step G1.4) check what only a change from a repository has (`RequirementItem.repo`): each flag's
+ * plan in `release.yaml` and the self-check of tf's `plan-ciec.md` on `plan.md`. In Jira mode they stay silent.
  */
 
 export const MVP_LINE = 'R1';
@@ -215,4 +218,92 @@ export const RELEASE_RULES: Rule[] = [
       ];
     },
   },
+  {
+    id: 'REL-007',
+    name: 'Flag has a plan',
+    description: 'Repository mode: each flag in release.yaml has rollout stages with exit criteria, an owner and a removal date.',
+    appliesTo: ['epic', 'feature'],
+    run: (c) => {
+      const release = c.r.repo?.release;
+      if (!release) return [];
+      return release.flags.flatMap((f) => {
+        const gaps = flagGaps(f);
+        if (!gaps.length) return [];
+        return [
+          {
+            disc: f.key,
+            category: 'GAP' as const,
+            severity: 'info' as const,
+            dimension: 'delivery' as const,
+            title: `Flag ${f.key} has no plan`,
+            explanation: `The flag ${f.key} in release.yaml has ${list(gaps)}. Without them nobody knows when the flag may go to the next stage, who decides and when it is removed.`,
+            evidence: [evFile(c, release, f.line, `${release.path} — flag ${f.key}`)],
+            question: { text: `What is the rollout plan of the flag ${f.key} (stages with exit criteria, owner, removal date)?`, options: ['The team will complete the flag in release.yaml', 'The flag is removed from the plan'], topic: 'release plan' },
+          },
+        ];
+      });
+    },
+  },
+  {
+    id: 'REL-008',
+    name: 'Foundations unblock, slices trace to requirements',
+    description: 'Repository mode: each foundation in plan.md says what it unblocks (a task of the change), and each slice has a requirement (verification or a US/FR/AC id).',
+    appliesTo: ['epic', 'feature'],
+    run: (c) => {
+      const plan = c.r.repo?.plan;
+      if (!plan) return [];
+      const rows = (c.env.childrenOf.get(c.r.key) ?? []).filter((s) => s.repo?.kind && s.repo.path === plan.path);
+      const known = new Set((c.env.childrenOf.get(c.r.key) ?? []).map((s) => s.key));
+      const finding = (s: RequirementItem, disc: string, title: string, explanation: string, question: string, options: string[]) => ({
+        disc,
+        category: 'GAP' as const,
+        severity: 'warning' as const,
+        dimension: 'delivery' as const,
+        title,
+        explanation,
+        evidence: [evFile(c, plan, s.repo?.line, `${plan.path} — ${s.key}`)],
+        question: { text: question, options, topic: 'release plan' },
+      });
+      return rows.flatMap((s) => {
+        const r = s.repo!;
+        if (r.kind === 'foundation') {
+          if (!r.unblocks) {
+            return [
+              finding(s, `${s.key}:unblocks`, `Foundation ${s.key} does not say what it unblocks`, `${s.key} "${s.title}" is a foundation with no "Unblocks" (Odblokowuje): a slice of the change, an unknown it settles or a verification path a slice needs. A foundation without it is layered work; drop it or fold it into the first slice that needs it.`, `What does ${s.key} unblock?`, ['The team will fill "Unblocks" in plan.md', `Fold ${s.key} into the first slice that needs it`]),
+            ];
+          }
+          const missing = keysIn(r.unblocks).filter((k) => !known.has(k));
+          if (!missing.length) return [];
+          return [
+            finding(s, `${s.key}:unknown`, `Foundation ${s.key} unblocks ${missing.join(', ')}, which ${missing.length === 1 ? 'is' : 'are'} not in the change`, `${s.key} "${s.title}" says it unblocks ${missing.join(', ')}, but the change has no such task in plan.md or release.yaml.`, `Which task of the change does ${s.key} unblock?`, ['The team will correct "Unblocks" in plan.md', `Add ${missing.join(', ')} to the plan`]),
+          ];
+        }
+        if (s.acceptanceCriteria.length || r.requirements?.length) return [];
+        return [
+          finding(s, `${s.key}:requirement`, `Slice ${s.key} has no requirement`, `${s.key} "${s.title}" has neither a verification nor a requirement id (US, FR, AC) in plan.md, so nothing says which need it delivers or how to check it.`, `Which requirement does ${s.key} deliver?`, ['The team will add the requirement id or verification to plan.md', `Drop ${s.key} from the plan`]),
+        ];
+      });
+    },
+  },
 ];
+
+// ---------------------------------------------------------------------------- repo mode (G1.4)
+
+/** Evidence pointing at a change file and a line in it, so the gate annotates that file. */
+function evFile(c: ItemCtx, file: RepoFile, line: number | undefined, title: string): Evidence {
+  return { ...evJira(c.r), title, url: file.url, path: file.path, ...(line && { line }) };
+}
+
+/** What a flag's plan lacks (pdi contract 0.5.0 `release-plan.flags[]`). */
+function flagGaps(f: FlagPlan): string[] {
+  const gaps: string[] = [];
+  if (!f.rollout.length) gaps.push('no rollout stages');
+  for (const st of f.rollout) if (!st.exit?.trim()) gaps.push(`stage "${st.stage}" has no exit criterion`);
+  if (!f.owner?.trim()) gaps.push('no owner');
+  if (!f.removeBy) gaps.push('no removal date (remove_by)');
+  return gaps;
+}
+
+const list = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
+/** Keys like TSK-57 in a cell. */
+const keysIn = (text: string) => text.match(/\b[A-Z][A-Z0-9]+-[0-9]+\b/g) ?? [];

@@ -19,6 +19,17 @@ const PLAN = `${header('plan', 'tasks: [TSK-57, TSK-58, TSK-59, TSK-60]\n')}# Pl
 | TSK-59 | R2 | — | Failed retries are counted per day | api/ | the count matches the failed retries | planned |
 | TSK-60 | R2 | — | Old retry script | ops/ | | dropped |
 `;
+/** A plan with tf's kinds (S-NN / F-NN), "Odblokowuje" and requirement ids: two foundations and one slice break REL-008. */
+const KINDS = `${header('plan', 'tasks: [TSK-55, TSK-56, TSK-57, TSK-58, TSK-59]\n')}# Plan zmiany CHG-12
+
+| Cięcie | Rodzaj | Wydanie | Flaga | Wartość | Wymagania | Odblokowuje | Weryfikacja | Status |
+|---|---|---|---|---|---|---|---|---|
+| TSK-55 | F-01 | R1 | — | (fundament) Retry queue is ready | — | — | the queue accepts a job | done |
+| TSK-56 | foundation | R1 | — | Payment log table exists | — | TSK-99 | the log keeps 30 days | planned |
+| TSK-57 | S-01 | R1 | payment-retry | Customer retries a failed payment from the receipt screen | US-02 | — | npm test retry passes | in_progress |
+| TSK-58 | cięcie | R1 | payment-retry | Idempotency key stops a double charge | — | — | | planned |
+| TSK-59 | slice | R2 | — | Failed retries are counted per day | AC-3, FR-007 | the retry metric can be measured | | planned |
+`;
 const RELEASE = `change: CHG-12
 mvp:
   release: R1
@@ -34,8 +45,8 @@ flags:
     owner: PO Payments
     remove_by: 2026-12-31
     rollout:
-      - { stage: internal, min_days: 3 }
-      - { stage: "100%" }
+      - { stage: internal, min_days: 3, exit: no double charge in 3 days }
+      - { stage: "100%", exit: recovered payments at least 25% }
 `;
 
 const tmp = mkdtempSync(join(tmpdir(), 'ci-repo-'));
@@ -161,4 +172,125 @@ describe('the release rules on a change from a repository', () => {
     const noMetric = await analyze(RELEASE.replace(/  metric: .*\n/, ''));
     expect(noMetric.findings.map((f) => f.ruleId)).toContain('REL-002');
   });
+});
+
+// G1.4 (pdi plan G1/G2 §5.3): REL-007 and REL-008 check the plan of a change from a repository only.
+const C = `${CHANGES_DIR}/CHG-12`;
+const lineOf = (text: string, re: RegExp) => text.split('\n').findIndex((l) => re.test(l)) + 1;
+
+describe('the plan of a change: flags and slices (G1.4)', () => {
+  const findings = async (release: string | undefined, plan = PLAN) => {
+    const root = repo({ 'CHG-12/intent.md': INTENT, 'CHG-12/plan.md': plan, ...(release !== undefined && { 'CHG-12/release.yaml': release }) });
+    const { requirements, problems } = await readRepoChanges(root);
+    expect(problems).toEqual([]);
+    const ctx: ProjectContext = { project: { key: 'PAY', name: 'Payments' }, requirements, documents: [], frames: [], fetchedAt: '2026-10-26T00:00:00.000Z' };
+    const { result } = await analyzeProject(ctx, {});
+    return result.items.find((i) => i.key === 'CHG-12')!.findings;
+  };
+  const rel = async (id: string, release: string | undefined, plan = PLAN) => (await findings(release, plan)).filter((f) => f.ruleId === id);
+
+  it('REPO-07: the connector keeps each flag\'s plan and each slice\'s kind, unblocks and requirements', () => {
+    const [epic, ...stories] = parseChange('CHG-12', { intent: INTENT, plan: KINDS, release: RELEASE }) as [RequirementItem, ...RequirementItem[]];
+    expect(epic.repo).toEqual({
+      path: `${C}/intent.md`,
+      plan: { path: `${C}/plan.md` },
+      release: {
+        path: `${C}/release.yaml`,
+        flags: [
+          {
+            key: 'payment-retry',
+            tasks: ['TSK-57', 'TSK-58'],
+            owner: 'PO Payments',
+            removeBy: '2026-12-31',
+            rollout: [
+              { stage: 'internal', minDays: 3, exit: 'no double charge in 3 days' },
+              { stage: '100%', exit: 'recovered payments at least 25%' },
+            ],
+            line: lineOf(RELEASE, /key: payment-retry/),
+          },
+        ],
+      },
+    });
+    expect(stories.map((s) => [s.key, s.repo?.kind, s.repo?.unblocks, s.repo?.requirements, s.repo?.line])).toEqual([
+      ['TSK-55', 'foundation', undefined, [], lineOf(KINDS, /\| TSK-55 /)],
+      ['TSK-56', 'foundation', 'TSK-99', [], lineOf(KINDS, /\| TSK-56 /)],
+      ['TSK-57', 'slice', undefined, ['US-02'], lineOf(KINDS, /\| TSK-57 /)],
+      ['TSK-58', 'slice', undefined, [], lineOf(KINDS, /\| TSK-58 /)],
+      ['TSK-59', 'slice', 'the retry metric can be measured', ['AC-3', 'FR-007'], lineOf(KINDS, /\| TSK-59 /)],
+      ['TSK-61', undefined, undefined, undefined, undefined],
+    ]);
+    // A plan without the new columns: every row is a slice with no unblocks and no requirement ids.
+    expect(parseChange('CHG-12', { intent: INTENT, plan: PLAN }).slice(1).map((s) => [s.repo?.kind, s.repo?.requirements])).toEqual([
+      ['slice', []],
+      ['slice', []],
+      ['slice', []],
+    ]);
+    // English headers and the "(foundation)" outcome of tf's plan mark a foundation too.
+    const english = KINDS.replace('| Cięcie | Rodzaj | Wydanie | Flaga | Wartość | Wymagania | Odblokowuje | Weryfikacja | Status |', '| Slice | Kind | Release | Flag | Value | Requirements | Unblocks | Verification | Status |');
+    expect(parseChange('CHG-12', { intent: INTENT, plan: english }).slice(1).map((s) => [s.repo?.kind, s.repo?.unblocks])).toEqual(stories.slice(0, 5).map((s) => [s.repo?.kind, s.repo?.unblocks]));
+    const noKind = `${header('plan')}| Cięcie | Wartość | Odblokowuje |\n|---|---|---|\n| TSK-57 | (fundament) Retry queue is ready | TSK-58 |\n| TSK-58 | Customer retries | — |\n`;
+    expect(parseChange('CHG-12', { intent: INTENT, plan: noKind }).slice(1).map((s) => [s.repo?.kind, s.repo?.unblocks])).toEqual([
+      ['foundation', 'TSK-58'],
+      ['slice', undefined],
+    ]);
+  });
+
+  describe('REL-007: a flag without a plan', () => {
+    it('REL007-01: a flag with stages, exits, an owner and a removal date gives no finding', async () => {
+      expect(await rel('REL-007', RELEASE)).toEqual([]);
+      expect(await rel('REL-007', undefined)).toEqual([]);
+    });
+
+    it.each([
+      { id: 'REL007-02', what: 'no rollout stages', release: RELEASE.replace(/    rollout:\n(      - .*\n)+/, ''), missing: /no rollout stages/ },
+      { id: 'REL007-03', what: 'a stage without exit', release: RELEASE.replace(', exit: no double charge in 3 days', ''), missing: /stage "internal" has no exit criterion/ },
+      { id: 'REL007-04', what: 'no owner', release: RELEASE.replace('    owner: PO Payments\n', ''), missing: /no owner/ },
+      { id: 'REL007-05', what: 'no remove_by', release: RELEASE.replace('    remove_by: 2026-12-31\n', ''), missing: /no removal date \(remove_by\)/ },
+    ])('$id: $what', async ({ release, missing }) => {
+      const [f, ...more] = await rel('REL-007', release);
+      expect(more).toEqual([]);
+      expect(f).toMatchObject({ category: 'GAP', severity: 'info', dimension: 'delivery', title: 'Flag payment-retry has no plan' });
+      expect(f!.explanation).toMatch(missing);
+      expect(f!.evidence[0]).toMatchObject({ path: `${C}/release.yaml`, line: lineOf(release, /key: payment-retry/) });
+    });
+
+    it('REL007-06: one finding per flag, naming everything it lacks', async () => {
+      const release = `${RELEASE}  - key: saved-cards\n    tasks: [TSK-59]\n`.replace('    owner: PO Payments\n', '');
+      const fs = await rel('REL-007', release);
+      expect(fs.map((f) => f.title)).toEqual(['Flag payment-retry has no plan', 'Flag saved-cards has no plan']);
+      expect(fs[1]!.explanation).toMatch(/no rollout stages, no owner and no removal date \(remove_by\)/);
+      expect(fs[1]!.evidence[0]!.line).toBe(lineOf(release, /key: saved-cards/));
+    });
+  });
+
+  describe('REL-008: the plan\'s self-check (foundations and slices)', () => {
+    it('REL008-01: a clean plan gives no finding; a plan without the new columns is read as before', async () => {
+      const clean = KINDS.replace(/\| TSK-55 (.*?)\| — \| — \|/, '| TSK-55 $1| — | TSK-57 |').replace('| TSK-99 |', '| TSK-57, TSK-58 |').replace(/\| TSK-58 (.*?)\| — \| — \| \|/, '| TSK-58 $1| US-03 | — | |');
+      expect(await rel('REL-008', RELEASE, clean)).toEqual([]);
+      expect(await rel('REL-008', RELEASE)).toEqual([]);
+    });
+
+    it('REL008-02: a foundation without unblocks, unblocks naming no task of the change, a slice without a requirement', async () => {
+      const fs = await rel('REL-008', RELEASE, KINDS);
+      expect(fs.map((f) => [f.title, f.severity, f.category, f.dimension, f.evidence[0]?.path, f.evidence[0]?.line])).toEqual([
+        ['Foundation TSK-55 does not say what it unblocks', 'warning', 'GAP', 'delivery', `${C}/plan.md`, lineOf(KINDS, /\| TSK-55 /)],
+        ['Foundation TSK-56 unblocks TSK-99, which is not in the change', 'warning', 'GAP', 'delivery', `${C}/plan.md`, lineOf(KINDS, /\| TSK-56 /)],
+        ['Slice TSK-58 has no requirement', 'warning', 'GAP', 'delivery', `${C}/plan.md`, lineOf(KINDS, /\| TSK-58 /)],
+      ]);
+    });
+
+    it('REL008-03: Jira mode is unaffected: the same items without what the repository gives fire neither rule', async () => {
+      const ids = (await analyzeStripped()).map((f) => f.ruleId);
+      expect(ids).not.toContain('REL-007');
+      expect(ids).not.toContain('REL-008');
+    });
+  });
+
+  /** The change with what only the repository gives dropped, as an epic and stories from Jira look. */
+  const analyzeStripped = async () => {
+    const root = repo({ 'CHG-12/intent.md': INTENT, 'CHG-12/plan.md': KINDS, 'CHG-12/release.yaml': RELEASE.replace(/    rollout:\n(      - .*\n)+/, '') });
+    const { requirements } = await readRepoChanges(root);
+    const ctx: ProjectContext = { project: { key: 'PAY', name: 'Payments' }, requirements: requirements.map(({ repo: _, ...r }) => r), documents: [], frames: [], fetchedAt: '2026-10-26T00:00:00.000Z' };
+    return (await analyzeProject(ctx, {})).result.items.find((i) => i.key === 'CHG-12')!.findings;
+  };
 });
