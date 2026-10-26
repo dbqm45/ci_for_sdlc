@@ -23,6 +23,7 @@
     "test:visual": "playwright test -c playwright.visual.config.ts",
     "test:contract": "npm run test:contract -w @ci/server",
     "test:contract:update": "npm run test:contract:update -w @ci/server",
+    "test:parity": "npm run test:parity -w @ci/core",
     "test:mutation": "npm run test:mutation -w @ci/core",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "typecheck": "tsc -p packages/core && tsc -p packages/server && tsc -p packages/web && tsc -p packages/sandbox && tsc -p e2e",
