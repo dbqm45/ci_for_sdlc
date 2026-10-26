@@ -4,7 +4,7 @@ import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from
 import { FigmaRateLimitError } from '@ci/core';
 
 /** How the caller proved it may change state. Recorded with every audit entry it causes. */
-export type Principal = 'admin_token' | 'loopback';
+export type Principal = 'admin_token' | 'loopback' | 'pdi_signature';
 
 export interface GuardConfig {
   /** CI_ADMIN_TOKEN. Empty = local mode: only loopback clients may change state. */

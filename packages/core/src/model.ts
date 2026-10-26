@@ -480,6 +480,8 @@ export interface Approval {
   forced?: true;
   /** Required justification of a forced approval. */
   reason?: string;
+  /** The pdi decision (DEC-n) behind an approval that came from the pdi gate inbox (F4). */
+  decision?: string;
   /**
    * Meaning fingerprints at approval time (P5). Approvals stored before this
    * existed fall back to `contextHashes`, so any edit counts as drift.

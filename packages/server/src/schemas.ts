@@ -29,6 +29,7 @@ export const settingsBody = obj({
       releaseLineField: str(100),
       flagLabelPrefix: str(50),
       flagField: str(100),
+      changeLabelPrefix: str(50),
       jqlFilter: str(4000),
       issueTypeMap: { type: 'object', maxProperties: 100, propertyNames: { minLength: 1, maxLength: 100, pattern: '\\S' }, additionalProperties: { enum: ISSUE_TYPES } },
     }),

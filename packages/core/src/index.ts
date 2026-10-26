@@ -17,6 +17,7 @@ export * from './ai/providers.js';
 export { demoProject, DEMO_SCENARIOS } from './connectors/demo.js';
 export * from './hierarchy.js';
 export * from './settings.js';
+export * from './pdi.js';
 export { errorMessage } from './errors.js';
 export { ATLASSIAN_API, RELEASE_LINE_SOURCES, type ReleaseLineSource, fetchJira, fetchConfluence, jiraIssueToRequirement, adfToText, splitSections, type AtlassianOAuthAccess, type JiraConfig, type ConfluenceConfig } from './connectors/atlassian.js';
 export { clearFigmaCache, fetchFigma, figmaApiBase, framesFromDocument, FigmaRateLimitError, type FigmaConfig } from './connectors/figma.js';
