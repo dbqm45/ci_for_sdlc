@@ -118,7 +118,8 @@ describe('Claude analyzer (Anthropic API)', () => {
     const calls = fakeFetch(message('end_turn'));
     const a = createSemanticAnalyzer({ provider: 'anthropic', model: 'claude-sonnet-5', effort: 'low' }, { anthropicApiKey: 'ak' })!;
     expect((await a.analyze(input)).findings).toEqual([finding]);
-    expect(calls[0]?.headers['x-api-key']).toBe('ak');
+    // @anthropic-ai/sdk 1.x sends the API key as a bearer token instead of x-api-key.
+    expect(calls[0]?.headers.authorization).toBe('Bearer ak');
     expect(calls[0]?.body).toMatchObject({ model: 'claude-sonnet-5', output_config: { effort: 'low', format: { type: 'json_schema' } } });
     expect(calls[0]?.body.fallbacks).toBeUndefined();
   });
