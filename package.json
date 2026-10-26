@@ -1,6 +1,6 @@
 {
   "name": "continuous-intelligence-sdlc",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "description": "Continuous Intelligence for Product & Software Definition — AI quality gate across Jira, Confluence and Figma",
   "workspaces": [
