@@ -28,6 +28,12 @@ const ATTRIBUTE_HINTS: [ClaimAttribute, RegExp][] = [
   ['session_lifetime', /session/i],
   ['max_items', /limit|max/i],
   ['max_file_size', /upload|file size/i],
+  ['power', /\bk?W\b|power|moc/i],
+  ['energy', /kWh|energy|energi/i],
+  ['ocpp_version', /ocpp/i],
+  ['uptime_target', /uptime|availability|dostępnoś/i],
+  ['uptime_definition', /uptime|maintenance/i],
+  ['connector_status', /connector|status|złącz/i],
 ];
 
 /**

@@ -46,7 +46,7 @@ export interface PdiOutboxEntry {
 
 export const DEFAULT_SETTINGS: Settings = {
   mode: 'demo',
-  project: { key: 'CHK', name: 'Checkout' },
+  project: { key: 'CHK', name: 'Checkout', claimPack: 'general' },
   integrations: {
     jira: { enabled: false, baseUrl: '', email: '', projectKey: '' },
     confluence: { enabled: false, baseUrl: '', email: '', spaceKeys: [] },

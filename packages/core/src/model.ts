@@ -170,7 +170,8 @@ export interface DesignFrame {
 }
 
 export interface ProjectContext {
-  project: { key: string; name: string };
+  /** `claimPack`: the claim vocabulary of the project's domain (settings `project.claimPack`); absent = general. */
+  project: { key: string; name: string; claimPack?: ClaimPackId };
   requirements: RequirementItem[];
   documents: DocumentItem[];
   frames: DesignFrame[];
@@ -273,7 +274,18 @@ export type ClaimAttribute =
   | 'max_items'
   | 'max_file_size'
   | 'min_length'
-  | 'max_length';
+  | 'max_length'
+  // EV pack (analysis/claim-pack-ev.ts)
+  | 'power'
+  | 'energy'
+  | 'ocpp_version'
+  | 'uptime_target'
+  | 'uptime_definition'
+  | 'connector_status';
+
+/** Claim vocabularies per domain: `general` (checkout and other web products, the default) and `ev` (EV charging). */
+export const CLAIM_PACKS = ['general', 'ev'] as const;
+export type ClaimPackId = (typeof CLAIM_PACKS)[number];
 
 export type FindingCategory =
   | 'GAP'

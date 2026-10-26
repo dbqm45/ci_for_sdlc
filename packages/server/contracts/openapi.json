@@ -630,6 +630,12 @@
                       "name": {
                         "type": "string",
                         "maxLength": 200
+                      },
+                      "claimPack": {
+                        "enum": [
+                          "general",
+                          "ev"
+                        ]
                       }
                     }
                   },

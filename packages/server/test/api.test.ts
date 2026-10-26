@@ -100,6 +100,18 @@ describe('API', () => {
     expect((await putSettings(ctx.app, { policy: { storyShape } })).statusCode).toBe(422);
   });
 
+  it('API-05: the claim pack of the project is stored, refused when unknown, and given to the next analysis', async () => {
+    expect((await json('GET', '/api/settings')).body.settings.project.claimPack).toBe('general');
+    const res = await putSettings(ctx.app, { project: { claimPack: 'ev' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().settings.project).toMatchObject({ name: 'Checkout', claimPack: 'ev' });
+    expect((await json('GET', '/api/settings')).body.settings.project.claimPack).toBe('ev');
+    await json('POST', '/api/analyze');
+    expect(ctx.engine.state.context?.project.claimPack).toBe('ev');
+    expect((await putSettings(ctx.app, { project: { claimPack: 'retail' } })).statusCode).toBe(422);
+    await putSettings(ctx.app, { project: { claimPack: 'general' } });
+  });
+
   it('API-04: the release-plan policy and the Jira release conventions are stored; wrong values are refused', async () => {
     expect((await json('GET', '/api/settings')).body.settings.policy.release).toEqual(DEFAULT_RELEASE);
     const res = await putSettings(ctx.app, { policy: { release: { maxMvpPercent: 50 } }, integrations: { jira: { releaseLineSource: 'fixVersion', flagLabelPrefix: 'ff:' } } });

@@ -13,6 +13,7 @@ import type {
 } from '../model.js';
 import { excerpt } from '../text.js';
 import { isClaimable } from '../connectors/reconstruction.js';
+import { claimPackOf } from './claim-packs.js';
 import { extractClaims, normalizeSubject } from './claims.js';
 import { TRAIT_PATTERNS, type Trait } from './vocabulary.js';
 
@@ -43,33 +44,34 @@ export function createEnv(ctx: ProjectContext, built: BuiltGraph, decisions: Dec
     }
   }
 
+  const pack = claimPackOf(ctx.project.claimPack);
   const claimsByEntity = new Map<string, Claim[]>();
   for (const r of ctx.requirements) {
-    const domain = normalizeSubject(built.domains.get(r.key)?.name ?? 'general');
+    const domain = normalizeSubject(built.domains.get(r.key)?.name ?? 'general', pack);
     const text = [r.title, r.description, ...r.acceptanceCriteria, ...r.businessRules].join('\n');
-    claimsByEntity.set(issueId(r.key), extractClaims(text, { source: 'jira', entityId: issueId(r.key), title: r.key, url: r.url }, { defaultSubject: domain, updatedAt: r.updatedAt }));
+    claimsByEntity.set(issueId(r.key), extractClaims(text, { source: 'jira', entityId: issueId(r.key), title: r.key, url: r.url }, { defaultSubject: domain, updatedAt: r.updatedAt, pack }));
   }
   for (const d of ctx.documents) {
     // Code items state facts only when tf backed them with evidence it could confirm; their title repeats the body.
     if (d.code && !isClaimable(d.code)) continue;
     const text = d.code ? d.body : `${d.title}\n${d.body}`;
-    claimsByEntity.set(docId(d), extractClaims(text, evDoc(d), { defaultSubject: normalizeSubject(d.labels[0] ?? d.space ?? 'general'), updatedAt: d.updatedAt }));
+    claimsByEntity.set(docId(d), extractClaims(text, evDoc(d), { defaultSubject: normalizeSubject(d.labels[0] ?? d.space ?? 'general', pack), updatedAt: d.updatedAt, pack }));
   }
   for (const f of ctx.frames) {
-    claimsByEntity.set(frameId(f), extractClaims([f.name, ...f.texts].join('\n'), { source: 'figma', entityId: frameId(f), title: `${f.fileName} / ${f.name}`, url: f.url }, { defaultSubject: 'general', updatedAt: f.updatedAt, confidence: 'medium' }));
+    claimsByEntity.set(frameId(f), extractClaims([f.name, ...f.texts].join('\n'), { source: 'figma', entityId: frameId(f), title: `${f.fileName} / ${f.name}`, url: f.url }, { defaultSubject: 'general', updatedAt: f.updatedAt, confidence: 'medium', pack }));
   }
   const decisionsByItem = new Map<string, Decision[]>();
   const decisionsByQuestion = new Map<string, Decision>();
   for (const dec of decisions) {
     (decisionsByItem.get(dec.itemKey) ?? decisionsByItem.set(dec.itemKey, []).get(dec.itemKey)!).push(dec);
     decisionsByQuestion.set(dec.questionId, dec);
-    const domain = normalizeSubject(built.domains.get(dec.itemKey)?.name ?? 'general');
+    const domain = normalizeSubject(built.domains.get(dec.itemKey)?.name ?? 'general', pack);
     // The answer carries the claim; the question only supplies context ("How many times…" + "Up to 3 times").
     const answer = `${dec.answer}${dec.note ? `. ${dec.note}` : ''}`;
     const text = /\d|idempot|unlimited|async|synchron|dedup/i.test(answer) ? `${dec.question.replace(/\?/g, '').replace(/\d+\s*(?:seconds?|s|minutes?)/gi, '')} — ${answer}` : answer;
     claimsByEntity.set(
       `decision:${dec.id}`,
-      extractClaims(text, { source: 'decision', entityId: `decision:${dec.id}`, title: `Decision on ${dec.topic} (${dec.decidedBy})` }, { defaultSubject: domain, updatedAt: dec.decidedAt }),
+      extractClaims(text, { source: 'decision', entityId: `decision:${dec.id}`, title: `Decision on ${dec.topic} (${dec.decidedBy})` }, { defaultSubject: domain, updatedAt: dec.decidedAt, pack }),
     );
   }
   return { ctx, built, reqByKey, docsByEntity, framesByEntity, claimsByEntity, decisionsByItem, decisionsByQuestion, childrenOf, policy };

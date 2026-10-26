@@ -60,7 +60,9 @@ export class Engine extends EventEmitter {
   }
 
   async loadContext(settings: Settings): Promise<ProjectContext> {
-    const ctx = this.repo ? await this.loadRepo(settings, this.repo) : settings.mode === 'demo' ? ((await this.store.demoContext()) ?? demoProject()) : await this.loadSources(settings);
+    const loaded = this.repo ? await this.loadRepo(settings, this.repo) : settings.mode === 'demo' ? ((await this.store.demoContext()) ?? demoProject()) : await this.loadSources(settings);
+    // The claim vocabulary is the project's setting in every mode, the demo workspace included.
+    const ctx: ProjectContext = { ...loaded, project: { ...loaded.project, claimPack: settings.project.claimPack ?? 'general' } };
     // tf's reconstruction from code is the current state of the code, next to the specification in either mode.
     const { code } = settings.integrations;
     if (!code.enabled) return ctx;
