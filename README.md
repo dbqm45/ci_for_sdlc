@@ -2,7 +2,7 @@
 
 > **„Czy naprawdę wiemy, co budujemy — i czy wszystkie źródła wiedzy mówią to samo?”**
 
-Warstwa AI, która łączy **Jira** (wymagania), **Confluence** (wiedza, reguły biznesowe, decyzje) i **Figma** (design), wykrywa **luki, konflikty, niejednoznaczności, nieaktualne informacje i brakujące scenariusze**, zadaje pytania, których zespół nie zadał, pokazuje **dowody** dla każdego wniosku i określa, czy feature jest **gotowy do implementacji**. Po zatwierdzeniu pilnuje, żeby nic się nie „rozjechało” (**continuous drift detection**).
+Warstwa AI, która łączy **Jira** (wymagania), **Confluence** (wiedza, reguły biznesowe, decyzje) i **Figma** (design) — a opcjonalnie stan obecny kodu z rekonstrukcji tf (`reconstruction.json`) — wykrywa **luki, konflikty, niejednoznaczności, nieaktualne informacje i brakujące scenariusze**, zadaje pytania, których zespół nie zadał, pokazuje **dowody** dla każdego wniosku i określa, czy feature jest **gotowy do implementacji**. Po zatwierdzeniu pilnuje, żeby nic się nie „rozjechało” (**continuous drift detection**).
 
 Produkt **nie analizuje kodu** — to świadoma decyzja zakresu MVP: najpierw „czy wiemy, co budujemy?”, dopiero później „jak to zbudować?”.
 

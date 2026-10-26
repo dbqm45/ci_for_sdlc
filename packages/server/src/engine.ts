@@ -10,6 +10,7 @@ import {
   fetchConfluence,
   fetchFigma,
   fetchJira,
+  readReconstruction,
   type AnalysisResult,
   type Approval,
   type ContextGraph,
@@ -48,10 +49,14 @@ export class Engine extends EventEmitter {
   }
 
   async loadContext(settings: Settings): Promise<ProjectContext> {
-    if (settings.mode === 'demo') {
-      const saved = await this.store.demoContext();
-      return saved ?? demoProject();
-    }
+    const ctx = settings.mode === 'demo' ? ((await this.store.demoContext()) ?? demoProject()) : await this.loadSources(settings);
+    // tf's reconstruction from code is the current state of the code, next to the specification in either mode.
+    const { code } = settings.integrations;
+    if (!code.enabled) return ctx;
+    return { ...ctx, documents: [...ctx.documents, ...(await readReconstruction(code.reconstructionPath, { repoUrl: code.repoUrl }))] };
+  }
+
+  private async loadSources(settings: Settings): Promise<ProjectContext> {
     const { jira, confluence, figma } = settings.integrations;
     const ctx: ProjectContext = { project: settings.project, requirements: [], documents: [], frames: [], fetchedAt: new Date().toISOString() };
     const token = (name: string) => {

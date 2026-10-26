@@ -757,6 +757,24 @@
                             }
                           }
                         }
+                      },
+                      "code": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "reconstructionPath": {
+                            "type": "string",
+                            "maxLength": 1000
+                          },
+                          "repoUrl": {
+                            "type": "string",
+                            "maxLength": 500,
+                            "pattern": "^(https://[^\\s]+)?$"
+                          }
+                        }
                       }
                     }
                   },

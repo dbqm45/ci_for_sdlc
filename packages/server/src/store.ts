@@ -51,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
     jira: { enabled: false, baseUrl: '', email: '', projectKey: '' },
     confluence: { enabled: false, baseUrl: '', email: '', spaceKeys: [] },
     figma: { enabled: false, fileKeys: [] },
+    code: { enabled: false, reconstructionPath: '' },
   },
   ai: { provider: 'none', model: '', effort: 'high', temperature: 0.2, runOn: 'on_demand' },
   security: {

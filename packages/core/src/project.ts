@@ -4,7 +4,7 @@ import { formatClaimValue } from './analysis/claims.js';
 import { createEnv, evJira, questionOptions, type ItemCtx } from './analysis/context.js';
 import { designCoveragePercent } from './analysis/states.js';
 import { errorMessage } from './errors.js';
-import { buildContextGraph, issueId, type ContextGraph } from './graph.js';
+import { buildContextGraph, docId, issueId, type ContextGraph } from './graph.js';
 import type {
   AnalysisResult,
   Approval,
@@ -234,7 +234,8 @@ async function semanticPass(a: ItemAnalysis, c: ItemCtx, decided: Map<string, De
   };
   const r = c.r;
   sources.push({ ref: 'S1', entityId: issueId(r.key), source: 'jira', title: `${r.key} ${r.title}`, content: clean([`Type: ${r.type}`, `Description:\n${r.description}`, `Acceptance criteria:\n${r.acceptanceCriteria.map((x) => `- ${x}`).join('\n')}`, r.businessRules.length ? `Business rules:\n${r.businessRules.map((x) => `- ${x}`).join('\n')}` : ''].join('\n')) });
-  for (const d of c.docs) sources.push({ ref: `S${sources.length + 1}`, entityId: `confluence:${d.id}`, source: 'confluence', title: d.title, content: clean(d.body) });
+  for (const d of c.docs) sources.push({ ref: `S${sources.length + 1}`, entityId: docId(d), source: d.source ?? 'confluence', title: d.title, content: clean(d.body) });
+  for (const d of c.code) sources.push({ ref: `S${sources.length + 1}`, entityId: docId(d), source: 'code', title: d.title, content: clean(d.body) });
   for (const f of c.frames) sources.push({ ref: `S${sources.length + 1}`, entityId: `figma:${f.fileKey}:${f.id}`, source: 'figma', title: `${f.fileName} / ${f.page} / ${f.name}`, content: clean(`Frame: ${f.name}\nText layers: ${f.texts.join(' | ')}`) });
   for (const d of c.decisions) sources.push({ ref: `S${sources.length + 1}`, entityId: `decision:${d.id}`, source: 'decision', title: `Decision on ${d.topic}`, content: clean(`Q: ${d.question}\nA: ${d.answer}${d.note ? `\nNote: ${d.note}` : ''}`) });
 
@@ -407,7 +408,7 @@ function diffSnapshots(prev: Snapshot, cur: Snapshot, items: Map<string, ItemAna
 
 const rank = (r: string) => ({ ready: 0, needs_attention: 1, not_ready: 2 })[r] ?? 0;
 const label = (r: string) => r.replace('_', ' ').toUpperCase();
-const sourceLabel = (s?: SourceSystem) => ({ jira: 'Jira', confluence: 'Confluence', figma: 'Figma', decision: 'Decision' })[s ?? 'jira'];
+const sourceLabel = (s?: SourceSystem) => ({ jira: 'Jira', confluence: 'Confluence', figma: 'Figma', decision: 'Decision', code: 'Code' })[s ?? 'jira'];
 
 function counts(list: ItemAnalysis[]): AnalysisResult['counts'] {
   const work = list.filter((a) => a.type === 'story' || a.type === 'bug');

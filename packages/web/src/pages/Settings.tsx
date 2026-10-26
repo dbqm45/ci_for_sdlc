@@ -58,6 +58,8 @@ export function Settings() {
   const shape = s.policy.storyShape ?? {};
   const setShape = (key: string, value: unknown) => set('policy.storyShape', { ...shape, [key]: value });
   const release = s.policy.release ?? {};
+  // Settings saved before the code integration have none; the server fills in the default.
+  const codeIntegration = s.integrations.code ?? { enabled: false, reconstructionPath: '' };
   const setRelease = (key: string, value: unknown) => set('policy.release', { ...release, [key]: value });
   const save = async () => {
     setSaving(true);
@@ -158,6 +160,10 @@ export function Settings() {
             {!oauth && <Field label="Site URL"><input className="input" placeholder="https://your-site.atlassian.net" value={s.integrations.confluence.baseUrl} onChange={(e) => set('integrations.confluence.baseUrl', e.target.value)} /></Field>}
             {!oauth && <Field label="Account e-mail"><input className="input" value={s.integrations.confluence.email} onChange={(e) => set('integrations.confluence.email', e.target.value)} /></Field>}
             <Field label="Space keys (comma separated)"><input className="input" placeholder="PAY, CHK" value={s.integrations.confluence.spaceKeys.join(', ')} onChange={(e) => set('integrations.confluence.spaceKeys', e.target.value.split(',').map((x: string) => x.trim()).filter(Boolean))} /></Field>
+          </Integration>
+          <Integration title="Code (tf reconstruction)" source="code" enabled={s.integrations.code?.enabled ?? false} onToggle={(v) => set('integrations.code', { ...codeIntegration, enabled: v })} badges={<span className="badge">reconstruction.json</span>}>
+            <Field label="Path to reconstruction.json on the server"><input className="input" placeholder="/repo/docs/project/00-reconstruction/reconstruction.json" value={codeIntegration.reconstructionPath} onChange={(e) => set('integrations.code', { ...codeIntegration, reconstructionPath: e.target.value })} /></Field>
+            <Field label="Repository URL for code links (optional)"><input className="input" placeholder="https://github.com/acme/shop" value={codeIntegration.repoUrl ?? ''} onChange={(e) => set('integrations.code', { ...codeIntegration, repoUrl: e.target.value || undefined })} /></Field>
           </Integration>
           <Integration title="Figma" source="figma" enabled={s.integrations.figma.enabled} onToggle={(v) => set('integrations.figma.enabled', v)} badges={secret('FIGMA_TOKEN')}>
             <Field label="File keys (comma separated)"><input className="input" placeholder="from figma.com/design/<FILE_KEY>/…" value={s.integrations.figma.fileKeys.join(', ')} onChange={(e) => set('integrations.figma.fileKeys', e.target.value.split(',').map((x: string) => parseFigmaFileKey(x)).filter(Boolean))} /></Field>

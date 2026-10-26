@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_RELEASE, DEFAULT_STORY_SHAPE, DEMO_SCENARIOS, RULES } from '@ci/core';
 import { buildApp } from '../src/app.js';
@@ -109,6 +110,21 @@ describe('API', () => {
       expect((await putSettings(ctx.app, bad)).statusCode).toBe(422);
     }
     await putSettings(ctx.app, { policy: { release: DEFAULT_RELEASE }, integrations: { jira: { releaseLineSource: 'label', flagLabelPrefix: 'flag:' } } });
+  });
+
+  it('API-05: tf reconstruction from code joins the analysis: the code contradicting PAY-123 is a CON-001 conflict', async () => {
+    const reconstructionPath = fileURLToPath(new URL('../../core/test/fixtures/tf-reconstruction/reconstruction.json', import.meta.url));
+    expect((await putSettings(ctx.app, { integrations: { code: { enabled: true, reconstructionPath, repoUrl: 'https://github.com/acme/shop' } } })).statusCode).toBe(200);
+    expect((await json('POST', '/api/settings/test-connections')).body.code).toBe('OK — 8 items reconstructed from code');
+    await json('POST', '/api/analyze');
+    const conflict = (await json('GET', '/api/items/PAY-123')).body.item.findings.find((f: any) => f.ruleId === 'CON-001' && f.evidence.some((e: any) => e.source === 'code'));
+    expect(conflict.evidence.find((e: any) => e.source === 'code')).toMatchObject({ title: 'Code src/payments/gateway.ts:1', url: 'https://github.com/acme/shop/blob/3f2a9c1/src/payments/gateway.ts#L1' });
+
+    await putSettings(ctx.app, { integrations: { code: { reconstructionPath: '/etc/passwd' } } });
+    expect((await json('POST', '/api/settings/test-connections')).body.error).toBe('the reconstruction path must point to a .json file');
+    expect((await putSettings(ctx.app, { integrations: { code: { repoUrl: 'javascript:alert(1)' } } })).statusCode).toBe(422);
+    await putSettings(ctx.app, { integrations: { code: { enabled: false, reconstructionPath: '' } } });
+    await json('POST', '/api/analyze');
   });
 
   it('API-01: lists the rules and the demo scenarios', async () => {

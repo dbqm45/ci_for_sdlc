@@ -54,6 +54,12 @@ Nie. Domyślnie dostawca AI to `none` i działa tylko analiza regułowa, która 
   - komponenty i etykiety.
 - **Confluence** — strony z podanych przestrzeni (*space keys*).
 - **Figma** — ramki z podanych plików (*file keys*), ich teksty i przejścia prototypu.
+- **Kod (rekonstrukcja tf)** — plik `reconstruction.json`, który tf zapisuje po odtworzeniu reguł i wymagań z kodu
+  (`recon_export.py`). Ścieżkę do pliku na serwerze podajesz w *Settings → Integrations → Code (tf reconstruction)*,
+  opcjonalnie z adresem repozytorium, żeby dowody linkowały do linii kodu. Aplikacja sama kodu nie czyta. Reguła lub
+  wymaganie z dowodem `plik:linia`, którego tf nie podważył, może się nie zgadzać ze specyfikacją — wtedy `CON-001`
+  pokazuje konflikt, np. „Jira: 30 s, kod: 45 s” z dowodem `Code src/payments/gateway.ts:1`. Założenia i pytania
+  z rekonstrukcji są tylko kontekstem, a kod nigdy nie zastępuje brakującej specyfikacji (np. limitu ponowień).
 
 **Jak elementy są ze sobą łączone?**
 Graf kontekstu (`packages/core/src/graph.ts`) tworzy dwa rodzaje powiązań:

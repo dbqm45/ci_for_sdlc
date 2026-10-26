@@ -13,6 +13,7 @@ import type {
 } from '../model.js';
 import { dimensionsFor } from '../model.js';
 import { hash } from '../text.js';
+import { docId } from '../graph.js';
 import { workItemsUnder } from '../hierarchy.js';
 import { aiFindingsAction, driftReactionOf, type SeverityAction } from '../policy.js';
 import { evJira, itemContext, questionOptions, type AnalysisEnv, type ItemCtx } from './context.js';
@@ -72,7 +73,7 @@ export function analyzeItem(env: AnalysisEnv, r: RequirementItem): { analysis: I
     dimensions: [],
     findings,
     context: c.bundle,
-    claims: c.claims.all,
+    claims: [...c.claims.all, ...c.claims.code],
     states,
     journeys,
     tasks,
@@ -209,7 +210,7 @@ function buildChecklist(a: ItemAnalysis, c?: ItemCtx): ChecklistGroup[] {
     groups.push({ group: 'Design', items });
   }
 
-  const docItems: ChecklistGroup['items'] = c.docs.slice(0, 4).map((d) => ({ label: d.title, status: open.some((f) => f.evidence.some((e) => e.entityId === `confluence:${d.id}`) && f.dimension === 'documentation') ? 'warn' : 'ok' }));
+  const docItems: ChecklistGroup['items'] = c.docs.slice(0, 4).map((d) => ({ label: d.title, status: open.some((f) => f.evidence.some((e) => e.entityId === docId(d)) && f.dimension === 'documentation') ? 'warn' : 'ok' }));
   if (!docItems.length) docItems.push({ label: 'No documentation found', status: 'warn' });
   groups.push({ group: 'Documentation', items: docItems });
 
