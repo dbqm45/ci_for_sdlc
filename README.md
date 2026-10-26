@@ -188,9 +188,14 @@ packages/
             → findings & questions → decisions → readiness → snapshots & drift → impact
   server/   Fastify API, persystencja (pliki JSON, opcjonalnie szyfrowane), harmonogram, webhooki, SSE, audit, CLI
   web/      React UI (Project health, Backlog, Story/Epic detail, Decisions, Drift, Impact, Settings, Audit)
+  mcp/      serwer MCP (stdio) dla Claude nad REST API, tylko odczyt
 ```
 
 Szczegóły i mapowanie koncepcji produktu na kod: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+**Claude jako interfejs (MCP).** W Claude Code albo Claude Desktop można pytać o gotowość („Czy CHG-12 jest gotowe
+do implementacji i co je blokuje?”) obok serwerów MCP pdi i ShipScope: `packages/mcp` czyta REST API, tylko do odczytu.
+Konfiguracja: [`packages/mcp/README.md`](packages/mcp/README.md).
 
 ## API (skrót)
 

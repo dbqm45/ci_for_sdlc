@@ -7,6 +7,10 @@ Lista propozycji, które świadomie odłożono, żeby o nich nie zapomnieć. Ka�
 - **P6b. Uzasadnienie wymuszenia powiązane z ustaleniami.** Teraz wymuszone zatwierdzenie wymaga tylko tekstu. Później: wskazanie, których blokujących ustaleń dotyczy uzasadnienie.
 - **P8b. Role i uprawnienia (SaaS).** Teraz każdy z tokenem administratora może potwierdzać, zatwierdzać i wymuszać. Później: role, np. tylko lider może wymusić zatwierdzenie albo potwierdzić ustalenie AI.
 - **P7b. Osobne zatwierdzanie feature i epic.** Odrzucone na teraz (gotowość jest wyliczana ze story). Do ponownej oceny, jeśli zespoły będą chciały zatwierdzać całe funkcjonalności.
+- **K1b. Token odczytu (2026-10-26).** Odczyty `GET /api/*` nie wymagają dziś tokenu (`CI_ADMIN_TOKEN` chroni tylko
+  zmiany), więc w instalacji sieciowej każdy, kto dosięgnie usługi, czyta analizę, decyzje i dryf — też przez serwer
+  MCP z K-1 (`packages/mcp`), który świadomie nie wysyła tokenu administratora. Do zrobienia przed instalacją sieciową:
+  np. `CI_READ_TOKEN` wymagany dla `GET /api/*`, gdy ustawiony, i `CI_SDLC_TOKEN` w serwerze MCP. Plan: `docs/MCP-K1-PLAN.md`.
 - **P1b. Mapowanie hierarchii poza typem zgłoszenia.** Np. po etykiecie, komponencie albo polu niestandardowym Jira.
 
 ## Kształt historyjki i kryteria akceptacji (G2)
