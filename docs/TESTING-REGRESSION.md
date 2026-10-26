@@ -24,6 +24,7 @@ Kwarantanna (`@quarantine`) jest wyłączona z bramki PR, ale uruchamiana w prze
 | `npm run test:visual` | zrzuty ekranu (`playwright.visual.config.ts`) — tylko w obrazie Docker, patrz niżej |
 | `npm run test:contract` / `test:contract:update` | kontrakt OpenAPI / akceptacja zmiany kontraktu |
 | `npm run test:mutation` | Stryker na modułach krytycznych `core`, raport w `packages/core/reports/mutation/index.html` |
+| `TF_DIR=../tf npm run test:parity` | zgodność reguł STORY/AC z `requirements_lint.py` tf na zestawie wzorcowym pdi i historyjkach demo (plan G1/G2 §4.8); bez `TF_DIR` test jest pomijany. W przebiegu nocnym (job `parity`) z tf przypiętym w `TF_REF`. Różnica spoza listy `KNOWN` w `tf-parity.test.ts` oblewa test, a wyjątek, którego żadna historyjka już nie potrzebuje, też — wtedy usuń go z listy |
 
 Zmienne środowiskowe e2e: `E2E_PORT` (domyślnie 4399), `E2E_BROWSERS`, `E2E_FAIL_ON_FLAKY=1` (test zielony dopiero
 po ponowieniu oblewa przebieg), `E2E_INCLUDE_QUARANTINE=1`, `PW_CHROMIUM_PATH` (własna binarka Chromium).

@@ -93,6 +93,32 @@ jobs:
             test-results/
           retention-days: 14
 
+  # Plan G1/G2 §4.8: the STORY/AC rules give the same result here and in tf's requirements_lint.py
+  # (packages/core/test/tf-parity.test.ts). tf is pinned; bump TF_REF when tf changes its linter.
+  parity:
+    if: ${{ !inputs.update_snapshots }}
+    name: Parity with tf (story shape)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TF_REF: 97bdef43a7ec852b9e2a29199874bba466ecb05c
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: dbqm45/tf
+          ref: ${{ env.TF_REF }}
+          path: tf
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:parity
+        env:
+          TF_DIR: ${{ github.workspace }}/tf
+
   mutation:
     if: ${{ !inputs.update_snapshots }}
     name: Mutation (core)
