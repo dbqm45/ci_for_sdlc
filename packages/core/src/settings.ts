@@ -1,5 +1,5 @@
 import type { AiProviderConfig } from './ai/providers.js';
-import type { IssueType } from './model.js';
+import type { ClaimPackId, IssueType } from './model.js';
 import type { AnalysisPolicy } from './policy.js';
 import type { ReleaseLineSource } from './connectors/atlassian.js';
 
@@ -10,7 +10,8 @@ export const AI_RUN_ON = ['every_analysis', 'on_demand'] as const;
 
 export interface Settings {
   mode: (typeof SETTINGS_MODES)[number];
-  project: { key: string; name: string };
+  /** `claimPack`: the domain vocabulary of claims (CON-001 conflicts); optional in settings saved before it existed. */
+  project: { key: string; name: string; claimPack?: ClaimPackId };
   integrations: {
     jira: { enabled: boolean; baseUrl: string; email: string; projectKey: string; acceptanceCriteriaField?: string; storyPointsField?: string; releaseLineSource?: ReleaseLineSource; releaseLabelPrefix?: string; releaseLineField?: string; flagLabelPrefix?: string; flagField?: string; changeLabelPrefix?: string; jqlFilter?: string; issueTypeMap?: Record<string, IssueType> };
     confluence: { enabled: boolean; baseUrl: string; email: string; spaceKeys: string[] };

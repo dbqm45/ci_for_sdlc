@@ -43,7 +43,7 @@
 |---|---|
 | Context before code / Context Discovery (§15) | `graph.ts` (`buildContextGraph`, `bundleFor`) |
 | Context Graph — entities & relations (§16) | `model.ts` (`Entity`, `Relation`), `graph.ts` |
-| Claims & semantic conflicts (§17) | `analysis/claims.ts`, rule `CON-001` |
+| Claims & semantic conflicts (§17) | `analysis/claims.ts` (packs per domain: `claim-pack-ev.ts`, `claim-packs.ts`), rule `CON-001` |
 | Domain detection (§18) | `graph.ts` (`detectDomains`) |
 | AI agents (§19) | Specification Reviewer + Question Agent = `ai/types.ts` prompt; Story/Epic/Bug analyzers = `analysis/analyze.ts`; Context Discovery = `graph.ts` |
 | Adversarial review (§20, UC-07) | `analysis/states.ts` (`PROBES`) + AI `challenges` |
@@ -144,6 +144,19 @@ reconstructed, each with evidence `path:line`. `connectors/reconstruction.ts` re
   the challenges).
 
 The fixture in `packages/core/test/fixtures/tf-reconstruction/` was produced by tf's exporter; regenerate it, never edit it.
+
+## Claim packs per domain
+
+The claim vocabulary (`ClaimPack` in `analysis/claims.ts`: ordered subjects and attribute extractors) is chosen per
+project by `settings.project.claimPack` (`general` | `ev`, default `general`). The engine copies it into
+`ProjectContext.project.claimPack` in every mode; `createEnv` (claims for CON-001) and `buildContextGraph` (meaning
+fingerprints for drift) resolve it with `claimPackOf`. `general` is the checkout vocabulary that existed before packs.
+`ev` (`claim-pack-ev.ts`, terms copied from tf `pack-ev` 1.1.0) adds the EV hierarchy as subjects (location, charging
+station, charging point = EVSE, connector, vehicle, CSMS, transaction, session, tariff, battery) and the attributes
+`power` (kW), `energy` (kWh), `ocpp_version` (subject `charging station`), `uptime_target` and `uptime_definition`
+(subject `charging point`) and `connector_status` (subject `connector (<situation>)`, so statuses of different moments
+are not compared). An `ocpp_version` conflict goes to the `architecture` dimension. Tests:
+`packages/core/test/claim-packs.test.ts`; plan: `docs/CLAIM-PACKS-PLAN.md`.
 
 ## Decisions feed back into the analysis
 

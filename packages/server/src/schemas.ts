@@ -2,7 +2,7 @@
  * JSON Schemas for request validation and the OpenAPI document. Bodies reject
  * unknown properties; the server still trims and caps free text.
  */
-import { AC_FORMATS, AI_EFFORTS, AI_FINDINGS_ACTIONS, AI_PROVIDERS, AI_RUN_ON, DECISION_EFFECTS, DRIFT_REACTIONS, ISSUE_TYPES, SCHEDULE_MODES, SETTINGS_MODES, SEVERITY_ACTIONS, REQUIRE_FLAG, RELEASE_LINE_SOURCES } from '@ci/core';
+import { AC_FORMATS, CLAIM_PACKS, AI_EFFORTS, AI_FINDINGS_ACTIONS, AI_PROVIDERS, AI_RUN_ON, DECISION_EFFECTS, DRIFT_REACTIONS, ISSUE_TYPES, SCHEDULE_MODES, SETTINGS_MODES, SEVERITY_ACTIONS, REQUIRE_FLAG, RELEASE_LINE_SOURCES } from '@ci/core';
 
 const str = (maxLength: number, extra: object = {}) => ({ type: 'string', maxLength, ...extra }) as const;
 const bool = { type: 'boolean' } as const;
@@ -15,7 +15,7 @@ export const idParams = obj({ id: str(128, { minLength: 1 }) }, ['id']);
 /** Settings are a partial update; the UI sends the whole object. */
 export const settingsBody = obj({
   mode: { enum: SETTINGS_MODES },
-  project: obj({ key: str(40), name: str(200) }),
+  project: obj({ key: str(40), name: str(200), claimPack: { enum: CLAIM_PACKS } }),
   integrations: obj({
     jira: obj({
       enabled: bool,

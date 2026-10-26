@@ -140,6 +140,24 @@ Epica ani feature nie ocenia się samodzielnie. Ich gotowość wynika ze story p
    - analiza stanów UI i ścieżek użytkownika.
 5. Wynikiem są **ustalenia** (findings) i **pytania** do zespołu, a na ich podstawie liczona jest gotowość.
 
+**Jakie twierdzenia porównuje `CON-001`? Czy działa poza checkoutem?**
+Zależy od słownika domeny projektu: *Settings → Workspace → Domain vocabulary* (`project.claimPack` w
+`/api/settings`). Działa bez AI, na tekście źródeł.
+
+| Słownik | Twierdzenia (atrybuty) | Przykład konfliktu |
+|---|---|---|
+| `general` (domyślny) | timeout, limit ponowień, idempotencja, tryb przetwarzania, czas sesji, limit elementów, rozmiar pliku | „Jira: timeout 30 s, Confluence: 45 s” |
+| `ev` (ładowanie pojazdów) | wszystko z `general` oraz moc (kW), energia (kWh), wersja OCPP, docelowy uptime (%), definicja uptime (z planowanym serwisem czy bez), status złącza w danej sytuacji | „Jira: stacja 22 kW, Confluence: 11 kW”, „OCPP 1.6 vs 2.0.1”, „status złącza po wpięciu kabla: Preparing vs Available” |
+
+Słownik `ev` powstał z glosariusza EV w tf (`dom-ev-glossary`, statusy złącza z `dom-ev-ocpp-16`/`dom-ev-ocpp-2x`,
+definicje uptime z `dom-ev-kpi-analytics`). Rozumie synonimy i polskie formy: *charger*, *wallbox*, *ładowarka* i
+*Charge Point* (OCPP 1.6) to stacja ładowania; *EVSE* i *punkt ładowania* to punkt ładowania; *złącze*, *Type 2*, *CCS2*
+to złącze; sesja i transakcja to osobne podmioty. Jednostki są normalizowane (22000 W = 22 kW, 40000 Wh = 40 kWh,
+3,7 kW), a `1.6J` to OCPP 1.6. Status złącza porównywany jest tylko w tej samej sytuacji (kabel wpięty, po zakończeniu
+sesji, rezerwacja, awaria), więc „Available przed sesją” i „Finishing po sesji” nie są konfliktem. Zakresy („3,7–22 kW”)
+i zdania o migracji („z OCPP 1.6 na 2.0.1”) nie dają twierdzeń. Zmiana słownika działa od następnej analizy. Szczegóły:
+[`docs/CLAIM-PACKS-PLAN.md`](docs/CLAIM-PACKS-PLAN.md).
+
 **Jakie są reguły?**
 Pełna tabela jest w [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#rules). Rodziny reguł:
 

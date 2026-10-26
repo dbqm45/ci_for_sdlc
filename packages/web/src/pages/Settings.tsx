@@ -1,4 +1,4 @@
-import type { AiEffort, AiProviderKind, Settings as SettingsData } from '@ci/core';
+import type { AiEffort, AiProviderKind, ClaimPackId, Settings as SettingsData } from '@ci/core';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../App';
 import { api, ApiError, currentUser, errMsg, setCurrentUser, type AtlassianStatus } from '../api';
@@ -7,6 +7,12 @@ import { parseFigmaFileKey } from '../components/figmaFileKey';
 import { SparkleIcon, SyncIcon } from '../components/icons';
 
 const EFFORTS: readonly AiEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+/** The claim vocabularies of core (CLAIM_PACKS): which facts CON-001 compares across sources. */
+const CLAIM_PACK_OPTIONS: readonly { id: ClaimPackId; label: string }[] = [
+  { id: 'general', label: 'General — timeouts, retries, limits (web products, checkout)' },
+  { id: 'ev', label: 'EV charging — power, energy, OCPP version, uptime, connector status' },
+];
 
 const PROVIDERS: readonly { id: AiProviderKind; label: string; hint: string }[] = [
   { id: 'none', label: 'Deterministic rules only', hint: 'No data leaves this machine.' },
@@ -119,6 +125,15 @@ export function Settings() {
           </Field>
           <Field label="Your name (recorded on decisions)">
             <input className="input" value={user} onChange={(e) => setUser(e.target.value)} />
+          </Field>
+          <Field label="Domain vocabulary (facts compared across sources)">
+            <select className="input" value={s.project.claimPack ?? 'general'} onChange={(e) => set('project.claimPack', e.target.value)}>
+              {CLAIM_PACK_OPTIONS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
           </Field>
         </div>
       </Card>

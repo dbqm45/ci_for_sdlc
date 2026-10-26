@@ -12,6 +12,7 @@ import type {
   RequirementItem,
 } from './model.js';
 import { TfIdf, cosine, hash, sharedTerms, type Vector } from './text.js';
+import { claimPackOf } from './analysis/claim-packs.js';
 import { documentMeaning, frameMeaning, requirementMeaning } from './analysis/fingerprint.js';
 
 export const issueId = (key: string) => `jira:${key}`;
@@ -103,6 +104,7 @@ const FRAME_THRESHOLD = 0.17;
 export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = []): BuiltGraph {
   const g = new ContextGraph();
   const reqByKey = new Map(ctx.requirements.map((r) => [r.key, r]));
+  const pack = claimPackOf(ctx.project.claimPack);
 
   for (const r of ctx.requirements) {
     const text = requirementText(r);
@@ -115,12 +117,12 @@ export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = [
       updatedAt: r.updatedAt,
       text,
       contentHash: hash(text + r.status),
-      meaningHash: requirementMeaning(r, issueId(r.key)),
+      meaningHash: requirementMeaning(r, issueId(r.key), pack),
     });
   }
   for (const d of ctx.documents) {
     const text = documentText(d);
-    g.addEntity({ id: docId(d), kind: 'document', source: d.source ?? 'confluence', title: d.title, url: d.url, updatedAt: d.updatedAt, text, contentHash: hash(text), meaningHash: documentMeaning(d, docId(d)) });
+    g.addEntity({ id: docId(d), kind: 'document', source: d.source ?? 'confluence', title: d.title, url: d.url, updatedAt: d.updatedAt, text, contentHash: hash(text), meaningHash: documentMeaning(d, docId(d), pack) });
   }
   for (const f of ctx.frames) {
     const text = frameText(f);
@@ -133,7 +135,7 @@ export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = [
       updatedAt: f.updatedAt,
       text,
       contentHash: hash(text + f.transitions.join(',')),
-      meaningHash: frameMeaning(f, frameId(f)),
+      meaningHash: frameMeaning(f, frameId(f), pack),
     });
   }
   for (const dec of decisions) {

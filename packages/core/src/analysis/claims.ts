@@ -1,13 +1,30 @@
-import type { Claim, ClaimAttribute, Evidence } from '../model.js';
+import type { Claim, ClaimAttribute, ClaimPackId, Evidence } from '../model.js';
 import { hash, sentences } from '../text.js';
 
 /**
  * Claim extraction — normalizes free text into comparable statements so that
  * conflicts can be detected across Jira, Confluence, Figma and decisions.
  * Deterministic; the semantic AI layer can add claims it finds on top.
+ *
+ * The vocabulary comes in packs per domain (docs/CLAIM-PACKS-PLAN.md): the subjects a sentence can be about and the
+ * extractors of the attributes. `GENERAL_CLAIM_PACK` below is the default; `claim-pack-ev.ts` adds EV charging.
  */
 
-const SUBJECTS: [string, RegExp][] = [
+export interface ClaimExtractor {
+  attribute: ClaimAttribute;
+  /** Returns [value, unit?, subject?] or undefined; a subject here wins over the sentence's. */
+  match: (s: string) => [string | number | boolean, string?, string?] | undefined;
+}
+
+export interface ClaimPack {
+  id: ClaimPackId;
+  label: string;
+  /** In order: the first that matches a sentence is its subject. */
+  subjects: [string, RegExp][];
+  extractors: ClaimExtractor[];
+}
+
+export const GENERAL_SUBJECTS: [string, RegExp][] = [
   ['refund', /\brefund/i],
   ['payment', /\b(payment|charge|checkout|pay)\w*/i],
   ['session', /\bsession/i],
@@ -17,13 +34,13 @@ const SUBJECTS: [string, RegExp][] = [
 ];
 
 /** Normalize a label / space / domain name into a claim subject. */
-export function normalizeSubject(x: string): string {
-  for (const [name, re] of SUBJECTS) if (re.test(x)) return name;
+export function normalizeSubject(x: string, pack: ClaimPack = GENERAL_CLAIM_PACK): string {
+  for (const [name, re] of pack.subjects) if (re.test(x)) return name;
   return x.toLowerCase().replace(/s$/, '') || 'general';
 }
 
-function subjectOf(sentence: string, fallback: string): string {
-  for (const [name, re] of SUBJECTS) if (re.test(sentence)) return name;
+function subjectOf(sentence: string, fallback: string, pack: ClaimPack): string {
+  for (const [name, re] of pack.subjects) if (re.test(sentence)) return name;
   return fallback;
 }
 
@@ -33,13 +50,7 @@ function toSeconds(n: number, unit: string): number {
   return Math.round(n * (UNIT_SECONDS[u] ?? UNIT_SECONDS[u + 's'] ?? 1) * 1000) / 1000;
 }
 
-interface Extractor {
-  attribute: ClaimAttribute;
-  /** Returns [value, unit?] or undefined. */
-  match: (s: string) => [string | number | boolean, string?] | undefined;
-}
-
-const EXTRACTORS: Extractor[] = [
+export const GENERAL_EXTRACTORS: ClaimExtractor[] = [
   {
     attribute: 'timeout',
     match: (s) => {
@@ -108,6 +119,9 @@ const EXTRACTORS: Extractor[] = [
   },
 ];
 
+/** Today's checkout vocabulary: the default for every project. */
+export const GENERAL_CLAIM_PACK: ClaimPack = { id: 'general', label: 'General (web products, checkout)', subjects: GENERAL_SUBJECTS, extractors: GENERAL_EXTRACTORS };
+
 function wordNum(x: string): number {
   const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5 };
   return words[x.toLowerCase()] ?? Number(x);
@@ -116,15 +130,16 @@ function wordNum(x: string): number {
 export function extractClaims(
   text: string,
   evidence: Omit<Evidence, 'excerpt'>,
-  opts: { defaultSubject: string; updatedAt?: string; confidence?: Claim['confidence'] },
+  opts: { defaultSubject: string; updatedAt?: string; confidence?: Claim['confidence']; pack?: ClaimPack },
 ): Claim[] {
+  const pack = opts.pack ?? GENERAL_CLAIM_PACK;
   const out: Claim[] = [];
   const seen = new Set<string>();
   for (const s of sentences(text)) {
-    for (const ex of EXTRACTORS) {
+    for (const ex of pack.extractors) {
       const m = ex.match(s);
       if (!m) continue;
-      const subject = subjectOf(s, opts.defaultSubject);
+      const subject = m[2] ?? subjectOf(s, opts.defaultSubject, pack);
       const sig = `${subject}|${ex.attribute}|${String(m[0])}`;
       if (seen.has(sig)) continue;
       seen.add(sig);
@@ -160,6 +175,12 @@ export const ATTRIBUTE_LABELS: Record<ClaimAttribute, string> = {
   max_file_size: 'max file size',
   min_length: 'minimum length',
   max_length: 'maximum length',
+  power: 'power',
+  energy: 'energy',
+  ocpp_version: 'OCPP version',
+  uptime_target: 'uptime target',
+  uptime_definition: 'uptime definition',
+  connector_status: 'connector status',
 };
 
 export interface ClaimConflict {

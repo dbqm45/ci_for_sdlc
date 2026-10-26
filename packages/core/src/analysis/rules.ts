@@ -444,13 +444,14 @@ export const RULES: Rule[] = [
         if (latestDecision && !disagreeing.length) continue;
         const sources = new Set(conflict.claims.map((x) => x.evidence.source));
         const attr = ATTRIBUTE_LABELS[conflict.attribute];
-        const critical = !!latestDecision || conflict.attribute === 'idempotent' || conflict.attribute === 'processing_mode' || sources.has('jira');
+        const architectural = conflict.attribute === 'idempotent' || conflict.attribute === 'processing_mode' || conflict.attribute === 'ocpp_version';
+        const critical = !!latestDecision || architectural || sources.has('jira');
         const byValue = groupClaims(conflict.claims);
         out.push({
           disc: `${conflict.subject}.${conflict.attribute}`,
           category: 'CONFLICT',
           severity: critical ? 'critical' : 'warning',
-          dimension: conflict.attribute === 'idempotent' || conflict.attribute === 'processing_mode' ? 'architecture' : 'documentation',
+          dimension: architectural ? 'architecture' : 'documentation',
           title: latestDecision ? `Sources contradict decision on ${conflict.subject} ${attr}` : `Conflicting ${conflict.subject} ${attr}: ${conflict.values.join(' vs ')}`,
           explanation: latestDecision
             ? `A decision set ${conflict.subject} ${attr} to ${formatClaimValue(latestDecision)}, but ${disagreeing.map((x) => `"${x.evidence.title}" says ${formatClaimValue(x)}`).join('; ')}.`
