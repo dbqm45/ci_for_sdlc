@@ -333,6 +333,16 @@ export function Settings() {
             </select>
           </Field>
         </div>
+        <h3 style={{ margin: '18px 0 8px' }}>Answers found in sources</h3>
+        <div className="grid g3">
+          <Field label="When Confluence, Figma or a decision already answers a question">
+            <select className="input" value={s.policy.autoClose ?? 'suggest'} onChange={(e) => set('policy.autoClose', e.target.value)}>
+              <option value="suggest">Propose the answer for one click (default)</option>
+              <option value="off">Off</option>
+              <option value="apply">Close automatically (admin; after measured acceptance)</option>
+            </select>
+          </Field>
+        </div>
         <h3 style={{ margin: '18px 0 8px' }}>Story shape</h3>
         <div className="grid g3">
           <Field label="Acceptance criteria format (AC-001)">

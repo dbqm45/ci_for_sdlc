@@ -3,12 +3,13 @@ import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { APPROVE_GATE, changeReadiness, parseGateDecided, DEMO_SCENARIOS, DEFAULT_MODELS, RULES, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
+import { APPROVE_GATE, AUTO_CLOSE_DECISION_TYPE, acceptanceStats, autoCloseDecision, changeReadiness, parseGateDecided, DEMO_SCENARIOS, DEFAULT_MODELS, RULES, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
 import { AtlassianConnection, CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
+import { proposalEvent, recordAutoClose } from './auto-close.js';
 import { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
-import { MUTATION, approveBody, atlassianSiteBody, oauthCallbackQuery, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
+import { MUTATION, answerActionBody, answerParams, approveBody, atlassianSiteBody, oauthCallbackQuery, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
 import { deepMerge, Store, type Settings } from './store.js';
 import { APP_VERSION } from './version.js';
 
@@ -220,6 +221,62 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     const result = await engine.analyze(`decision on ${decision.itemKey}`);
     return { decision, item: result.items.find((i) => i.key === decision.itemKey) };
   });
+
+  // ------------------------------------------------------------------ answers found in sources (A2a, docs/AUTO-CLOSE-A2A-PLAN.md)
+  /** Accept, edit or reject an answer proposal; accept and edit record the decision (`finding.auto_close`). */
+  app.post<{ Params: { key: string; proposalId: string }; Body: { action: 'accept' | 'edit' | 'reject'; answer?: string; by?: string } }>(
+    '/api/items/:key/answers/:proposalId',
+    { schema: { summary: 'Accept, edit or reject an answer found in a source', params: answerParams, body: answerActionBody, response: errors(400, 404, 422), ...MUTATION } },
+    async (req) => {
+      const result = await ensure();
+      const f = result.items.find((i) => i.key === req.params.key)?.findings.find((x) => x.answer?.id === req.params.proposalId);
+      if (!f?.answer || !f.question) throw httpError(404, `No answer proposal ${req.params.proposalId} on ${req.params.key}`);
+      const { action } = req.body;
+      if (action === 'edit' && !req.body.answer?.trim()) throw httpError(400, 'An edited answer needs its text');
+      const by = who(req, req.body);
+      const at = new Date().toISOString();
+      if (action === 'reject') {
+        await recordAutoClose(store, [{ event: proposalEvent(f, 'rejected', at, { by: by.actor }), question: f.question.text, ...by }]);
+        return { item: (await engine.analyze(`answer rejected on ${f.itemKey}`)).items.find((i) => i.key === f.itemKey) };
+      }
+      const input = autoCloseDecision(f, { by: by.actor, at, answer: action === 'edit' ? req.body.answer : undefined });
+      let decision!: ActiveDecision;
+      await store.updateDecisions((all) => {
+        const r = recordDecision(all, input);
+        decision = r.decision;
+        return r.all;
+      });
+      await recordAutoClose(store, [{ event: proposalEvent(f, decision.draftEdited ? 'edited' : 'accepted', at, { by: by.actor, decisionId: decision.id }), question: f.question.text, answer: decision.answer, ...by }]);
+      const next = await engine.analyze(`answer accepted on ${f.itemKey}`);
+      return { decision, item: next.items.find((i) => i.key === f.itemKey) };
+    },
+  );
+
+  /** Reopen an auto-closed finding: withdraws its decision; the proposal counts as rejected and is not made again. */
+  app.post<{ Params: { id: string }; Body: { by?: string; reason?: string } | null }>(
+    '/api/decisions/:id/reopen',
+    { schema: { summary: 'Reopen a finding closed with an answer found in a source', params: idParams, body: withdrawBody, response: errors(404, 409, 422), ...MUTATION } },
+    async (req) => {
+      const d = (await store.decisions()).find((x) => x.id === req.params.id && x.status === 'active');
+      if (!d) throw httpError(404, 'No active decision with this id');
+      if (d.decisionType !== AUTO_CLOSE_DECISION_TYPE) throw httpError(409, 'Only auto-closed decisions can be reopened; withdraw this decision instead.');
+      const at = new Date().toISOString();
+      const by = who(req, req.body);
+      await store.updateDecisions((all) => withdrawDecision(all, d.id, by.actor, at, req.body?.reason?.slice(0, 2000)).all);
+      const source = d.evidence?.[0];
+      await recordAutoClose(store, [
+        {
+          event: { at, proposalId: d.proposalId ?? d.id, outcome: 'reopened', decisionType: AUTO_CLOSE_DECISION_TYPE, itemKey: d.itemKey, findingId: d.findingId, questionId: d.questionId, ...(source && { source: { source: source.source, entityId: source.entityId, title: source.title, ...(source.url && { url: source.url }) }, quote: source.excerpt }), decisionId: d.id, by: by.actor },
+          question: d.question,
+          ...by,
+        },
+      ]);
+      return engine.analyze(`auto-closed answer reopened on ${d.itemKey}`);
+    },
+  );
+
+  /** A2a: acceptance of the AI's drafts per decision type, against pdi's thresholds; it never changes the policy. */
+  app.get('/api/decisions/acceptance', async () => [acceptanceStats(await store.autoCloseLog())]);
 
   /** Decisions are never deleted: DELETE withdraws the active version and re-opens its finding. */
   app.delete<{ Params: { id: string }; Body: { by?: string; reason?: string } | null }>('/api/decisions/:id', { schema: { params: idParams, body: withdrawBody, response: errors(404, 422), ...MUTATION } }, async (req) => {

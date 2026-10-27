@@ -25,6 +25,15 @@ export type AiFindingsAction = (typeof AI_FINDINGS_ACTIONS)[number];
 export const AC_FORMATS = ['gwt', 'ears', 'any', 'off'] as const;
 export type AcFormatPolicy = (typeof AC_FORMATS)[number];
 
+/**
+ * A2a: what an answer found in a source does to a finding's question.
+ *  off     — nothing is proposed
+ *  suggest — the finding offers the answer; a person accepts, edits or rejects it
+ *  apply   — the server records the decision itself (autonomy level 1); set only by an admin, never by default
+ */
+export const AUTO_CLOSE_MODES = ['off', 'suggest', 'apply'] as const;
+export type AutoCloseMode = (typeof AUTO_CLOSE_MODES)[number];
+
 export const REQUIRE_FLAG = ['user_facing', 'all', 'off'] as const;
 export type RequireFlagPolicy = (typeof REQUIRE_FLAG)[number];
 
@@ -70,6 +79,8 @@ export interface AnalysisPolicy {
   storyShape?: Partial<StoryShapePolicy>;
   /** Optional in stored settings written before it existed; read through `releaseOf`. */
   release?: Partial<ReleasePolicy>;
+  /** Optional in stored settings written before it existed; read through `autoCloseOf` (A2a). */
+  autoClose?: AutoCloseMode;
 }
 
 export const DEFAULT_POLICY: AnalysisPolicy = {
@@ -79,6 +90,7 @@ export const DEFAULT_POLICY: AnalysisPolicy = {
   driftReaction: 'review_required',
   storyShape: { ...DEFAULT_STORY_SHAPE },
   release: { ...DEFAULT_RELEASE },
+  autoClose: 'suggest',
 };
 
 export const aiFindingsAction = (p: AnalysisPolicy): AiFindingsAction => p.aiFindings ?? 'require_confirmation';
@@ -88,3 +100,5 @@ export const driftReactionOf = (p: AnalysisPolicy): DriftReaction => p.driftReac
 export const storyShapeOf = (p: AnalysisPolicy): StoryShapePolicy => ({ ...DEFAULT_STORY_SHAPE, ...p.storyShape });
 
 export const releaseOf = (p: AnalysisPolicy): ReleasePolicy => ({ ...DEFAULT_RELEASE, ...p.release });
+
+export const autoCloseOf = (p: AnalysisPolicy): AutoCloseMode => p.autoClose ?? 'suggest';

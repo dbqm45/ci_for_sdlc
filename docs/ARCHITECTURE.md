@@ -178,10 +178,25 @@ answer is parsed into claims. That is how a decision like *"Idempotency key per 
 the fact that the Payments API Reference still says *"accepts repeated requests"* — a new, evidence-backed
 conflict instead of a silently ignored inconsistency.
 
+## Answers found in sources (A2a)
+
+`analysis/auto-close.ts` looks for the answer to every open finding's question in the item's active decisions,
+Confluence pages and Figma frames (never in tf's code), with a pattern per rule that describes behaviour
+(`ANSWER_PATTERNS`: REQ-004, ERR-001…005, ARCH-001, ARCH-002); the AI reviewer may propose one too (`answers` in its
+output). Every quote must be found word for word in the cited source (`isVerbatimQuote`) or there is no proposal.
+The proposal is `Finding.answer`; `policy.autoClose` (`off` | `suggest` | `apply`, default `suggest`) decides whether
+it is offered (`POST /api/items/:key/answers/:proposalId` accept / edit / reject) or recorded by the engine itself
+(`decidedBy: auto-close`, `automation: { level: 1, rule }`). The decision is an ordinary `resolve` decision with the
+pdi contract's `decisionType: finding.auto_close`, `draftedBy: ai`, `draftEdited` and the quote as `evidence`.
+`POST /api/decisions/:id/reopen` withdraws it; a reopened or rejected proposal is never made again (`auto-close.json`,
+passed to the analysis as `suppressedAnswers`). `GET /api/decisions/acceptance` (`auto-close-stats.ts`) measures the
+last 30 reviewed drafts against pdi's thresholds (95% unedited, 10% edited) and never changes the policy. Every step is
+an `auto_close` audit entry. Plan: `docs/AUTO-CLOSE-A2A-PLAN.md`.
+
 ## Persistence
 
 `CI_DATA_DIR` (default `.ci-data/`): `settings.json`, `decisions.json`, `approvals.json`, `snapshot.json`,
-`drift.json`, `history.json`, `ai-cache.json`, `audit.jsonl`, `demo-context.json`. Context-bearing files are
+`drift.json`, `history.json`, `ai-cache.json`, `audit.jsonl`, `demo-context.json`, `auto-close.json`. Context-bearing files are
 encrypted with AES-256-GCM when *Encrypt stored context* is on and `CI_ENCRYPTION_KEY` is set.
 
 The store is fail-closed: a missing file means "empty", but a file that exists and cannot be read, parsed or

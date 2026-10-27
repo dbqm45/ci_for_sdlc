@@ -478,6 +478,19 @@ export const DEMO_SCENARIOS: { id: string; title: string; description: string; a
     },
   },
   {
+    id: 'answers-in-sources',
+    title: 'Confluence: Payment Failure Handling answers open questions',
+    description: 'An engineer documents what the customer sees on a provider timeout and while a payment is processing (A2a: proposed as answers).',
+    apply: (ctx) => {
+      const d = ctx.documents.find((x) => x.id === '1004');
+      if (d) {
+        d.body += `\nIf the payment provider does not respond within 30 seconds, the app shows a timeout message and the customer can try the payment again.
+While a payment is processing, the app shows a processing screen and polls the payment status every 2 seconds.`;
+        d.updatedAt = new Date().toISOString();
+      }
+    },
+  },
+  {
     id: 'release-planning',
     title: 'Jira: product plans the releases',
     description: 'Product marks the MVP stories with release:R1 and links feature flags: Checkout Experience gets a sound plan, Payment Reliability one with problems.',

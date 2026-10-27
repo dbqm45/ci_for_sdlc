@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../App';
-import type { Finding } from '@ci/core';
+import type { AcceptanceStats, Finding } from '@ci/core';
 import { api, type Decision } from '../api';
+import { autoClosedDecisions, sharePercent } from '../lib/autoClose';
 import { Card, DateTime, QuestionMark, SeverityBadge, Stat } from '../components/ui';
 
 export function Decisions() {
   const { analysis, navigate, version, refresh } = useApp();
   const [log, setLog] = useState<Decision[]>([]);
   const [topic, setTopic] = useState<string>();
+  const [acceptance, setAcceptance] = useState<AcceptanceStats[]>([]);
   useEffect(() => void api.decisions().then(setLog), [version]);
+  useEffect(() => void api.acceptance().then(setAcceptance).catch(() => setAcceptance([])), [version]);
+  const autoClosed = useMemo(() => autoClosedDecisions(log), [log]);
 
   const open = useMemo(() => {
     const out: { key: string; title: string; severity: Finding['severity']; question: string; topic: string; finding: string }[] = [];
@@ -59,6 +63,45 @@ export function Decisions() {
           ))}
         </div>
       </Card>
+      <Card title={`Auto-closed (${autoClosed.length})`} pad={false}>
+        <p className="small muted" style={{ padding: '0 var(--sp-6)' }}>
+          Questions closed with an answer found in Confluence, Figma or an earlier decision. Reopen one if the quote does not answer it: the finding opens again and the same answer is not proposed again.
+        </p>
+        {acceptance.map((a) => (
+          <div key={a.decisionType} className="row wrap small" style={{ gap: 12, padding: '0 var(--sp-6) var(--sp-4)' }} aria-label={`Acceptance of ${a.decisionType}`}>
+            <span className="mono">{a.decisionType}</span>
+            <span>Reviewed {a.reviewed}/{a.thresholds.lastDecisions}</span>
+            <span>Accepted unedited {a.accepted} ({sharePercent(a.uneditedShare)})</span>
+            <span>Edited {a.edited} ({sharePercent(a.editedShare)})</span>
+            <span>Rejected {a.rejected}</span>
+            <span>Reopened {a.reopened}</span>
+            <span>Closed automatically {a.applied}</span>
+            <span className="muted">{a.note}</span>
+          </div>
+        ))}
+        <table className="table">
+          <thead>
+            <tr><th>When</th><th>Item</th><th>Question</th><th>Answer and source</th><th className="hide-sm">By</th><th /></tr>
+          </thead>
+          <tbody>
+            {autoClosed.length === 0 && <tr><td colSpan={6} className="empty">Nothing auto-closed.</td></tr>}
+            {autoClosed.map((d) => (
+              <tr key={d.id}>
+                <td className="small muted"><DateTime iso={d.decidedAt} /></td>
+                <td><a href={`#/item/${d.itemKey}`} className="key">{d.itemKey}</a></td>
+                <td className="small">{d.question}</td>
+                <td>
+                  <strong>{d.answer}</strong>
+                  {d.draftEdited && <span className="badge" style={{ marginLeft: 6 }}>edited</span>}
+                  {d.evidence?.[0] && <div className="small muted">«{d.evidence[0].excerpt}» — {d.evidence[0].title}</div>}
+                </td>
+                <td className="small hide-sm">{d.automation ? `${d.decidedBy} (${d.automation.rule})` : d.decidedBy}</td>
+                <td><button className="btn ghost sm" onClick={async () => (await api.reopenAutoClosed(d.id)) && refresh()}>Reopen</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
       <Card title="Decision log" pad={false}>
         <table className="table">
           <thead>
@@ -81,7 +124,7 @@ export function Decisions() {
                   {d.status === 'withdrawn' && <div className="small muted">Withdrawn by {d.withdrawnBy}{d.withdrawReason ? `: ${d.withdrawReason}` : ''}</div>}
                 </td>
                 <td className="small hide-sm">{d.decidedBy}</td>
-                <td className="hide-sm">{d.status === 'active' && <button className="btn ghost sm" onClick={async () => (await api.reopen(d.id)) && refresh()}>Re-open</button>}</td>
+                <td className="hide-sm">{d.status === 'active' && <button className="btn ghost sm" onClick={async () => (await (d.decisionType === 'finding.auto_close' ? api.reopenAutoClosed(d.id) : api.reopen(d.id))) && refresh()}>Re-open</button>}</td>
               </tr>
             ))}
           </tbody>

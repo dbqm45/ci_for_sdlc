@@ -1,5 +1,6 @@
 import type { SemanticAnalyzer, SemanticInput, SemanticOutput } from './ai/types.js';
 import { analyzeItem, applyDecisions, blendEpicScores, crossItemPass, findingFromDraft, scoreItem } from './analysis/analyze.js';
+import { answerProposalId, decisionText, isVerbatimQuote, proposeAnswers, type AiAnswer } from './analysis/auto-close.js';
 import { formatClaimValue } from './analysis/claims.js';
 import { createEnv, evJira, questionOptions, type ItemCtx } from './analysis/context.js';
 import { designCoveragePercent } from './analysis/states.js';
@@ -19,7 +20,7 @@ import type {
   Severity,
   SourceSystem,
 } from './model.js';
-import { DEFAULT_POLICY, driftReactionOf, type AnalysisPolicy } from './policy.js';
+import { DEFAULT_POLICY, autoCloseOf, driftReactionOf, type AnalysisPolicy } from './policy.js';
 import { hash } from './text.js';
 
 export interface Snapshot {
@@ -69,6 +70,8 @@ export interface AnalyzeOptions {
   policy?: AnalysisPolicy;
   ai?: AiRunOptions;
   now?: Date;
+  /** A2a: answer proposals a person rejected or reopened; they are not made again. */
+  suppressedAnswers?: readonly string[];
 }
 
 export interface ProjectAnalysis {
@@ -96,11 +99,12 @@ export async function analyzeProject(ctx: ProjectContext, opts: AnalyzeOptions =
 
   // ---------------- semantic AI layer (optional) ----------------
   const aiErrors: string[] = [];
+  const aiAnswers = new Map<string, AiAnswer[]>();
   if (opts.ai) {
     const targets = [...items.values()].filter((a) => a.type === 'story' || a.type === 'bug').slice(0, opts.ai.maxItems ?? 200);
     await runPool(targets, opts.ai.concurrency ?? 3, async (a) => {
       try {
-        await semanticPass(a, ctxs.get(a.key)!, env.decisionsByQuestion, opts.ai!, now);
+        aiAnswers.set(a.key, await semanticPass(a, ctxs.get(a.key)!, env.decisionsByQuestion, opts.ai!, now));
       } catch (e) {
         aiErrors.push(`${a.key}: ${errorMessage(e)}`);
       }
@@ -148,9 +152,13 @@ export async function analyzeProject(ctx: ProjectContext, opts: AnalyzeOptions =
     scoreItem(env, a, ctxs.get(a.key));
   }
   crossItemPass(env, items, ctxs);
+  const suppressed = new Set(opts.suppressedAnswers ?? []);
   for (const a of items.values()) {
     applyDecisions(env, a);
     scoreItem(env, a, ctxs.get(a.key));
+    // A2a: answers already in a source, for the questions still open (proposals do not change readiness).
+    const c = ctxs.get(a.key);
+    if (c) proposeAnswers(c, a, { mode: autoCloseOf(policy), suppressed, ai: aiAnswers.get(a.key) });
   }
   blendEpicScores(items, env);
 
@@ -225,8 +233,11 @@ const REDACT = [
   { re: /\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b/g, sub: '[card-number]' },
 ];
 
-async function semanticPass(a: ItemAnalysis, c: ItemCtx, decided: Map<string, Decision>, ai: AiRunOptions, now: string) {
+/** Runs the AI reviewer on one item; returns its answers to open questions whose quote is verbatim in the cited source. */
+async function semanticPass(a: ItemAnalysis, c: ItemCtx, decided: Map<string, Decision>, ai: AiRunOptions, now: string): Promise<AiAnswer[]> {
   const sources: SemanticInput['sources'] = [];
+  /** The text each ref stands for before minimization: a quote is checked against what the source really says. */
+  const original = new Map<string, string>();
   const clean = (t: string) => {
     let out = t;
     if (ai.redactPersonalData) for (const { re, sub } of REDACT) out = out.replace(re, sub);
@@ -234,10 +245,19 @@ async function semanticPass(a: ItemAnalysis, c: ItemCtx, decided: Map<string, De
   };
   const r = c.r;
   sources.push({ ref: 'S1', entityId: issueId(r.key), source: 'jira', title: `${r.key} ${r.title}`, content: clean([`Type: ${r.type}`, `Description:\n${r.description}`, `Acceptance criteria:\n${r.acceptanceCriteria.map((x) => `- ${x}`).join('\n')}`, r.businessRules.length ? `Business rules:\n${r.businessRules.map((x) => `- ${x}`).join('\n')}` : ''].join('\n')) });
-  for (const d of c.docs) sources.push({ ref: `S${sources.length + 1}`, entityId: docId(d), source: d.source ?? 'confluence', title: d.title, content: clean(d.body) });
+  for (const d of c.docs) {
+    original.set(`S${sources.length + 1}`, d.body);
+    sources.push({ ref: `S${sources.length + 1}`, entityId: docId(d), source: d.source ?? 'confluence', title: d.title, content: clean(d.body) });
+  }
   for (const d of c.code) sources.push({ ref: `S${sources.length + 1}`, entityId: docId(d), source: 'code', title: d.title, content: clean(d.body) });
-  for (const f of c.frames) sources.push({ ref: `S${sources.length + 1}`, entityId: `figma:${f.fileKey}:${f.id}`, source: 'figma', title: `${f.fileName} / ${f.page} / ${f.name}`, content: clean(`Frame: ${f.name}\nText layers: ${f.texts.join(' | ')}`) });
-  for (const d of c.decisions) sources.push({ ref: `S${sources.length + 1}`, entityId: `decision:${d.id}`, source: 'decision', title: `Decision on ${d.topic}`, content: clean(`Q: ${d.question}\nA: ${d.answer}${d.note ? `\nNote: ${d.note}` : ''}`) });
+  for (const f of c.frames) {
+    original.set(`S${sources.length + 1}`, [f.name, ...f.texts].join('\n'));
+    sources.push({ ref: `S${sources.length + 1}`, entityId: `figma:${f.fileKey}:${f.id}`, source: 'figma', title: `${f.fileName} / ${f.page} / ${f.name}`, content: clean(`Frame: ${f.name}\nText layers: ${f.texts.join(' | ')}`) });
+  }
+  for (const d of c.decisions) {
+    original.set(`S${sources.length + 1}`, decisionText(d));
+    sources.push({ ref: `S${sources.length + 1}`, entityId: `decision:${d.id}`, source: 'decision', title: `Decision on ${d.topic}`, content: clean(`Q: ${d.question}\nA: ${d.answer}${d.note ? `\nNote: ${d.note}` : ''}`) });
+  }
 
   const input: SemanticInput = {
     itemKey: r.key,
@@ -246,10 +266,11 @@ async function semanticPass(a: ItemAnalysis, c: ItemCtx, decided: Map<string, De
     sources,
     knownFindings: a.findings.map((f) => `${f.category}: ${f.title}`),
     knownQuestions: a.challenges.map((x) => x.question.text),
+    openQuestions: a.findings.flatMap((f) => (f.question && !decided.has(f.question.id) ? [{ id: f.question.id, text: f.question.text }] : [])),
   };
   const inputHash = hash(JSON.stringify(input) + ai.analyzer.model);
   const cached = ai.cache.get(inputHash);
-  if (!cached && ai.cacheOnly && !ai.onlyKeys?.has(r.key)) return;
+  if (!cached && ai.cacheOnly && !ai.onlyKeys?.has(r.key)) return [];
   let out: SemanticOutput;
   try {
     out = cached ?? (await ai.analyzer.analyze(input));
@@ -318,6 +339,16 @@ async function semanticPass(a: ItemAnalysis, c: ItemCtx, decided: Map<string, De
     findings: out.findings.length - discarded,
     discarded,
     challenges: out.challenges.length,
+  });
+
+  // A2a: only answers to the questions asked, from a source other than the item itself (Jira, code), quoted verbatim.
+  const asked = new Set((input.openQuestions ?? []).map((q) => q.id));
+  return (out.answers ?? []).flatMap((x): AiAnswer[] => {
+    const s = byRef.get(x.ref);
+    const text = original.get(x.ref);
+    if (!s || text === undefined || !asked.has(x.questionId) || !isVerbatimQuote(text, x.quote)) return [];
+    const quote = x.quote.trim();
+    return [{ questionId: x.questionId, proposal: { id: answerProposalId(x.questionId, s.entityId, quote), origin: 'ai', rule: 'auto-close:ai', quote, source: { source: s.source, entityId: s.entityId, title: s.title, excerpt: quote } } }];
   });
 }
 

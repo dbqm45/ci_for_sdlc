@@ -14,6 +14,8 @@ export { storyStatement, joinedActions } from './analysis/story-shape.js';
 export { MVP_LINE, releaseLineOf, releasePlanOf } from './analysis/release-plan.js';
 export { STATE_LABELS, JOURNEY_LABELS, TRAIT_LABELS } from './analysis/vocabulary.js';
 export { designCoveragePercent } from './analysis/states.js';
+export { AUTO_CLOSE_ACTOR, answerProposalId, autoCloseDecision, isVerbatimQuote } from './analysis/auto-close.js';
+export * from './auto-close-stats.js';
 export * from './ai/types.js';
 export * from './ai/providers.js';
 export { demoProject, DEMO_SCENARIOS } from './connectors/demo.js';
