@@ -184,6 +184,7 @@ Wszystko poza sekretami ustawiasz w UI (*Settings*). Sekrety — zmienne środow
 | `CI_ALLOWED_ORIGINS` | dodatkowe originy przeglądarki, które mogą zmieniać dane (po przecinku, np. `https://ci.firma.pl`) — ochrona przed CSRF |
 | `CI_FIGMA_API_BASE` | adres atrapy API Figmy dla testów (np. `http://127.0.0.1:4010/v1`); przyjmowany tylko host lokalny (`localhost`, `127.0.0.1`, `::1`), inny adres zatrzymuje pobieranie z Figmy, zanim token opuści maszynę |
 | `CI_DATA_DIR`, `PORT`, `HOST` | katalog danych (domyślnie `.ci-data/`), port (4317), host (127.0.0.1) |
+| `CI_DATABASE_URL` | Postgres zamiast plików (F5, [`docs/WORKSPACES-F5-PLAN.md`](docs/WORKSPACES-F5-PLAN.md)): stan wszystkich przestrzeni w tabelach `ci_documents` i `ci_log_entries` (jsonb), rozdzielony przez row-level security; schemat tworzy się przy starcie. Rola bazy nie może być superużytkownikiem (inaczej RLS nie działa). Istniejące pliki przenosi `npm run db:import` (z `CI_DATA_DIR` i `CI_DATABASE_URL`). Bez zmiennej — pliki jak dotąd |
 
 Tryb live: *Settings → Workspace → Mode: Live*, włącz integracje, podaj URL-e / klucze projektu / spaces / file keys, *Test connections*, *Save & re-analyze*.
 

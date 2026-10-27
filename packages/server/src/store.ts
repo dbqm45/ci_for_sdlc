@@ -1,14 +1,10 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { DEFAULT_POLICY, errorMessage, normalizeDecision, type Approval, type AutoCloseEvent, type Decision, type StoredDecision, type DriftEvent, type IssueType, type PdiEvent, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
+import { FileBackend, type Backend } from './backend.js';
 import type { Principal } from './http.js';
 import { pruneToSchema, settingsBody } from './schemas.js';
 
 export type { Settings };
-
-const isErrno = (e: unknown): e is NodeJS.ErrnoException => e instanceof Error && 'code' in e;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
@@ -131,16 +127,21 @@ export class StoreReadError extends Error {
 export class Store {
   private queue: Promise<unknown> = Promise.resolve();
 
-  constructor(readonly dir: string) {}
+  private readonly backend: Backend;
+
+  /** A directory of JSON files, or any backend (Postgres, F5). */
+  constructor(target: string | Backend) {
+    this.backend = typeof target === 'string' ? new FileBackend(target) : target;
+  }
 
   async init() {
-    await mkdir(this.dir, { recursive: true });
+    await this.backend.init();
     await this.migrateSettings();
   }
 
   /** Rewrites settings.json from an older version without unknown or invalid fields (e.g. old secrets). */
   private async migrateSettings() {
-    if (!existsSync(join(this.dir, 'settings.json'))) return;
+    if ((await this.backend.read('settings.json').catch(() => undefined)) === undefined) return;
     const raw = await this.readJson('settings.json', {}, anyJson);
     const pruned = pruneToSchema(raw, settingsBody) ?? {};
     const removed = removedPaths(raw, pruned);
@@ -163,17 +164,11 @@ export class Store {
   }
 
   private async readJson<T>(name: string, fallback: T, shape: Shape<T>): Promise<T> {
-    const p = join(this.dir, name);
-    let raw: string;
-    try {
-      raw = await readFile(p, 'utf8');
-    } catch (e) {
-      if (isErrno(e) && e.code === 'ENOENT') return fallback;
-      throw new StoreReadError(name, errorMessage(e));
-    }
     let value: unknown;
     try {
-      value = this.decrypt(JSON.parse(raw));
+      const stored = await this.backend.read(name);
+      if (stored === undefined) return fallback;
+      value = this.decrypt(stored);
     } catch (e) {
       throw new StoreReadError(name, errorMessage(e));
     }
@@ -192,19 +187,13 @@ export class Store {
   }
 
   private async writeJson(name: string, value: unknown, encrypt = false) {
-    let body = JSON.stringify(value, null, 2);
-    if (encrypt) {
-      const key = this.key();
-      if (!key) throw new Error(`Refusing to write ${name} unencrypted: encryption at rest is on but CI_ENCRYPTION_KEY is not set`);
-      const iv = randomBytes(12);
-      const c = createCipheriv('aes-256-gcm', key, iv);
-      const data = Buffer.concat([c.update(body, 'utf8'), c.final()]);
-      body = JSON.stringify({ __enc: 1, iv: iv.toString('base64'), tag: c.getAuthTag().toString('base64'), data: data.toString('base64') });
-    }
-    const p = join(this.dir, name);
-    const tmp = `${p}.${randomBytes(6).toString('hex')}.tmp`;
-    await writeFile(tmp, body);
-    await rename(tmp, p);
+    if (!encrypt) return this.backend.write(name, value);
+    const key = this.key();
+    if (!key) throw new Error(`Refusing to write ${name} unencrypted: encryption at rest is on but CI_ENCRYPTION_KEY is not set`);
+    const iv = randomBytes(12);
+    const c = createCipheriv('aes-256-gcm', key, iv);
+    const data = Buffer.concat([c.update(JSON.stringify(value, null, 2), 'utf8'), c.final()]);
+    await this.backend.write(name, { __enc: 1, iv: iv.toString('base64'), tag: c.getAuthTag().toString('base64'), data: data.toString('base64') });
   }
 
   private write(name: string, value: unknown, encrypt = false) {
@@ -338,21 +327,12 @@ export class Store {
   }
 
   async audit(e: AuditEntry) {
-    await appendFile(join(this.dir, 'audit.jsonl'), JSON.stringify(e) + '\n');
+    await this.backend.append('audit', e);
   }
+  /** The latest entries first; an entry that is not an audit entry is skipped. */
   async auditLog(limit = 300): Promise<AuditEntry[]> {
-    const p = join(this.dir, 'audit.jsonl');
-    if (!existsSync(p)) return [];
-    const lines = (await readFile(p, 'utf8')).trim().split('\n').filter(Boolean);
-    // Append-only log: one torn or hand-edited line must not hide the rest.
-    return lines.slice(-limit).reverse().flatMap((l) => {
-      try {
-        const entry: unknown = JSON.parse(l);
-        return isRecord(entry) && typeof entry.at === 'string' && typeof entry.kind === 'string' ? [entry as unknown as AuditEntry] : [];
-      } catch {
-        return [];
-      }
-    });
+    const entries = await this.backend.tail('audit', limit);
+    return entries.reverse().flatMap((entry) => (isRecord(entry) && typeof entry.at === 'string' && typeof entry.kind === 'string' ? [entry as unknown as AuditEntry] : []));
   }
 }
 

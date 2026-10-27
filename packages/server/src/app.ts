@@ -11,7 +11,9 @@ import { ensure, who, workspaceRoutes } from './routes-workspace.js';
 import { MUTATION, approvalRequestBody, changeParams, errors, oauthCallbackQuery, problem, workspaceBody, workspaceDeleteBody, workspaceParams, workspaceRenameBody } from './schemas.js';
 import type { Store } from './store.js';
 import { APP_VERSION } from './version.js';
-import { DEFAULT_WORKSPACE, WorkspaceExistsError, WorkspaceRefusedError, Workspaces, type Workspace } from './workspaces.js';
+import pg from 'pg';
+import { migrate } from './backend.js';
+import { DEFAULT_WORKSPACE, FileStorage, PgStorage, WorkspaceExistsError, WorkspaceRefusedError, Workspaces, type Workspace } from './workspaces.js';
 
 export { awsCredentialsConfigured } from './routes-workspace.js';
 
@@ -31,6 +33,8 @@ export interface AppOptions {
   connect?: ConnectConfig;
   /** pdi link (F4); defaults to PDI_EVENTS_URL and PDI_SIGNING_SECRET. */
   pdi?: PdiOptions;
+  /** Postgres instead of files (F5); defaults to CI_DATABASE_URL. Empty = files in `dataDir`. */
+  databaseUrl?: string;
 }
 
 /** A workspace's part of the pdi changes: its analysis and the changes of its stories. */
@@ -60,7 +64,11 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       }),
     );
 
-  const workspaces = new Workspaces(opts.dataDir, connect, async (w) => {
+  const databaseUrl = opts.databaseUrl ?? process.env.CI_DATABASE_URL ?? '';
+  const pool = databaseUrl ? new pg.Pool({ connectionString: databaseUrl, max: 10 }) : undefined;
+  if (pool) await migrate(pool);
+  const storage = pool ? new PgStorage(pool) : new FileStorage(opts.dataDir);
+  const workspaces = new Workspaces(storage, connect, async (w) => {
     /** A2b: decided A2a steps go to pdi's registry as decision.recorded, with the item's CHG from its `change:` label. */
     w.sink = async (steps) => {
       if (!pdi.enabled) return;
@@ -113,7 +121,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   });
 
   app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
-  app.get('/api/health', async () => ({ ok: true, version: APP_VERSION, running: main.engine.state.running, lastError: main.engine.state.lastError }));
+  app.get('/api/health', async () => ({ ok: true, version: APP_VERSION, storage: storage.kind, running: main.engine.state.running, lastError: main.engine.state.lastError }));
   app.get('/api/rules', async () => RULES.map(({ id, name, description, appliesTo }) => ({ id, name, description, appliesTo })));
 
   // ------------------------------------------------------------------ workspaces (F5, docs/WORKSPACES-F5-PLAN.md)
@@ -311,5 +319,12 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   app.addHook('onClose', async () => {
     for (const w of workspaces.all()) w.engine.stop();
   });
+  // The pool closes last: whatever order the hooks run in, pdi's last delivery and the engines are done with it first.
+  if (pool)
+    app.addHook('onClose', async () => {
+      for (const w of workspaces.all()) w.engine.stop();
+      await pdi.deliver().catch(() => undefined);
+      await pool.end();
+    });
   return { app, engine: main.engine, store: main.store, pdi, workspaces };
 }

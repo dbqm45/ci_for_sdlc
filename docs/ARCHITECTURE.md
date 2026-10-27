@@ -223,6 +223,10 @@ its requests to `/api/w/<id>/…`.
 
 ## Persistence
 
+With `CI_DATABASE_URL` the same documents and logs live in Postgres instead (`backend.ts`: `PgBackend`,
+`ci_documents`/`ci_log_entries`, row-level security per workspace, `MIGRATIONS` applied at start; `npm run db:import`
+copies a data directory in). `Store` owns shapes, encryption and the write queue for both.
+
 `CI_DATA_DIR` (default `.ci-data/`; one directory per workspace, see above): `settings.json`, `decisions.json`, `approvals.json`, `snapshot.json`,
 `drift.json`, `history.json`, `ai-cache.json`, `audit.jsonl`, `demo-context.json`, `auto-close.json`. Context-bearing files are
 encrypted with AES-256-GCM when *Encrypt stored context* is on and `CI_ENCRYPTION_KEY` is set.

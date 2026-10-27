@@ -39,7 +39,8 @@
     "sandbox:status": "tsx packages/sandbox/src/cli.ts status",
     "sandbox:figma-plugin": "tsx packages/sandbox/src/figma-plugin.ts",
     "lint:commit": "node scripts/check-commit-message.mjs",
-    "hooks:install": "git config core.hooksPath .githooks"
+    "hooks:install": "git config core.hooksPath .githooks",
+    "db:import": "npm run db:import -w @ci/server"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
