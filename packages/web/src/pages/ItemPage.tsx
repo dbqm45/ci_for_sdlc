@@ -8,6 +8,7 @@ import { Modal } from '../components/Modal';
 import { Bar, Card, Chevron, DIMENSION_LABELS, DateTime, EmptyState, HealthNumber, JOURNEY_LABELS, ReadinessBadge, STATE_LABELS, SeverityBadge, Source, SourceLogo, Spinner, StatusBadge, StatusIcon, ago } from '../components/ui';
 import { ChevronIcon, ListIcon, SearchIcon, SettingsIcon, SlidersIcon, SparkleIcon } from '../components/icons';
 import { acTestRows, acTestsSummary } from '../lib/acTests';
+import { canAskPdi, changeLabel, changeOfItem, type ChangeState } from '../lib/changes';
 
 type Tab = 'findings' | 'challenge' | 'states' | 'context' | 'claims' | 'history';
 
@@ -33,6 +34,18 @@ export function ItemPage({ itemKey, focusFinding }: { itemKey: string; focusFind
     }
   }, [itemKey]);
   useEffect(() => void load(), [load, version]);
+  const [changes, setChanges] = useState<{ pdi: boolean; changes: ChangeState[] }>({ pdi: false, changes: [] });
+  useEffect(() => void api.changes().then(setChanges).catch(() => undefined), [version]);
+  const change = changeOfItem(changes.changes, itemKey);
+  const askPdi = async (c: ChangeState) => {
+    try {
+      if (!(await api.requestApproval(c.change))) return;
+      toast(`Asked pdi to approve ${c.change} — sent to pdi's inbox`);
+      setChanges(await api.changes());
+    } catch (e) {
+      toast(errMsg(e));
+    }
+  };
   const focusClosed = !!focusFinding && !!d?.item.findings.some((f) => f.id === focusFinding && f.status !== 'open');
   useEffect(() => {
     if (!focusFinding || !d) return;
@@ -154,9 +167,24 @@ export function ItemPage({ itemKey, focusFinding }: { itemKey: string; focusFind
               </span>
             )}
             {d.approval?.reason && <span className="muted">Reason: {d.approval.reason}</span>}
+            {change && (
+              <span className="badge" title="The pdi change of this story (label change:CHG-n); pdi decides its approval">
+                {changeLabel(change)}
+              </span>
+            )}
+            {change?.requested && (
+              <span className="muted small" title={`gate.requested ${change.requested.event}`}>
+                asked pdi {ago(change.requested.at)} ({change.requested.by})
+              </span>
+            )}
           </div>
         </div>
         <div className="row">
+          {canAskPdi(changes.pdi, change) && (
+            <button className="btn" onClick={() => void askPdi(change)} title={`Send "Approve for implementation" of ${change.change} to pdi's inbox with what still blocks its stories`}>
+              Ask pdi to approve {change.change}
+            </button>
+          )}
           <button className="btn row" style={{ gap: 6 }} onClick={openAi} disabled={aiBusy} title="Semantic review + adversarial questions by the configured AI provider">
             {aiBusy ? <Spinner /> : <SparkleIcon size={15} />} AI review
           </button>

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
-import { CHANGE_LABEL_PREFIX, changeKeyOf, changeReadiness, decisionRecordedEvent, parseGateDecided, readinessEvents, type DecisionRecordedInput, type ItemAnalysis, type RequirementItem } from '../src/index.js';
+import { CHANGE_LABEL_PREFIX, approvalQuestions, changeKeyOf, changeReadiness, decisionRecordedEvent, gateRequestedEvent, parseGateDecided, readinessEvents, type DecisionRecordedInput, type ItemAnalysis, type RequirementItem } from '../src/index.js';
 
 // F4 (pdi docs/plan-jeden-flow-sdlc.md §6): readiness of a pdi change (CHG-n) from the stories labelled `change:CHG-n`,
 // sent to pdi as readiness.changed; gate.decided from pdi approves the stories. Envelopes: pdi contract 0.4.0.
@@ -176,5 +176,64 @@ describe('decision.recorded (A2b)', () => {
     expect(e.payload).not.toHaveProperty('url');
     expect(e.payload.evidence).toEqual([{ text: base.quote }]);
     expect((e.payload.ref as string).length).toBe(200);
+  });
+});
+
+// F4: a person asks pdi to decide "Approve for implementation" for a change that is not ready (gate.requested).
+describe('gate.requested (F4)', () => {
+  const schema = JSON.parse(readFileSync(new URL('./fixtures/pdi-contract/0.7.0/event.schema.json', import.meta.url), 'utf8'));
+  const validate = new Ajv2020({ allErrors: true, strict: false }).compile(schema);
+  const story = (key: string, readiness: ItemAnalysis['readiness'], p: { blocking?: string[]; findingQuestions?: string[]; challenges?: string[] } = {}) =>
+    ({
+      key,
+      type: 'story',
+      readiness,
+      blockingIssues: p.blocking ?? [],
+      findings: [...(p.findingQuestions ?? []).map((text, n) => ({ id: `f${n}`, status: 'open', question: { text } })), { id: 'closed', status: 'resolved', question: { text: 'Closed already?' } }],
+      challenges: [...(p.challenges ?? []).map((text, n) => ({ id: `c${n}`, answered: false, question: { text } })), { id: 'done', answered: true, question: { text: 'Answered?' } }],
+    }) as unknown as ItemAnalysis;
+  const stories = [
+    story('PAY-1', 'not_ready', { blocking: ['No error state'], findingQuestions: ['What happens on timeout?', 'What happens on timeout?'], challenges: ['Can a refund be partial?'] }),
+    story('PAY-2', 'ready', { findingQuestions: ['Minor wording?'] }),
+  ];
+  const change = { change: 'CHG-12', readiness: 'not_ready' as const, openQuestions: 1, items: ['PAY-1', 'PAY-2'] };
+  const AT = '2026-10-27T12:00:00.123Z';
+
+  it('GR-01: the pdi example passes the copied schema', () => {
+    expect(validate(JSON.parse(readFileSync(new URL('./fixtures/pdi-contract/0.7.0/event-gate.requested.json', import.meta.url), 'utf8')))).toBe(true);
+  });
+
+  it('GR-02: what blocks the stories not ready, once each, as the questions', () => {
+    expect(approvalQuestions(stories)).toEqual(['PAY-1: No error state', 'PAY-1: What happens on timeout?', 'PAY-1: Can a refund be partial?']);
+  });
+
+  it('GR-03: the event for approve-for-implementation, valid against the contract', () => {
+    const e = gateRequestedEvent({ change, stories, requestedBy: 'Ann', note: ' Ship behind a flag ', publicUrl: 'https://ci.example.com/' }, AT);
+    expect(e).toEqual({
+      id: 'ci-gate-CHG-12-20261027T120000Z',
+      type: 'gate.requested',
+      occurred_at: '2026-10-27T12:00:00Z',
+      source: 'ci_for_sdlc',
+      contract_version: '0.7.0',
+      payload: {
+        change: 'CHG-12',
+        gate: 'approve-for-implementation',
+        summary: 'CHG-12: Ann asks to approve it for implementation although 1 of 2 stories not ready — Ship behind a flag',
+        artifact: 'stories PAY-1, PAY-2',
+        url: 'https://ci.example.com/#/item/PAY-1',
+        questions: ['PAY-1: No error state', 'PAY-1: What happens on timeout?', 'PAY-1: Can a refund be partial?'],
+      },
+    });
+    expect(validate(e), JSON.stringify(validate.errors)).toBe(true);
+  });
+
+  it('GR-04: drift says so; without a public URL or questions those fields are left out; at most 20 questions', () => {
+    const e = gateRequestedEvent({ change: { ...change, readiness: 'drift' }, stories: [story('PAY-2', 'ready')], requestedBy: 'Ann' }, AT);
+    expect(e.payload.summary).toBe('CHG-12: Ann asks to approve it for implementation although its approved baseline drifted');
+    expect(e.payload).not.toHaveProperty('url');
+    expect(e.payload).not.toHaveProperty('questions');
+    expect(validate(e)).toBe(true);
+    const many = story('PAY-3', 'not_ready', { challenges: Array.from({ length: 30 }, (_, n) => `Question ${n}?`) });
+    expect(approvalQuestions([many])).toHaveLength(20);
   });
 });

@@ -105,6 +105,9 @@ export const decisionBody = obj(
 export const approveBody = obj({ by: str(200), force: bool, reason: str(5000) });
 /** DELETE bodies are optional. */
 export const withdrawBody = { ...obj({ by: str(200), reason: str(5000) }), nullable: true } as const;
+/** F4: a request for approval of a change in pdi (`gate.requested`). */
+export const changeParams = obj({ change: str(64, { pattern: '^[A-Z][A-Z0-9]+-[0-9]+$' }) }, ['change']);
+export const approvalRequestBody = { ...obj({ by: str(200), note: str(500) }), nullable: true } as const;
 /** A2a: what a person does with an answer proposal; `answer` is the edited text. */
 export const answerActionBody = obj({ action: { enum: ['accept', 'edit', 'reject'] }, answer: str(5000), by: str(200) }, ['action']);
 export const answerParams = obj({ key: str(64, { pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]*$' }), proposalId: str(128, { minLength: 1 }) }, ['key', 'proposalId']);

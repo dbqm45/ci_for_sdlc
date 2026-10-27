@@ -325,6 +325,12 @@ rejestru decyzji pdi jako `decision.recorded`. Przy decyzji widać numer, który
 „not in pdi”, dopóki pdi jej nie zapisał. Zdarzenie, którego pdi nie przyjął (odpowiedź 400), zostaje w kolejce
 z powodem odmowy (*GET /api/pdi*) i nie jest ponawiane; pozostałe ponawiamy aż do skutku, bo to ślad audytowy.
 
+**Jak poprosić pdi o zatwierdzenie zmiany, która nie jest gotowa?**
+Gotowa zmiana (wszystkie historyjki z etykietą `change:CHG-n` są `ready`) trafia do skrzynki pdi sama. Dla zmiany
+niegotowej na stronie dowolnej jej historyjki jest przycisk *Ask pdi to approve CHG-n*: pdi dostaje prośbę
+(`gate.requested`) z listą tego, co blokuje historyjki, i z powodem, jeśli go podasz. Gdy pdi zatwierdzi, ci_for_sdlc
+zatwierdza tylko historyjki bez blokujących ustaleń, a resztę trzeba poprawić albo zatwierdzić tutaj z wymuszeniem.
+
 **Czy decyzję można zmienić albo usunąć?**
 Decyzje są niezmienne i wersjonowane (`packages/core/src/decisions.ts`):
 

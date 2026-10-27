@@ -1,0 +1,13 @@
+{
+  "id": "evt-gate.requested",
+  "type": "gate.requested",
+  "occurred_at": "2026-10-23T10:00:00Z",
+  "source": "tf",
+  "contract_version": "0.7.0",
+  "payload": {
+    "change": "CHG-12",
+    "gate": "B1",
+    "summary": "Intencja gotowa do akceptacji",
+    "artifact": "docs/project/changes/CHG-12/intent.md"
+  }
+}

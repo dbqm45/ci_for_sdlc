@@ -29,6 +29,22 @@ Stan: 2026-10-26, zrobione (PR w toku). Strony pdi (dbqm45/pdi#16) i tf (dbqm45/
    Inne bramki i wyniki są przyjmowane i tylko zapisywane w audycie. To samo zdarzenie drugi raz (to samo `id`) nic
    nie zmienia.
 
+4. **Prośba o zatwierdzenie zmiany niegotowej (`gate.requested`, 2026-10-27).** Zmiana gotowa trafia do skrzynki pdi
+   sama, z `readiness.changed: ready`. Dla zmiany niegotowej (albo z dryfem) człowiek klika na stronie jej historyjki
+   **Ask pdi to approve CHG-n** (`POST /api/changes/:change/request-approval`, z opcjonalnym powodem). ci_for_sdlc
+   wysyła wtedy `gate.requested` (kontrakt 0.7.0) dla bramki `approve-for-implementation`:
+   - `summary` mówi, kto prosi i co jest niegotowe;
+   - `artifact` wymienia historyjki zmiany, a `url` prowadzi do pierwszej z nich;
+   - `questions` to to, co blokuje historyjki niegotowe (`KLUCZ: tekst`, najwyżej 20): blokujące ustalenia,
+     pytania otwartych ustaleń i pytania wyzwań bez odpowiedzi.
+
+   Decyzja właściciela: przycisk jest ręczny, bo gotowe zmiany idą automatycznie i pozycje w skrzynce się nie
+   dublują. Zatwierdzenie z pdi działa jak w punkcie 3: tylko historyjki bez blokujących ustaleń.
+
+   Prośbę dla zmiany gotowej serwer odrzuca (409), podobnie bez połączenia z pdi (409); nieznana zmiana to 404.
+   `GET /api/changes` zwraca zmiany z gotowością i ostatnią prośbą (`requested: { at, by, event }`). Prośby, tak jak
+   decyzje z A2b, nie znikają po 10 próbach, a odpowiedź 400 z pdi oznacza je jako nieudane, bez ponowień.
+
 ## Elementy
 - `packages/core/src/pdi.ts` (czyste): `changeKeyOf()`, `changeReadiness()`, `readinessEvents()` (porównanie
   z ostatnio wysłanym stanem), `readinessEnvelope()`, `parseGateDecided()` (sprawdzenie pól zdarzenia z zewnątrz).

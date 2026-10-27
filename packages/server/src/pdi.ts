@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { changeReadiness, decisionRecordedEvent, errorMessage, readinessEvents, type AnalysisResult, type DecisionRecordedInput, type RequirementItem } from '@ci/core';
+import { changeReadiness, decisionRecordedEvent, errorMessage, gateRequestedEvent, readinessEvents, type GateRequestInput, type AnalysisResult, type DecisionRecordedInput, type RequirementItem } from '@ci/core';
 import type { AutoCloseStep } from './auto-close.js';
 import type { PdiOutboxEntry, Store } from './store.js';
 
@@ -93,6 +93,15 @@ export class PdiLink {
     if (events.length) await this.store.updatePdiOutbox((all) => [...all, ...events.map((event) => ({ event, attempts: 0, nextAt: now }))]);
   }
 
+  /** F4: a person asks pdi to decide "Approve for implementation" for a change that is not ready (`gate.requested`). */
+  async requestApproval(input: Omit<GateRequestInput, 'publicUrl'>) {
+    const now = this.clock().toISOString();
+    const event = gateRequestedEvent({ ...input, publicUrl: this.publicUrl }, now);
+    await this.store.updatePdiState((s) => ({ ...s, requested: { ...s.requested, [input.change.change]: { at: now, by: input.requestedBy, event: event.id } } }));
+    await this.store.updatePdiOutbox((all) => [...all.filter((e) => e.event.id !== event.id), { event, attempts: 0, nextAt: now }]);
+    return event;
+  }
+
   /**
    * A2b: one `decision.recorded` per decided A2a step (accept, edit, reject, reopen, apply). A reopen waits in the queue
    * until the decision it reopens has its DEC; `changeOf` gives the item's CHG from its `change:` label.
@@ -140,7 +149,7 @@ export class PdiLink {
 
   /**
    * Sends what is due; a failure stays queued with a doubling delay (1 min … 1 h). `readiness.changed` is dropped after
-   * MAX_ATTEMPTS; a decision is the audit trail and stays until pdi records it, and one pdi refused (400) stays as
+   * MAX_ATTEMPTS; a decision or a request for approval stays until pdi takes it, and one pdi refused (400) stays as
    * failed without retries.
    */
   deliver(): Promise<void> {
@@ -163,14 +172,17 @@ export class PdiLink {
       const r = await this.send(entry);
       const at = this.clock();
       const isDecision = entry.event.type === 'decision.recorded';
-      const refused = isDecision && r.status === 400;
+      // What a person did (a decision, a request for approval) stays until pdi takes it; a readiness update is replaced
+      // by the next one anyway.
+      const kept = isDecision || entry.event.type === 'gate.requested';
+      const refused = kept && r.status === 400;
       await this.store.updatePdiOutbox((all) =>
         all.flatMap((e): PdiOutboxEntry[] => {
           if (e.event.id !== entry.event.id) return [e];
           if (!r.error) return [];
           if (refused) return [{ ...entry, failed: r.error, lastError: r.error }];
           const attempts = e.attempts + 1;
-          if (attempts >= MAX_ATTEMPTS && !isDecision) return [];
+          if (attempts >= MAX_ATTEMPTS && !kept) return [];
           const wait = Math.min(60 * 2 ** (attempts - 1), MAX_BACKOFF_SECONDS);
           return [{ ...e, attempts, nextAt: new Date(at.getTime() + wait * 1000).toISOString(), lastError: r.error }];
         }),
@@ -178,7 +190,7 @@ export class PdiLink {
       const what = isDecision ? `decision.recorded for ${String(entry.event.payload.ref)}` : `${entry.event.type} for ${String(entry.event.payload.change)}`;
       if (!r.error && r.decision) await this.keepDecisionNumber(entry, r.decision);
       if (refused) await this.store.audit({ at: at.toISOString(), kind: 'pdi', actor: 'system', summary: `pdi refused ${what}: ${r.error}` });
-      else if (r.error && !isDecision && entry.attempts + 1 >= MAX_ATTEMPTS)
+      else if (r.error && !kept && entry.attempts + 1 >= MAX_ATTEMPTS)
         await this.store.audit({ at: at.toISOString(), kind: 'pdi', actor: 'system', summary: `Gave up sending ${what} to pdi after ${MAX_ATTEMPTS} attempts: ${r.error}` });
     }
   }
@@ -227,6 +239,6 @@ export class PdiLink {
   /** For GET /api/pdi: configuration without the secret, readiness last sent, queued events. */
   async status() {
     const [state, outbox] = await Promise.all([this.store.pdiState(), this.store.pdiOutbox()]);
-    return { enabled: this.enabled, receiving: !!this.secret, eventsUrl: this.eventsUrl ?? null, sent: state.sent ?? {}, outbox };
+    return { enabled: this.enabled, receiving: !!this.secret, eventsUrl: this.eventsUrl ?? null, sent: state.sent ?? {}, requested: state.requested ?? {}, outbox };
   }
 }
