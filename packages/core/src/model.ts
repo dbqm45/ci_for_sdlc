@@ -7,7 +7,7 @@
  * building?", not "is the code correct?".
  */
 
-export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision' | 'code';
+export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision' | 'code' | 'test';
 
 // ---------------------------------------------------------------------------
 // Normalized source contexts (output of connectors + normalizer)
@@ -169,6 +169,33 @@ export interface DesignFrame {
   url?: string;
 }
 
+/** A test the item's criterion names: `<KEY>/AC-n` in its name or class (G4, connectors/tests.ts). */
+export interface TestRef {
+  itemKey: string;
+  ac: string;
+}
+
+/** One test case of a JUnit XML report. */
+export interface TestCase {
+  name: string;
+  classname?: string;
+  /** The test file, when the report names it (`file` of the test case or its suite). */
+  file?: string;
+  /** The report it was read from. */
+  report: string;
+  status: 'passed' | 'failed' | 'skipped';
+  /** Failures: the first line of the failure or error message. */
+  message?: string;
+  refs: TestRef[];
+}
+
+/** One criterion of an item with the tests that name it (G4): `failed` if any failed, `passed` if all ran and passed. */
+export interface AcTestResult {
+  ac: string;
+  status: 'passed' | 'failed' | 'untested';
+  tests: { name: string; status: TestCase['status']; message?: string }[];
+}
+
 export interface ProjectContext {
   /** `claimPack`: the claim vocabulary of the project's domain (settings `project.claimPack`); absent = general. */
   project: { key: string; name: string; claimPack?: ClaimPackId };
@@ -176,6 +203,8 @@ export interface ProjectContext {
   documents: DocumentItem[];
   frames: DesignFrame[];
   fetchedAt: string;
+  /** Test results (`analyze --tests`, G4); absent = no results given, and the TEST rules stay silent. */
+  tests?: TestCase[];
 }
 
 // ---------------------------------------------------------------------------
@@ -527,6 +556,8 @@ export interface ItemAnalysis {
   rollup?: EpicRollup;
   /** For epics and features: release lines of their stories. */
   releasePlan?: ReleasePlan;
+  /** Each criterion with the tests that name it, when some test names the item (G4). */
+  acTests?: AcTestResult[];
   checklist: ChecklistGroup[];
 }
 

@@ -18,6 +18,7 @@ import { workItemsUnder } from '../hierarchy.js';
 import { aiFindingsAction, driftReactionOf, type SeverityAction } from '../policy.js';
 import { evJira, itemContext, questionOptions, type AnalysisEnv, type ItemCtx } from './context.js';
 import { RULES, taskCoverage, type FindingDraft } from './rules.js';
+import { acTestsOf } from './test-trace.js';
 import { releasePlanOf } from './release-plan.js';
 import { challenges, designCoveragePercent, journeyCoverage, stateCoverage } from './states.js';
 import { STATE_LABELS, TRAIT_LABELS } from './vocabulary.js';
@@ -78,6 +79,7 @@ export function analyzeItem(env: AnalysisEnv, r: RequirementItem): { analysis: I
     journeys,
     tasks,
     traits: [...c.traits].map((t) => TRAIT_LABELS[t]),
+    ...(acTestsOf(r, env.testsByItem?.get(r.key)) && { acTests: acTestsOf(r, env.testsByItem?.get(r.key)) }),
     challenges: ch,
     ...(isContainer(r.type) && { releasePlan: releasePlanOf(env.childrenOf, r.key) }),
     checklist: [],

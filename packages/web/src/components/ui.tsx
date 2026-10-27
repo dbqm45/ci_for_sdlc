@@ -50,7 +50,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   DRIFT: 'Drift',
 };
 
-export const SOURCE_LABELS: Record<string, string> = { jira: 'Jira', confluence: 'Confluence', figma: 'Figma', decision: 'Decision', code: 'Code (tf)' };
+export const SOURCE_LABELS: Record<string, string> = { jira: 'Jira', confluence: 'Confluence', figma: 'Figma', decision: 'Decision', code: 'Code (tf)', test: 'Tests' };
 
 export function healthTone(status: string): 'ok' | 'warn' | 'bad' {
   return status === 'healthy' || status === 'ready' || status === 'ok' ? 'ok' : status === 'critical' || status === 'not_ready' || status === 'fail' ? 'bad' : 'warn';

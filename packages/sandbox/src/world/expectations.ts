@@ -71,6 +71,10 @@ export const EXPECTATIONS: RuleExpectation[] = [
   // G1.4: repository mode only (a change's release.yaml and plan.md); the world is Jira, where both stay silent.
   { rule: 'REL-007', fires: [], silent: [planned('CHK-200')], gap: 'repository mode only; fires on packages/core/test/fixtures/repo-changes (CHG-1)' },
   { rule: 'REL-008', fires: [], silent: [planned('CHK-200')], gap: 'repository mode only; fires on packages/core/test/fixtures/repo-changes (CHG-1)' },
+  // G4: only with test results (`analyze --tests`); the world has none, so all three stay silent.
+  { rule: 'TEST-001', fires: [], silent: ['PAY-123'], gap: 'test results only; fires on the demo project with packages/core/test/fixtures/junit/results.xml (PAY-124)' },
+  { rule: 'TEST-002', fires: [], silent: ['PAY-123'], gap: 'test results only; fires on the demo project with packages/core/test/fixtures/junit/results.xml (PAY-124)' },
+  { rule: 'TEST-003', fires: [], silent: ['PAY-123'], gap: 'test results only; fires on the demo project with packages/core/test/fixtures/junit/results.xml (PAY-126)' },
 ];
 
 export const DERIVED_EXPECTATIONS: DerivedRuleExpectation[] = [

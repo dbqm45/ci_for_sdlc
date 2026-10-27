@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Test results of the demo project (rule-coverage.test.ts): PAY-124 has a failing and a missing criterion,
+     PAY-125 every criterion green, PAY-126 a test of a criterion it no longer has. -->
+<testsuites name="vitest tests" tests="9" failures="1" errors="0" skipped="1">
+  <testsuite name="test/cards.test.ts" tests="3" failures="1" skipped="0">
+    <testcase classname="test/cards.test.ts" name="PAY-124/AC-1 deletes a saved card from the list" time="0.01"/>
+    <testcase classname="test/cards.test.ts" name="PAY-124/AC-2 the card disappears after confirming" time="0.02">
+      <failure message="expected 1 card, got 2" type="AssertionError">AssertionError: expected 1 card, got 2
+    at test/cards.test.ts:31:7</failure>
+    </testcase>
+    <testcase classname="test/cards.test.ts" name="lists saved cards" time="0.01"/>
+  </testsuite>
+  <testsuite name="e2e/retry.spec.ts" tests="5" failures="0" skipped="1">
+    <testcase classname="PAY-125 › retry" name="AC-1 the error screen offers a retry" time="1.2"/>
+    <testcase classname="PAY-125 › retry" name="AC-2 retry submits the payment again" time="1.1"/>
+    <testcase classname="PAY-125 › retry" name="AC-3 a loading indicator shows while retrying" time="0.9"/>
+    <testcase classname="PAY-125 › retry" name="AC-4 success shows the confirmation" time="0.8"/>
+    <testcase classname="PAY-125 › retry" name="AC-4 success on a slow network" time="0.1"><skipped/></testcase>
+  </testsuite>
+  <testsuite name="test/receipt.test.ts" tests="1" failures="0">
+    <testcase classname="test/receipt.test.ts" name="PAY-126/AC-5 sends the receipt in the customer&apos;s language" time="0.01"/>
+  </testsuite>
+</testsuites>

@@ -8,8 +8,10 @@
  *   npm run analyze -- --items PAY-125,PAY-126
  *   npm run analyze -- --repo . [--repo-url https://github.com/acme/pay] --fail-on critical
  *                                                    # a pull request's docs/project/changes only (F2)
+ *   npm run analyze -- --repo . --tests reports/junit   # with test results: each criterion's tests (G4)
  *
- * With `--repo`, a change file that cannot be read fails the gate whatever the threshold. In GitHub Actions
+ * With `--repo`, a change file that cannot be read fails the gate whatever the threshold; so does a `--tests` report
+ * (a JUnit XML file, or a directory of them; repeatable) that cannot be read. In GitHub Actions
  * (`GITHUB_ACTIONS=true`) the problems and the findings that fail the gate are also error annotations on their files
  * (the file and line of the finding's evidence, else the item's), other open findings on a change file (REL-007,
  * REL-008) are warning or notice annotations, and the report is appended to `$GITHUB_STEP_SUMMARY`. Uses the persisted settings / decisions in CI_DATA_DIR (default .ci-data).
@@ -18,7 +20,7 @@
 import { appendFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CHANGES_DIR, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem } from '@ci/core';
+import { CHANGES_DIR, readTestResults, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem } from '@ci/core';
 import { AtlassianConnection, connectConfigFromEnv } from './connections.js';
 import { Engine } from './engine.js';
 import { Store } from './store.js';
@@ -65,12 +67,14 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
     return i >= 0 ? args[i + 1] : undefined;
   };
   const repoPath = arg('repo');
+  const testPaths = args.flatMap((a, i) => (a === '--tests' && args[i + 1] ? [resolve(args[i + 1]!)] : []));
+  const testResults = testPaths.length ? await readTestResults(testPaths) : undefined;
   const repoUrl = arg('repo-url');
   const here = dirname(fileURLToPath(import.meta.url));
   const store = new Store(resolve(io.env.CI_DATA_DIR ?? resolve(here, '../../../.ci-data')));
   await store.init();
   const connect = connectConfigFromEnv();
-  const engine = new Engine(store, connect.mode === 'oauth' && !repoPath ? new AtlassianConnection(store, connect) : undefined, repoPath ? { path: resolve(repoPath), repoUrl } : undefined);
+  const engine = new Engine(store, connect.mode === 'oauth' && !repoPath ? new AtlassianConnection(store, connect) : undefined, repoPath ? { path: resolve(repoPath), repoUrl } : undefined, testResults?.tests);
   let result;
   try {
     result = await engine.analyze('cli');
@@ -97,12 +101,22 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
     io.out(`\nProblems in ${CHANGES_DIR} (these changes were left out):`);
     for (const p of problems) io.out(`  ✗ ${p.path}: ${p.message}`);
   }
+  const testProblems = testResults?.problems ?? [];
+  if (testResults) {
+    const t = testResults.tests;
+    io.out(`\nTests: ${t.length} read, ${t.filter((x) => x.status === 'failed').length} failed, ${t.filter((x) => x.refs.length).length} naming a criterion`);
+  }
+  if (testProblems.length) {
+    io.out('\nTest reports that could not be read:');
+    for (const p of testProblems) io.out(`  ✗ ${p.path}: ${p.message}`);
+  }
   const out = arg('json');
   if (out) await writeFile(out, JSON.stringify(result, null, 2));
 
   const failOn = arg('fail-on');
   const failing = items.filter((i) => (failOn === 'critical' && i.readiness === 'not_ready') || (failOn === 'warning' && i.readiness !== 'ready'));
 
+  if (io.env.GITHUB_ACTIONS === 'true') for (const p of testProblems) io.out(`::error file=${escProp(p.path)},title=Test report::${escData(p.message)}`);
   if (repoPath && io.env.GITHUB_ACTIONS === 'true') {
     const byKey = new Map(engine.state.context?.requirements.map((r) => [r.key, r]) ?? []);
     const { actions } = (await store.settings()).policy;
@@ -145,5 +159,6 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
 
   if (failing.length) io.err(`\n✗ Quality gate failed: ${failing.map((i) => i.key).join(', ')}`);
   if (problems.length) io.err(`\n✗ Quality gate failed: ${problems.length} change file(s) could not be read`);
-  return failing.length || problems.length ? 1 : 0;
+  if (testProblems.length) io.err(`\n✗ Quality gate failed: ${testProblems.length} test report(s) could not be read`);
+  return failing.length || problems.length || testProblems.length ? 1 : 0;
 }

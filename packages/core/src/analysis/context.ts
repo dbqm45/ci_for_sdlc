@@ -10,12 +10,14 @@ import type {
   ProjectContext,
   QuestionOption,
   RequirementItem,
+  TestCase,
 } from '../model.js';
 import { excerpt } from '../text.js';
 import { isClaimable } from '../connectors/reconstruction.js';
 import { claimPackOf } from './claim-packs.js';
 import { extractClaims, normalizeSubject } from './claims.js';
 import { TRAIT_PATTERNS, type Trait } from './vocabulary.js';
+import { testsByItem } from './test-trace.js';
 
 /** Minimum confidence for a discovered artifact to be used as evidence by rules. */
 export const EVIDENCE_CONFIDENCE = 0.45;
@@ -31,6 +33,8 @@ export interface AnalysisEnv {
   decisionsByQuestion: Map<string, Decision>;
   childrenOf: Map<string, RequirementItem[]>;
   policy: AnalysisPolicy;
+  /** Tests per item and criterion (G4); absent when the analysis got no test results. */
+  testsByItem?: Map<string, { ac: string; test: TestCase }[]>;
 }
 
 export function createEnv(ctx: ProjectContext, built: BuiltGraph, decisions: Decision[], policy: AnalysisPolicy): AnalysisEnv {
@@ -74,7 +78,7 @@ export function createEnv(ctx: ProjectContext, built: BuiltGraph, decisions: Dec
       extractClaims(text, { source: 'decision', entityId: `decision:${dec.id}`, title: `Decision on ${dec.topic} (${dec.decidedBy})` }, { defaultSubject: domain, updatedAt: dec.decidedAt, pack }),
     );
   }
-  return { ctx, built, reqByKey, docsByEntity, framesByEntity, claimsByEntity, decisionsByItem, decisionsByQuestion, childrenOf, policy };
+  return { ctx, built, reqByKey, docsByEntity, framesByEntity, claimsByEntity, decisionsByItem, decisionsByQuestion, childrenOf, policy, testsByItem: testsByItem(ctx.requirements, ctx.tests) };
 }
 
 /** Everything the rules need to know about one item. */
