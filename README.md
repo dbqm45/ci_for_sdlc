@@ -252,8 +252,11 @@ Lista kontrolna tych kroków jest na górze [`TODO.md`](TODO.md).
    *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt `visual-baselines`
    i scommitować (procedura: [`docs/TESTING-REGRESSION.md`](docs/TESTING-REGRESSION.md)).
 2. **Następne luki ekosystemu SDLC** (mapa ekosystemu, luki G1–G8), od najmniejszej zależności:
-   - **G3 — kalibracja estymat:** czas cyklu elementu z ShipScope (pierwszy commit → wydane) obok estymaty
-     w sprintdecku. Część po stronie ShipScope jest mała; ma sens, gdy sprintdeck dostanie pokoje i import z Jiry.
+   - **G3 — kalibracja prognozy automatu:** od decyzji D-E1 (pdi, 25.10) prognozę „kiedy to będzie” liczy automat
+     (liczba cięć z planu tf × historyczny czas przepływu z ShipScope), a sprintdeck służy do konsensusu co do
+     ryzyka i zrozumienia. G3 nie czeka więc na sprintdeck: najpierw czas przepływu zmiany i cięcia w ShipScope
+     (pierwszy commit → pierwsze wydanie na PROD, w API usług), potem prognoza i jej porównanie z wynikiem w tf/pdi;
+     pokazanie prognozy w pokoju sprintdecka przyjdzie po jego MVP (konta, import z Jiry).
    - **G5 — dane o użyciu:** konektor analityki produktu (Amplitude, Mixpanel, GA, Segment) jako źródło metryki
      sukcesu MVP dla oceny skutku w pdi. Wymaga wyboru narzędzia.
    - **G8 — incydenty:** incydent (PagerDuty, Opsgenie, …) jako nowe zgłoszenie PRB w pdi. Wymaga wyboru narzędzia.

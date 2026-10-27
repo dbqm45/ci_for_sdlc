@@ -10,8 +10,10 @@
       Najpierw decyzja: które narzędzie (Amplitude, Mixpanel, GA, Segment).
 - [ ] **G8 — incydenty.** Incydent jako nowe zgłoszenie PRB w pdi. Najpierw decyzja: które narzędzie (PagerDuty,
       Opsgenie, …).
-- [ ] **G3 — kalibracja estymat.** Czas cyklu elementu z ShipScope (pierwszy commit → wydane) obok estymaty
-      w sprintdecku. Część ShipScope jest mała; ma sens, gdy sprintdeck dostanie pokoje i import z Jiry.
+- [ ] **G3 — kalibracja prognozy automatu** (od D-E1 prognozę liczy automat, sprintdeck głosuje nad ryzykiem):
+      1. ShipScope: czas przepływu zmiany i cięcia (pierwszy commit → pierwsze wydanie na PROD) w API usług;
+      2. tf/pdi: prognoza (cięcia × mediana czasu przepływu) i porównanie z wynikiem po wydaniu;
+      3. sprintdeck, po jego MVP (konta, import z Jiry): prognoza przy zadaniu w pokoju.
 - [ ] **G6, G7, P1, P2** (jedno wejście dla ludzi, miary przepływu, wspólna platforma, Jira czy repo) — decyzje
       architektoniczne do podjęcia, nie pojedyncze PR-y.
 - [ ] **W tym repo:** OpenAPI jako źródło (Faza 2, `docs/ROADMAP.md`) i wiele repozytoriów / projektów w jednej
