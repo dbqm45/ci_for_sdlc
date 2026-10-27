@@ -139,6 +139,22 @@ describe('API', () => {
     await json('POST', '/api/analyze');
   });
 
+  it('API-06: test results (JUnit XML) join the analysis: each criterion of PAY-124 gets its tests (G4)', async () => {
+    const reportsPath = fileURLToPath(new URL('../../core/test/fixtures/junit/results.xml', import.meta.url));
+    expect((await putSettings(ctx.app, { integrations: { tests: { enabled: true, reportsPath } } })).statusCode).toBe(200);
+    expect((await json('POST', '/api/settings/test-connections')).body.tests).toBe('OK — 9 test cases, 1 failed, 8 naming a criterion');
+    await json('POST', '/api/analyze');
+    const item = (await json('GET', '/api/items/PAY-124')).body.item;
+    expect(item.acTests.map((a: any) => [a.ac, a.status])).toEqual([['AC-1', 'passed'], ['AC-2', 'failed'], ['AC-3', 'untested']]);
+    expect(item.findings.filter((f: any) => f.ruleId.startsWith('TEST-')).map((f: any) => f.ruleId).sort()).toEqual(['TEST-001', 'TEST-002']);
+
+    await putSettings(ctx.app, { integrations: { tests: { reportsPath: '/nonexistent/reports' } } });
+    expect((await json('POST', '/api/settings/test-connections')).body.error).toBe('Test results: /nonexistent/reports: Cannot read the file');
+    await putSettings(ctx.app, { integrations: { tests: { enabled: false, reportsPath: '' } } });
+    await json('POST', '/api/analyze');
+    expect((await json('GET', '/api/items/PAY-124')).body.item.acTests).toBeUndefined();
+  });
+
   it('API-01: lists the rules and the demo scenarios', async () => {
     const rules = await json('GET', '/api/rules');
     expect(rules.body.map((r: any) => r.id)).toEqual(RULES.map((r) => r.id));

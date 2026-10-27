@@ -12,6 +12,7 @@ import {
   fetchJira,
   readReconstruction,
   readRepoChanges,
+  readTestResults,
   type RepoProblem,
   type AnalysisResult,
   type Approval,
@@ -65,11 +66,21 @@ export class Engine extends EventEmitter {
   async loadContext(settings: Settings): Promise<ProjectContext> {
     const loaded = this.repo ? await this.loadRepo(settings, this.repo) : settings.mode === 'demo' ? ((await this.store.demoContext()) ?? demoProject()) : await this.loadSources(settings);
     // The claim vocabulary is the project's setting in every mode, the demo workspace included.
-    const ctx: ProjectContext = { ...loaded, project: { ...loaded.project, claimPack: settings.project.claimPack ?? 'general' }, ...(this.tests && { tests: this.tests }) };
+    // Test results (G4): `analyze --tests` wins over the setting; a report that cannot be read stops the analysis.
+    const tests = this.tests ?? (await this.loadTests(settings));
+    const ctx: ProjectContext = { ...loaded, project: { ...loaded.project, claimPack: settings.project.claimPack ?? 'general' }, ...(tests && { tests }) };
     // tf's reconstruction from code is the current state of the code, next to the specification in either mode.
     const { code } = settings.integrations;
     if (!code.enabled) return ctx;
     return { ...ctx, documents: [...ctx.documents, ...(await readReconstruction(code.reconstructionPath, { repoUrl: code.repoUrl }))] };
+  }
+
+  private async loadTests(settings: Settings): Promise<TestCase[] | undefined> {
+    const t = settings.integrations.tests;
+    if (!t?.enabled) return undefined;
+    const { tests, problems } = await readTestResults([t.reportsPath]);
+    if (problems.length) throw new Error(`Test results: ${problems.map((p) => `${p.path}: ${p.message}`).join('; ')}`);
+    return tests;
   }
 
   private async loadRepo(settings: Settings, repo: RepoSource): Promise<ProjectContext> {

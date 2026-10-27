@@ -66,6 +66,7 @@ export function Settings() {
   const release = s.policy.release ?? {};
   // Settings saved before the code integration have none; the server fills in the default.
   const codeIntegration = s.integrations.code ?? { enabled: false, reconstructionPath: '' };
+  const testsIntegration = s.integrations.tests ?? { enabled: false, reportsPath: '' };
   const setRelease = (key: string, value: unknown) => set('policy.release', { ...release, [key]: value });
   const save = async () => {
     setSaving(true);
@@ -179,6 +180,10 @@ export function Settings() {
           <Integration title="Code (tf reconstruction)" source="code" enabled={s.integrations.code?.enabled ?? false} onToggle={(v) => set('integrations.code', { ...codeIntegration, enabled: v })} badges={<span className="badge">reconstruction.json</span>}>
             <Field label="Path to reconstruction.json on the server"><input className="input" placeholder="/repo/docs/project/00-reconstruction/reconstruction.json" value={codeIntegration.reconstructionPath} onChange={(e) => set('integrations.code', { ...codeIntegration, reconstructionPath: e.target.value })} /></Field>
             <Field label="Repository URL for code links (optional)"><input className="input" placeholder="https://github.com/acme/shop" value={codeIntegration.repoUrl ?? ''} onChange={(e) => set('integrations.code', { ...codeIntegration, repoUrl: e.target.value || undefined })} /></Field>
+          </Integration>
+          <Integration title="Tests (JUnit XML)" source="test" enabled={testsIntegration.enabled} onToggle={(v) => set('integrations.tests', { ...testsIntegration, enabled: v })} badges={<span className="badge">KEY/AC-n</span>}>
+            <Field label="Path to a JUnit XML report, or a directory of them, on the server"><input className="input" placeholder="/repo/reports/junit" value={testsIntegration.reportsPath} onChange={(e) => set('integrations.tests', { ...testsIntegration, reportsPath: e.target.value })} /></Field>
+            <p className="small muted" style={{ margin: 0 }}>A test named after its criterion (PAY-124/AC-2 …) is that criterion's test; TEST-001…003 report a criterion without a test, a failing one and one the item no longer has.</p>
           </Integration>
           <Integration title="Figma" source="figma" enabled={s.integrations.figma.enabled} onToggle={(v) => set('integrations.figma.enabled', v)} badges={secret('FIGMA_TOKEN')}>
             <Field label="File keys (comma separated)"><input className="input" placeholder="from figma.com/design/<FILE_KEY>/…" value={s.integrations.figma.fileKeys.join(', ')} onChange={(e) => set('integrations.figma.fileKeys', e.target.value.split(',').map((x: string) => parseFigmaFileKey(x)).filter(Boolean))} /></Field>

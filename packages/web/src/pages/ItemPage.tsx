@@ -7,6 +7,7 @@ import { GraphView } from '../components/GraphView';
 import { Modal } from '../components/Modal';
 import { Bar, Card, Chevron, DIMENSION_LABELS, DateTime, EmptyState, HealthNumber, JOURNEY_LABELS, ReadinessBadge, STATE_LABELS, SeverityBadge, Source, SourceLogo, Spinner, StatusBadge, StatusIcon, ago } from '../components/ui';
 import { ChevronIcon, ListIcon, SearchIcon, SettingsIcon, SlidersIcon, SparkleIcon } from '../components/icons';
+import { acTestRows, acTestsSummary } from '../lib/acTests';
 
 type Tab = 'findings' | 'challenge' | 'states' | 'context' | 'claims' | 'history';
 
@@ -326,6 +327,28 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
                     <StatusIcon status={r.coveredBy.length ? 'ok' : 'bad'} />
                     <span className="small">
                       {r.criterion} {r.coveredBy.length > 0 && <span className="muted">({r.coveredBy.join(', ')})</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {a.acTests && (
+            <Card title={`Acceptance criteria ↔ tests · ${acTestsSummary(a.acTests).passing}/${acTestsSummary(a.acTests).total} passing`}>
+              <div className="col" style={{ gap: 6 }}>
+                {acTestRows(a.acTests, d.source ?? { acceptanceCriteria: [] }).map((r) => (
+                  <div className="check-item" key={r.ac}>
+                    <StatusIcon status={r.icon} />
+                    <span className="small">
+                      <strong>{r.ac}</strong> {r.text}
+                      {r.tests.length === 0 && <span className="muted"> — no test</span>}
+                      {r.tests.map((t) => (
+                        <span key={t.name} className="muted" style={{ display: 'block' }}>
+                          {t.status === 'failed' ? '✗' : t.status === 'skipped' ? '–' : '✓'} {t.name}
+                          {t.message && `: ${t.message}`}
+                        </span>
+                      ))}
                     </span>
                   </div>
                 ))}

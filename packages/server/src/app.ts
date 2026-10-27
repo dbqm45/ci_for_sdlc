@@ -310,6 +310,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       const code = ctx.documents.filter((d) => d.source === 'code').length;
       if (s.integrations.confluence.enabled) out.confluence = `OK — ${ctx.documents.length - code} pages`;
       if (s.integrations.code.enabled) out.code = `OK — ${code} items reconstructed from code`;
+      if (s.integrations.tests?.enabled && ctx.tests) {
+        const t = ctx.tests;
+        out.tests = `OK — ${t.length} test cases, ${t.filter((x) => x.status === 'failed').length} failed, ${t.filter((x) => x.refs.length).length} naming a criterion`;
+      }
       if (s.integrations.figma.enabled) out.figma = `OK — ${ctx.frames.length} frames`;
     } catch (e) {
       out.error = errorMessage(e);

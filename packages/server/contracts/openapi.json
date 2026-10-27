@@ -781,6 +781,19 @@
                             "pattern": "^(https://[^\\s]+)?$"
                           }
                         }
+                      },
+                      "tests": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "reportsPath": {
+                            "type": "string",
+                            "maxLength": 1000
+                          }
+                        }
                       }
                     }
                   },
