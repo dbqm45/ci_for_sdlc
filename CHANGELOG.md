@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.24] - 2026-10-27
+
+### Nowe
+
+- **web:** show each acceptance criterion's tests on the item page (#77)
+
 ## [0.1.23] - 2026-10-27
 
 ### Nowe
