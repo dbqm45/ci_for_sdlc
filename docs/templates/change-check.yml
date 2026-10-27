@@ -3,6 +3,10 @@
 # A pull request that changes a change's intent.md, plan.md or release.yaml gets a red check when an item is not
 # ready or a file cannot be read; the findings are annotations on the files (REL-007 on the flag in release.yaml,
 # REL-008 on the row in plan.md) and a table in the run's summary. Use --fail-on warning to fail on REL-008 too.
+# With your tests' JUnit XML (TEST_REPORTS below), each acceptance criterion also gets its tests: a test named after
+# its criterion (TSK-57/AC-1 …, or US-02/AC-1 for a requirement id of the slice's row) is that criterion's test, and
+# TEST-001…003 report a criterion without a test, a failing one and one the item no longer has (docs/PDI-G4-PLAN.md).
+# The check then also needs to run when code changes: widen or drop `paths`.
 name: Definition check
 
 on:
@@ -32,6 +36,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+      # Optional: your tests, writing JUnit XML where TEST_REPORTS points. For example, with Vitest:
+      # - run: npm ci && npx vitest run --reporter=junit --outputFile=reports/junit.xml
+      #   continue-on-error: true   # a red test is reported by the check (TEST-002) and by your own test workflow
       - run: npm ci --workspace @ci/core --workspace @ci/server
         working-directory: .ci_for_sdlc
       - name: Check the changes
@@ -39,4 +46,10 @@ jobs:
         env:
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           CI_DATA_DIR: ${{ runner.temp }}/ci-data
-        run: npm run analyze -- --repo "$GITHUB_WORKSPACE" --repo-url "$REPO_URL" --fail-on critical
+          # A JUnit XML file or a directory of them, relative to the repository; empty = no test results. Once set, a
+          # report that is missing or cannot be read fails the check, so tests that did not run are never "no tests".
+          TEST_REPORTS: ''
+        run: |
+          set -- --repo "$GITHUB_WORKSPACE" --repo-url "$REPO_URL" --fail-on critical
+          if [ -n "$TEST_REPORTS" ]; then set -- "$@" --tests "$GITHUB_WORKSPACE/$TEST_REPORTS"; fi
+          npm run analyze -- "$@"
