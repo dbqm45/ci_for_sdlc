@@ -275,7 +275,8 @@ Lista kontrolna tych kroków jest na górze [`TODO.md`](TODO.md).
    - Przekrojowe **G6** (jedno wejście dla ludzi), **G7** (miary przepływu) oraz platformowe **P1** (wspólna
      platforma) i **P2** (Jira czy repo) to decyzje architektoniczne, nie pojedyncze PR-y.
 3. **W tym repo:** OpenAPI jako źródło (Faza 2 w [`docs/ROADMAP.md`](docs/ROADMAP.md)). Wiele przestrzeni roboczych
-   (F5 planu jednego flow) działa na plikach ([`docs/WORKSPACES-F5-PLAN.md`](docs/WORKSPACES-F5-PLAN.md)); dalej
-   Postgres oraz konta i role (kroki 2–3 w [`docs/SAAS.md`](docs/SAAS.md)).
+   (F5 planu jednego flow, [`docs/WORKSPACES-F5-PLAN.md`](docs/WORKSPACES-F5-PLAN.md)) działa na plikach i w Postgresie
+   z `CI_DATABASE_URL` (#89); dalej konta i role (krok 3 w [`docs/SAAS.md`](docs/SAAS.md)). Pełna lista tego, co zostało
+   w całym ekosystemie: pdi `docs/plan-jeden-flow-sdlc.md`, §8, „Co zostało”.
 
 Docelowy model dystrybucji to **SaaS z abonamentem**: OAuth zamiast tokenów, AI wliczone w usługę, szyfrowanie per organizacja, multi-tenancy, billing. Obecny tryb self-hosted (tokeny w zmiennych środowiskowych) zostaje do testów i instalacji u klienta. Szczegóły: [`docs/SAAS.md`](docs/SAAS.md).
