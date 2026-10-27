@@ -3,9 +3,9 @@ import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { APPROVE_GATE, AUTO_CLOSE_DECISION_TYPE, acceptanceStats, autoCloseDecision, changeReadiness, parseGateDecided, DEMO_SCENARIOS, DEFAULT_MODELS, RULES, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
+import { APPROVE_GATE, AUTO_CLOSE_DECISION_TYPE, acceptanceStats, autoCloseDecision, changeKeyOf, changeReadiness, parseGateDecided, DEMO_SCENARIOS, DEFAULT_MODELS, RULES, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type DecisionEffect, type IssueType, type NewDecision, type WithdrawnDecision } from '@ci/core';
 import { AtlassianConnection, CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
-import { proposalEvent, recordAutoClose } from './auto-close.js';
+import { proposalEvent, recordAutoClose, type AutoCloseSink } from './auto-close.js';
 import { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
@@ -58,7 +58,16 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const connect = opts.connect ?? connectConfigFromEnv();
   const atlassian = new AtlassianConnection(store, connect);
   const engine = new Engine(store, connect.mode === 'oauth' ? atlassian : undefined);
-  const pdi = new PdiLink(store, opts.pdi);
+  const pdi = new PdiLink(store, { publicUrl: connect.publicUrl, ...opts.pdi });
+  /** A2b: decided A2a steps go to pdi's registry as decision.recorded, with the item's CHG from its `change:` label. */
+  const autoCloseSink: AutoCloseSink = async (steps) => {
+    if (!pdi.enabled) return;
+    const prefix = (await store.settings()).integrations.jira.changeLabelPrefix || undefined;
+    const requirements = engine.state.context?.requirements ?? (await store.demoContext())?.requirements ?? [];
+    await pdi.enqueueDecisions(steps, (key) => changeKeyOf(requirements.find((r) => r.key === key)?.labels ?? [], prefix));
+    void pdi.deliver().catch((e) => app.log.error(e));
+  };
+  engine.autoCloseSink = autoCloseSink;
   // Strict bodies: unknown properties and wrong types are rejected, not silently dropped or coerced.
   const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } } });
   const env = guardConfigFromEnv();
@@ -236,7 +245,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       const by = who(req, req.body);
       const at = new Date().toISOString();
       if (action === 'reject') {
-        await recordAutoClose(store, [{ event: proposalEvent(f, 'rejected', at, { by: by.actor }), question: f.question.text, ...by }]);
+        await recordAutoClose(store, [{ event: proposalEvent(f, 'rejected', at, { by: by.actor }), question: f.question.text, ...by }], autoCloseSink);
         return { item: (await engine.analyze(`answer rejected on ${f.itemKey}`)).items.find((i) => i.key === f.itemKey) };
       }
       const input = autoCloseDecision(f, { by: by.actor, at, answer: action === 'edit' ? req.body.answer : undefined });
@@ -246,7 +255,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
         decision = r.decision;
         return r.all;
       });
-      await recordAutoClose(store, [{ event: proposalEvent(f, decision.draftEdited ? 'edited' : 'accepted', at, { by: by.actor, decisionId: decision.id }), question: f.question.text, answer: decision.answer, ...by }]);
+      await recordAutoClose(store, [{ event: proposalEvent(f, decision.draftEdited ? 'edited' : 'accepted', at, { by: by.actor, decisionId: decision.id }), question: f.question.text, answer: decision.answer, ...by }], autoCloseSink);
       const next = await engine.analyze(`answer accepted on ${f.itemKey}`);
       return { decision, item: next.items.find((i) => i.key === f.itemKey) };
     },
@@ -269,8 +278,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
           event: { at, proposalId: d.proposalId ?? d.id, outcome: 'reopened', decisionType: AUTO_CLOSE_DECISION_TYPE, itemKey: d.itemKey, findingId: d.findingId, questionId: d.questionId, ...(source && { source: { source: source.source, entityId: source.entityId, title: source.title, ...(source.url && { url: source.url }) }, quote: source.excerpt }), decisionId: d.id, by: by.actor },
           question: d.question,
           ...by,
+          ...(req.body?.reason?.trim() && { why: req.body.reason.trim().slice(0, 2000) }),
         },
-      ]);
+      ], autoCloseSink);
       return engine.analyze(`auto-closed answer reopened on ${d.itemKey}`);
     },
   );

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../App';
 import type { AcceptanceStats, Finding } from '@ci/core';
 import { api, type Decision } from '../api';
-import { autoClosedDecisions, sharePercent } from '../lib/autoClose';
+import { autoClosedDecisions, pdiDecisionLabel, sharePercent } from '../lib/autoClose';
 import { Card, DateTime, QuestionMark, SeverityBadge, Stat } from '../components/ui';
 
 export function Decisions() {
@@ -88,11 +88,14 @@ export function Decisions() {
             {autoClosed.map((d) => (
               <tr key={d.id}>
                 <td className="small muted"><DateTime iso={d.decidedAt} /></td>
-                <td><a href={`#/item/${d.itemKey}`} className="key">{d.itemKey}</a></td>
+                <td><a href={`#/item/${encodeURIComponent(d.itemKey)}/${encodeURIComponent(d.findingId)}`} className="key">{d.itemKey}</a></td>
                 <td className="small">{d.question}</td>
                 <td>
                   <strong>{d.answer}</strong>
                   {d.draftEdited && <span className="badge" style={{ marginLeft: 6 }}>edited</span>}
+                  <span className={`badge${d.pdiDecision ? ' accent' : ''}`} style={{ marginLeft: 6 }} title={d.pdiDecision ? 'Recorded in pdi’s decision register' : 'pdi has not recorded this decision yet'}>
+                    {pdiDecisionLabel(d)}
+                  </span>
                   {d.evidence?.[0] && <div className="small muted">«{d.evidence[0].excerpt}» — {d.evidence[0].title}</div>}
                 </td>
                 <td className="small hide-sm">{d.automation ? `${d.decidedBy} (${d.automation.rule})` : d.decidedBy}</td>

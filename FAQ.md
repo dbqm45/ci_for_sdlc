@@ -320,6 +320,11 @@ domyślne. W pdi to obniżenie poziomu autonomii, które wymaga zmierzonej akcep
 ostatnie 30 ocenionych propozycji (bez zmian, poprawione, odrzucone, otwarte ponownie) i progi pdi (co najmniej 95%
 bez zmian; powrót do człowieka powyżej 10% poprawionych). Aplikacja niczego nie zmienia sama na podstawie tych liczb.
 
+Z połączeniem z pdi każdy krok (przyjęcie, poprawka, odrzucenie, ponowne otwarcie, zamknięcie przez automat) trafia do
+rejestru decyzji pdi jako `decision.recorded`. Przy decyzji widać numer, który nadał jej pdi (`DEC-n`), albo
+„not in pdi”, dopóki pdi jej nie zapisał. Zdarzenie, którego pdi nie przyjął (odpowiedź 400), zostaje w kolejce
+z powodem odmowy (*GET /api/pdi*) i nie jest ponawiane; pozostałe ponawiamy aż do skutku, bo to ślad audytowy.
+
 **Czy decyzję można zmienić albo usunąć?**
 Decyzje są niezmienne i wersjonowane (`packages/core/src/decisions.ts`):
 

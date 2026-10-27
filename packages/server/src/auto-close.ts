@@ -36,13 +36,30 @@ export function proposalEvent(f: Finding, outcome: AutoCloseOutcome, at: string,
   };
 }
 
-/** Writes the event to the proposal log and the audit log. `actor` is the person, or the rule for proposals and `apply`. */
-export async function recordAutoClose(store: Store, events: { event: AutoCloseEvent; question: string; actor: string; via?: Principal; answer?: string }[]) {
-  if (!events.length) return;
-  await store.appendAutoClose(events.map((e) => e.event));
-  for (const { event: e, question, actor, via, answer } of events) {
+/** One A2a step: the log event, the question it is about, who acted, and for pdi the answer and the reason. */
+export interface AutoCloseStep {
+  event: AutoCloseEvent;
+  question: string;
+  /** The person, or the rule for proposals and `apply`. */
+  actor: string;
+  via?: Principal;
+  answer?: string;
+  /** Why a person reopened it. */
+  why?: string;
+}
+
+/** Where decided steps go next (A2b: pdi's registry). */
+export type AutoCloseSink = (steps: AutoCloseStep[]) => Promise<void>;
+
+/** Writes the steps to the proposal log and the audit log, then hands the decided ones (not proposals) to `sink`. */
+export async function recordAutoClose(store: Store, steps: AutoCloseStep[], sink?: AutoCloseSink) {
+  if (!steps.length) return;
+  await store.appendAutoClose(steps.map((e) => e.event));
+  for (const { event: e, question, actor, via, answer } of steps) {
     const from = e.source ? ` from ${e.source.title}` : '';
     const text = answer && answer !== e.quote ? ` → ${answer}` : e.quote ? `: «${e.quote}»` : '';
     await store.audit({ at: e.at, kind: 'auto_close', actor, ...(via && { via }), summary: `${VERB[e.outcome]} for ${e.itemKey} "${question}"${from}${text}`, details: e });
   }
+  const decided = steps.filter((x) => x.event.outcome !== 'proposed');
+  if (sink && decided.length) await sink(decided);
 }

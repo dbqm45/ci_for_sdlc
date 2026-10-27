@@ -91,5 +91,4 @@ ponowne otwarcie.
 koncie nie działają).
 
 ## Poza zakresem
-Wysyłanie propozycji i decyzji do pdi oraz odbiór wyników (A2b, wymaga zdarzenia w kontrakcie pdi 0.7.0);
-automatyczna zmiana poziomu autonomii.
+Wysyłanie decyzji do pdi — zrobione w A2b (`docs/PDI-F4-PLAN.md`, „A2b”); automatyczna zmiana poziomu autonomii.
