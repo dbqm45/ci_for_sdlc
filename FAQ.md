@@ -462,12 +462,16 @@ Pełna lista jest w [`README.md`](README.md#konfiguracja).
 - **Z `CI_ADMIN_TOKEN`:**
   - każda zmiana wymaga nagłówka `Authorization: Bearer <token>`;
   - UI zapyta o token raz i trzyma go tylko do zamknięcia karty (`sessionStorage`).
-- Odczyty (`GET`) i webhooki nie wymagają tokenu. Webhooki mają własny sekret.
+- Odczyty (`GET`) są otwarte, dopóki nie ustawisz `CI_READ_TOKEN`. Z nim każdy odczyt `/api/*` wymaga tokenu odczytu
+  albo administratora (UI zapyta raz na sesję); bez tokenu zostają tylko `/api/health`, webhooki i powrót logowania
+  Atlassian. Token odczytu nie pozwala niczego zmienić.
+- Webhooki mają własny sekret.
 
 **Chcę udostępnić aplikację w sieci firmowej. Co ustawić?**
 
 1. `HOST=0.0.0.0` (albo konkretny interfejs).
-2. `CI_ADMIN_TOKEN`, żeby zmiany wymagały tokenu.
+2. `CI_ADMIN_TOKEN`, żeby zmiany wymagały tokenu, i `CI_READ_TOKEN`, żeby odczyty też (inaczej każdy, kto dosięgnie
+   serwera, czyta analizę, decyzje i dryf; serwer ostrzega o tym przy starcie).
 3. `CI_ALLOWED_HOSTS`, czyli nazwy, pod którymi serwer jest dostępny, np. `ci.firma.local:4317`. Chroni to przed atakiem DNS rebinding: żądanie z innym nagłówkiem `Host` dostaje `403`.
 4. `CI_ALLOWED_ORIGINS`, jeśli UI działa pod innym adresem niż API, np. `https://ci.firma.pl`. Chroni to przed CSRF: zmiana wysłana z obcej strony dostaje `403`.
 

@@ -40,6 +40,8 @@ export interface AppOptions {
   logger?: boolean;
   /** Defaults to CI_ADMIN_TOKEN. */
   adminToken?: string;
+  /** Defaults to CI_READ_TOKEN. */
+  readToken?: string;
   /** Defaults to CI_ALLOWED_HOSTS (comma-separated). */
   allowedHosts?: string[];
   /** Defaults to CI_ALLOWED_ORIGINS (comma-separated). */
@@ -60,13 +62,13 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   // Strict bodies: unknown properties and wrong types are rejected, not silently dropped or coerced.
   const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } } });
   const env = guardConfigFromEnv();
-  const guard: GuardConfig = { adminToken: opts.adminToken ?? env.adminToken, allowedHosts: opts.allowedHosts ?? env.allowedHosts, allowedOrigins: opts.allowedOrigins ?? env.allowedOrigins };
+  const guard: GuardConfig = { adminToken: opts.adminToken ?? env.adminToken, readToken: opts.readToken ?? env.readToken, allowedHosts: opts.allowedHosts ?? env.allowedHosts, allowedOrigins: opts.allowedOrigins ?? env.allowedOrigins };
 
   await app.register(fastifySwagger, {
     openapi: {
       openapi: '3.0.3',
-      info: { title: 'Continuous Intelligence for the SDLC', version: APP_VERSION, description: 'State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state.' },
-      components: { securitySchemes: { adminToken: { type: 'http', scheme: 'bearer', description: 'CI_ADMIN_TOKEN' } } },
+      info: { title: 'Continuous Intelligence for the SDLC', version: APP_VERSION, description: 'State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state. Reads need the read token (or the admin token) when CI_READ_TOKEN is set, except /api/health.' },
+      components: { securitySchemes: { adminToken: { type: 'http', scheme: 'bearer', description: 'CI_ADMIN_TOKEN' }, readToken: { type: 'http', scheme: 'bearer', description: 'CI_READ_TOKEN (the admin token reads too)' } } },
     },
   });
   app.addSchema(problem);

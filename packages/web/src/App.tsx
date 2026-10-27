@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { api, currentUser, type AnalysisResult, errMsg } from './api';
+import { api, currentUser, readToken, type AnalysisResult, errMsg } from './api';
 import { ago, Sdot, Source, Spinner } from './components/ui';
 import {
   ActivityIcon,
@@ -19,6 +19,7 @@ import {
   UserIcon,
 } from './components/icons';
 import { disclosureReducer } from './lib/disclosure';
+import { subscribeEvents } from './lib/sse';
 import { trapTabKey } from './lib/focusTrap';
 import { Overview } from './pages/Overview';
 import { Backlog } from './pages/Backlog';
@@ -209,10 +210,8 @@ export function App() {
   useEffect(() => {
     void refresh();
     // Live updates: server pushes an event after every analysis (schedule, webhook, other users).
-    const es = new EventSource('/api/events');
-    es.addEventListener('analysis', () => void refresh());
-    es.addEventListener('status', (e) => setRunning(!!JSON.parse((e as MessageEvent).data).running));
-    return () => es.close();
+    // Read with fetch, not EventSource, so the read token (CI_READ_TOKEN) goes in a header (lib/sse.ts).
+    return subscribeEvents('/api/events', { analysis: () => void refresh(), status: (data) => setRunning(!!JSON.parse(data).running) }, { token: readToken });
   }, [refresh]);
 
   // Close the drawer/rail-overlay on route change, and whenever the matching

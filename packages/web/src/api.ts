@@ -1,4 +1,5 @@
 import type { AcceptanceStats, AnalysisResult, Approval, Decision, DeepPartial, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem, Settings } from '@ci/core';
+import { authStep } from './lib/auth';
 
 export type { AnalysisResult, ItemAnalysis, Decision, DriftEvent, ImpactReport };
 
@@ -38,7 +39,8 @@ export interface HistoryPoint {
 }
 
 const TOKEN_KEY = 'ci.adminToken';
-const readToken = () => {
+/** The token saved for this browser session: the admin token, or the read token when the server asks for one to read. */
+export const readToken = () => {
   try {
     return sessionStorage.getItem(TOKEN_KEY) ?? '';
   } catch {
@@ -123,15 +125,19 @@ async function send(method: string, url: string, body?: unknown, headers: Record
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const json: unknown = await res.json().catch(() => ({}));
-  if (res.status === 401 && res.headers.get('www-authenticate') && !retried) {
-    // The server has CI_ADMIN_TOKEN set: ask once per browser session; the token is never written to disk.
-    const t = window.prompt(`${(json as Problem).detail ?? 'This change requires the admin token.'}\nAdmin token:`);
+  const step = authStep({ status: res.status, challenge: !!res.headers.get('www-authenticate'), retried, used: token, current: readToken() });
+  // Another request saved a token while this one waited: try it without asking again.
+  if (step === 'retry') return send(method, url, body, headers, true);
+  if (step === 'prompt') {
+    // The server has CI_ADMIN_TOKEN (changes) or CI_READ_TOKEN (reads) set: ask once per browser session; the token is
+    // never written to disk. The admin token also reads.
+    const t = window.prompt(`${(json as Problem).detail ?? 'This requires a token.'}\n${method === 'GET' ? 'Read or admin token' : 'Admin token'}:`);
     if (t?.trim()) {
       saveToken(t.trim());
       return send(method, url, body, headers, true);
     }
   }
-  if (res.status === 401 && retried) saveToken('');
+  if (step === 'forget') saveToken('');
   if (!res.ok) throw new ApiError(res.status, toProblem(json));
   return { json, res };
 }
