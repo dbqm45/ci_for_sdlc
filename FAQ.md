@@ -234,6 +234,11 @@ bo przed implementacją to normalne); `TEST-002` — test kryterium nie przeszed
 którego element już nie ma (przenumerowane albo usunięte). Bez `--tests` wszystkie milczą. Plik wyników, którego nie
 da się odczytać, zatrzymuje bramkę z powodem, nigdy nie znaczy „zero testów”.
 
+W aplikacji to samo daje integracja *Settings → Integrations → Tests (JUnit XML)*: ścieżka do raportu albo katalogu
+raportów na dysku serwera, czytana przy każdej analizie. Strona historyjki pokazuje wtedy kartę *Acceptance criteria ↔
+tests* z każdym kryterium, jego testami i pierwszą linią błędu. Raport, którego nie da się odczytać, przerywa analizę
+z powodem, tak jak zły plik rekonstrukcji.
+
 **Kiedy działa AI i co do niego wysyłamy?**
 
 - Dostawcy: Anthropic, Amazon Bedrock, OpenAI, Azure OpenAI albo własny endpoint zgodny z OpenAI.

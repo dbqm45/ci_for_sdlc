@@ -37,3 +37,13 @@ idą jak inne jako adnotacje, a plik testu, który się nie wczytał, to błąd 
 limity), odwołania (`KLUCZ/AC-n` w nazwie i klasie, kilka w jednym teście, `US-02` przez wymagania cięcia).
 `test/test-trace.test.ts`: wynik kryterium, TEST-001…003. `rule-coverage.test.ts`: dane demo z plikiem
 `fixtures/junit/results.xml`. `server/test/gate.test.ts`: `--tests`, plik nieczytelny, adnotacje.
+
+## Krok 3: serwer i strona elementu
+- **Integracja „Tests (JUnit XML)”** w ustawieniach (`integrations.tests: { enabled, reportsPath }`, domyślnie
+  wyłączona): plik albo katalog na dysku serwera, czytany przy każdej analizie, jak rekonstrukcja tf. Raport, którego
+  nie da się odczytać, przerywa analizę z powodem (tak jak zły `reconstruction.json`); „Test connections” podaje
+  liczbę przypadków i nieudanych. `--tests` w CLI ma pierwszeństwo przed ustawieniem.
+- **Strona elementu:** karta „Acceptance criteria ↔ tests · N/M passing”, gdy jakiś test nazywa element: każde
+  kryterium z ikoną stanu, treścią kryterium i jego testami (nazwa, wynik, pierwsza linia błędu). Wiersze liczy czysty
+  helper `acTestRows()` (`packages/web/src/lib/acTests.ts`, testy w `packages/web/test/acTests.test.ts`).
+- Testy: `api.test.ts` API-06 (ustawienie, test połączeń, `acTests` w odpowiedzi elementu, zła ścieżka).

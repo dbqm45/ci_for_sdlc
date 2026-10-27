@@ -78,3 +78,17 @@ test('SET-06: tf reconstruction from code shows where the code contradicts the s
   await expect(page.getByText('Conflicting payment timeout: 30 s vs 45 s').first()).toBeVisible();
   await expect(page.getByText('Code src/payments/gateway.ts:1').first()).toBeAttached();
 });
+
+test('SET-07: test results (JUnit XML) give each acceptance criterion of PAY-124 its tests (G4)', async ({ page }) => {
+  const reports = resolve('packages/core/test/fixtures/junit/results.xml');
+  const integrations = card(page, 'Integrations');
+  await integrations.getByRole('checkbox', { name: /Tests \(JUnit XML\)/ }).check();
+  await integrations.getByLabel('Path to a JUnit XML report, or a directory of them, on the server').fill(reports);
+  await page.getByRole('button', { name: 'Save & re-analyze' }).click();
+  await expect(toast(page)).toHaveText('Settings saved');
+
+  await page.goto('/#/item/PAY-124');
+  await expect(page.getByText('Acceptance criteria ↔ tests · 1/3 passing')).toBeVisible();
+  await expect(page.getByText(/PAY-124\/AC-2 the card disappears after confirming: expected 1 card, got 2/)).toBeVisible();
+  await expect(page.getByText('— no test')).toBeVisible();
+});

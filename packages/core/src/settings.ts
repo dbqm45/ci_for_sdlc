@@ -18,6 +18,8 @@ export interface Settings {
     figma: { enabled: boolean; fileKeys: string[] };
     /** tf's reconstruction from code (`reconstruction.json`, connectors/reconstruction.ts), read from the server's disk. */
     code: { enabled: boolean; reconstructionPath: string; repoUrl?: string };
+    /** Test results as JUnit XML (a file or a directory of them, connectors/tests.ts), read from the server's disk (G4). */
+    tests: { enabled: boolean; reportsPath: string };
   };
   ai: AiProviderConfig & { runOn: (typeof AI_RUN_ON)[number] };
   security: {
