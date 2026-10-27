@@ -4,6 +4,7 @@ import { parse as parseYaml } from 'yaml';
 import type { FlagPlan, RepoFacts, RequirementItem } from '../model.js';
 import { isRecord, records, str } from '../guards.js';
 import { CHANGE_LABEL_PREFIX } from '../pdi.js';
+import { DesignFormatError, parseDesignMd, type DesignRow } from './design.js';
 
 /**
  * Connector for changes kept in a repository (pdi plan "one SDLC flow", step F2; docs/PDI-F2-PLAN.md):
@@ -248,7 +249,7 @@ function mvpText(mvp: NonNullable<ReleasePlan['mvp']>): string | undefined {
  *
  * @throws {RepoFileError} a file that cannot be used
  */
-export function parseChange(folder: string, files: { intent: string; plan?: string; release?: string }, opts: { urlOf?: (file: ChangeFile) => string | undefined } = {}): RequirementItem[] {
+export function parseChange(folder: string, files: { intent: string; plan?: string; release?: string; design?: string }, opts: { urlOf?: (file: string) => string | undefined } = {}): RequirementItem[] {
   const intent = frontMatter(files.intent, 'intent.md');
   checkHeader(intent.header, 'intent.md', folder);
   const plan = files.plan === undefined ? undefined : frontMatter(files.plan, 'plan.md');
@@ -267,8 +268,14 @@ export function parseChange(folder: string, files: { intent: string; plan?: stri
     const url = opts.urlOf?.(file);
     return { path: pathOf(file), ...(url && { url }) };
   };
+  // design.md (pdi contract 0.9.0): linked frames become Figma links of the change and of the slices naming the
+  // requirement, which the graph turns into explicit `designed_by` relations (graph.ts, remoteLinks).
+  const design = files.design === undefined ? undefined : parseDesignMd(files.design).rows;
+  const linkedOf = (rows: DesignRow[]) => [...new Set(rows.flatMap((r) => (r.frame ? [r.frame.url] : [])))];
+  const designUrl = opts.urlOf?.('design.md');
   const epicRepo: RepoFacts = {
     path: pathOf('intent.md'),
+    ...(design && { design: { path: `${CHANGES_DIR}/${folder}/design.md`, ...(designUrl && { url: designUrl }), rows: design } }),
     ...(plan && { plan: fileOf('plan.md') }),
     ...(release && { release: { ...fileOf('release.yaml'), flags: release.flags } }),
   };
@@ -282,6 +289,7 @@ export function parseChange(folder: string, files: { intent: string; plan?: stri
     ...(mvp && { mvp }),
     updatedAt: updatedAt(intent.header),
     ...(intentUrl && { url: intentUrl }),
+    remoteLinks: design ? linkedOf(design) : [],
     repo: epicRepo,
   };
 
@@ -307,6 +315,7 @@ export function parseChange(folder: string, files: { intent: string; plan?: stri
     flagKeys: release ? flagsOf.get(key) ?? [] : row?.flags ?? [],
     updatedAt: updatedAt(plan?.header ?? intent.header),
     ...((row ? planUrl : releaseUrl) && { url: row ? planUrl : releaseUrl }),
+    remoteLinks: design && row ? linkedOf(design.filter((d) => (row.requirements ?? []).some((req) => req === d.requirement || req === d.requirement.split('/')[0]))) : [],
     repo: row ? { path: pathOf('plan.md'), line: row.lineNo, kind: row.kind, ...(row.unblocks && { unblocks: row.unblocks }), requirements: row.requirements } : { path: pathOf('release.yaml') },
   });
   const stories = rows.filter((r) => r.status !== 'dropped').map((r) => story(r, r.key));
@@ -358,8 +367,17 @@ export async function readRepoChanges(root: string, opts: { repoUrl?: string } =
         }
       }
       if (texts['intent.md'] === undefined) throw new RepoFileError('intent.md', 'missing: a change needs its intent.md');
-      const urlOf = (file: ChangeFile) => (base && /^https:\/\//.test(base) ? `${base}/blob/HEAD/${rel(file).split('/').map(encodeURIComponent).join('/')}` : undefined);
-      requirements.push(...parseChange(folder, { intent: texts['intent.md'], plan: texts['plan.md'], release: texts['release.yaml'] }, { urlOf }));
+      const urlOf = (file: string) => (base && /^https:\/\//.test(base) ? `${base}/blob/HEAD/${rel(file).split('/').map(encodeURIComponent).join('/')}` : undefined);
+      // design.md is optional and its errors do not drop the change: the change is read without its frames.
+      let design: string | undefined;
+      try {
+        design = await readSmall(join(dir, folder, 'design.md'));
+        if (design !== undefined) parseDesignMd(design);
+      } catch (err) {
+        problems.push({ path: rel('design.md'), message: err instanceof DesignFormatError ? err.message : `cannot read: ${(err as Error).message}` });
+        design = undefined;
+      }
+      requirements.push(...parseChange(folder, { intent: texts['intent.md'], plan: texts['plan.md'], release: texts['release.yaml'], design }, { urlOf }));
     } catch (err) {
       if (!(err instanceof RepoFileError)) throw err;
       problems.push({ path: rel(err.file), message: err.message });

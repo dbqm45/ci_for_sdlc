@@ -30,6 +30,14 @@
         "reconstruction.schema.json": "packages/core/test/fixtures/tf-reconstruction/reconstruction-export.schema.json",
         "examples/reconstruction.json": "packages/core/test/fixtures/tf-reconstruction/reconstruction.json"
       }
+    },
+    {
+      "version": "0.9.0",
+      "files": {
+        "design-links.schema.json": "packages/core/test/fixtures/pdi-contract/0.9.0/design-links.schema.json",
+        "examples/design.md": "packages/core/test/fixtures/pdi-contract/0.9.0/design.md",
+        "examples/design-links.json": "packages/core/test/fixtures/pdi-contract/0.9.0/design-links.json"
+      }
     }
   ]
 }

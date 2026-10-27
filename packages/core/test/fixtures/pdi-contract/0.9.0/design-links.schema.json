@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dbqm45/pdi/contract/design-links.schema.json",
+  "title": "Ramki projektu zmiany z design.md (pdi, kontrakt 0.9.0)",
+  "description": "Odczytana tabela ramek z docs/project/changes/CHG-n/design.md: wymaganie → ścieżka → stan → ramka Figmy. Zapis w Markdown, reguły w contract.json → conventions.design; parsery tf, ci_for_sdlc i pdi dają z tego samego pliku ten sam obiekt (wzorzec: examples/design.md ↔ examples/design-links.json).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "rows"
+  ],
+  "properties": {
+    "rows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/row"
+      }
+    }
+  },
+  "$defs": {
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirement",
+        "journey",
+        "state",
+        "status"
+      ],
+      "properties": {
+        "requirement": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]*-[0-9]+(/AC-[0-9]+)?$"
+        },
+        "journey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "idle",
+            "loading",
+            "processing",
+            "success",
+            "validation_error",
+            "server_error",
+            "timeout",
+            "retry",
+            "empty",
+            "confirmation",
+            "session_expired",
+            "network_failure",
+            "permission_denied"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "linked",
+            "missing",
+            "not_applicable"
+          ]
+        },
+        "frame": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file_key",
+            "node_id",
+            "url"
+          ],
+          "properties": {
+            "file_key": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9]+$"
+            },
+            "node_id": {
+              "type": "string",
+              "pattern": "^[0-9]+:[0-9]+$"
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https://(www\\.)?figma\\.com/"
+            }
+          }
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "linked"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "frame"
+            ]
+          },
+          "else": {
+            "required": [
+              "note"
+            ],
+            "not": {
+              "required": [
+                "frame"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
