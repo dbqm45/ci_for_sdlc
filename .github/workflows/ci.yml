@@ -24,6 +24,8 @@ jobs:
       - run: npm run typecheck
       # Conventional Commits and SemVer helpers behind the PR title check and `npm run release`.
       - run: npm run test:scripts
+      - name: Copies of the pdi contract match their pinned source (scripts/pdi-contract.json)
+        run: npm run contract:check
       # Unit tests with coverage; includes the API contract test (packages/server/contracts/openapi.json).
       - run: npm run test:coverage
       - run: npm run build
