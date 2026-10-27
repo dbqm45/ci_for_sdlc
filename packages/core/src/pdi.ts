@@ -188,3 +188,64 @@ export function decisionRecordedEvent(i: DecisionRecordedInput, at: string): Pdi
     },
   };
 }
+
+// ---------------------------------------------------------------------------- gate.requested (F4)
+
+const MAX_QUESTIONS = 20;
+const MAX_QUESTION = 300;
+
+/** What a person sends with a request for approval of a change that is not ready. */
+export interface GateRequestInput {
+  change: ChangeReadiness;
+  /** The change's stories, as analysed. */
+  stories: ItemAnalysis[];
+  requestedBy: string;
+  note?: string;
+  /** CI_PUBLIC_URL, for the link to the first story. */
+  publicUrl?: string;
+}
+
+/**
+ * What stands between the change and readiness, per story not ready: blocking issues, the questions of open findings
+ * and unanswered challenges, as `KEY: text`, without repeats, at most 20.
+ */
+export function approvalQuestions(stories: ItemAnalysis[]): string[] {
+  const out: string[] = [];
+  for (const s of stories) {
+    if (s.readiness === 'ready') continue;
+    const texts = [
+      ...s.blockingIssues,
+      ...s.findings.filter((f) => f.status === 'open' && f.question).map((f) => f.question!.text),
+      ...s.challenges.filter((c) => !c.answered).map((c) => c.question.text),
+    ];
+    for (const t of texts) {
+      const line = `${s.key}: ${t}`.slice(0, MAX_QUESTION);
+      if (!out.includes(line)) out.push(line);
+    }
+  }
+  return out.slice(0, MAX_QUESTIONS);
+}
+
+/** `gate.requested` for "Approve for implementation" of a change a person wants decided although it is not ready. */
+export function gateRequestedEvent(i: GateRequestInput, at: string): PdiEvent {
+  const notReady = i.stories.filter((s) => s.readiness !== 'ready').length;
+  const state = i.change.readiness === 'drift' ? 'its approved baseline drifted' : `${notReady} of ${i.stories.length} stories not ready`;
+  const note = i.note?.trim();
+  const questions = approvalQuestions(i.stories);
+  const first = i.change.items[0];
+  return {
+    id: `ci-gate-${i.change.change}-${isoSeconds(at).replace(/[-:]/g, '')}`,
+    type: 'gate.requested',
+    occurred_at: isoSeconds(at),
+    source: 'ci_for_sdlc',
+    contract_version: PDI_DECISION_CONTRACT_VERSION,
+    payload: {
+      change: i.change.change,
+      gate: APPROVE_GATE,
+      summary: `${i.change.change}: ${i.requestedBy} asks to approve it for implementation although ${state}${note ? ` — ${note.slice(0, 500)}` : ''}`,
+      artifact: `stories ${i.change.items.join(', ')}`.slice(0, 500),
+      ...(i.publicUrl && first && { url: `${i.publicUrl.replace(/\/$/, '')}/#/item/${encodeURIComponent(first)}` }),
+      ...(questions.length && { questions }),
+    },
+  };
+}

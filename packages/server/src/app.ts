@@ -9,7 +9,7 @@ import { proposalEvent, recordAutoClose, type AutoCloseSink } from './auto-close
 import { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
-import { MUTATION, answerActionBody, answerParams, approveBody, atlassianSiteBody, oauthCallbackQuery, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
+import { MUTATION, answerActionBody, answerParams, approvalRequestBody, approveBody, atlassianSiteBody, changeParams, oauthCallbackQuery, decisionBody, errors, idParams, impactQuery, itemKeyParams, problem, settingsBody, withdrawBody } from './schemas.js';
 import { deepMerge, Store, type Settings } from './store.js';
 import { APP_VERSION } from './version.js';
 
@@ -452,6 +452,36 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
 
   // ------------------------------------------------------------------ pdi (F4, docs/PDI-F4-PLAN.md)
   app.get('/api/pdi', async () => pdi.status());
+
+  /** The pdi changes (stories labelled `change:CHG-n`) with their readiness and the last request for approval. */
+  const changesNow = async () => {
+    const result = await ensure();
+    const prefix = (await store.settings()).integrations.jira.changeLabelPrefix || undefined;
+    return { result, changes: changeReadiness(result.items, engine.state.context?.requirements ?? [], prefix) };
+  };
+  app.get('/api/changes', async () => {
+    const [{ changes }, state] = await Promise.all([changesNow(), store.pdiState()]);
+    return { pdi: pdi.enabled, changes: changes.map((c) => ({ ...c, ...(state.requested?.[c.change] && { requested: state.requested[c.change] }) })) };
+  });
+
+  /** F4: ask pdi to decide "Approve for implementation" for a change that is not ready (`gate.requested`). */
+  app.post<{ Params: { change: string }; Body: { by?: string; note?: string } | null }>(
+    '/api/changes/:change/request-approval',
+    { schema: { summary: 'Ask pdi to decide the approval of a change that is not ready', params: changeParams, body: approvalRequestBody, response: errors(404, 409, 422), ...MUTATION } },
+    async (req) => {
+      if (!pdi.enabled) throw httpError(409, 'The pdi link is not configured (PDI_EVENTS_URL and PDI_SIGNING_SECRET).');
+      const { result, changes } = await changesNow();
+      const change = changes.find((c) => c.change === req.params.change);
+      if (!change) throw httpError(404, `No stories labelled with change ${req.params.change}`);
+      if (change.readiness === 'ready') throw httpError(409, `${change.change} is ready: pdi already has it as "Approve for implementation".`);
+      const by = who(req, req.body);
+      const stories = change.items.map((k) => result.items.find((i) => i.key === k)!).filter(Boolean);
+      const event = await pdi.requestApproval({ change, stories, requestedBy: by.actor, note: req.body?.note });
+      await store.audit({ at: event.occurred_at, kind: 'pdi', ...by, summary: `Asked pdi to approve ${change.change} for implementation (${change.readiness})` });
+      void pdi.deliver().catch((e) => app.log.error(e));
+      return { event };
+    },
+  );
 
   /**
    * gate.decided from pdi. Outside the admin-token guard like the other webhooks, but signed: the raw body is needed

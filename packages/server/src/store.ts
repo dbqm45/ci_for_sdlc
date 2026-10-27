@@ -35,6 +35,8 @@ export const DEFAULT_JIRA_ISSUE_TYPES: Record<string, IssueType> = { Epic: 'epic
 export interface PdiState {
   sent: Record<string, string>;
   seen: string[];
+  /** The last request for approval sent per change (gate.requested). */
+  requested?: Record<string, { at: string; by: string; event: string }>;
 }
 const pdiStateShape: Shape<PdiState> = (v): v is PdiState => isRecord(v);
 export interface PdiOutboxEntry {

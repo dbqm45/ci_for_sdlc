@@ -1,5 +1,6 @@
 import type { AcceptanceStats, AnalysisResult, Approval, Decision, DeepPartial, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem, Settings } from '@ci/core';
 import { authStep } from './lib/auth';
+import type { ChangeState } from './lib/changes';
 
 export type { AnalysisResult, ItemAnalysis, Decision, DriftEvent, ImpactReport };
 
@@ -175,6 +176,14 @@ export const api = {
     return req<AnalysisResult>('POST', `/api/decisions/${encodeURIComponent(id)}/reopen`, { by: currentUser(), reason: reason.trim() || undefined });
   },
   acceptance: () => req<AcceptanceStats[]>('GET', '/api/decisions/acceptance'),
+  /** F4: pdi changes (stories labelled `change:CHG-n`) and whether the pdi link is on. */
+  changes: () => req<{ pdi: boolean; changes: ChangeState[] }>('GET', '/api/changes'),
+  /** F4: ask pdi to decide the approval of a change that is not ready. Returns undefined when the user cancels. */
+  requestApproval: async (change: string) => {
+    const note = window.prompt(`Ask pdi to approve ${change} for implementation although it is not ready. Why? (optional, shown in pdi's inbox)`);
+    if (note === null) return undefined;
+    return req<{ event: { id: string } }>('POST', `/api/changes/${encodeURIComponent(change)}/request-approval`, { by: currentUser(), note: note.trim() || undefined });
+  },
   impact: (q: string) => req<ImpactReport>('GET', `/api/impact?q=${encodeURIComponent(q)}`),
   drift: () => req<DriftEvent[]>('GET', '/api/drift'),
   history: () => req<HistoryPoint[]>('GET', '/api/history'),

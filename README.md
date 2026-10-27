@@ -226,7 +226,9 @@ Konfiguracja: [`packages/mcp/README.md`](packages/mcp/README.md).
 | GET / PUT | `/api/settings` | ustawienia |
 | POST | `/api/webhooks/:source` | powiadomienie o zmianie (jira / confluence / figma) |
 | POST | `/api/webhooks/pdi` | `gate.decided` z pdi (podpis `X-PDI-Signature`); „Approve for implementation” zatwierdza historyjki zmiany bez blokujących ustaleń, z numerem decyzji pdi |
-| GET | `/api/pdi` | połączenie z pdi: konfiguracja (bez sekretu), ostatnio wysłana gotowość zmian, kolejka zdarzeń |
+| GET | `/api/pdi` | połączenie z pdi: konfiguracja (bez sekretu), ostatnio wysłana gotowość zmian, prośby o zatwierdzenie, kolejka zdarzeń |
+| GET | `/api/changes` | zmiany pdi (historyjki z etykietą `change:CHG-n`): gotowość, historyjki, ostatnia prośba o zatwierdzenie |
+| POST | `/api/changes/:change/request-approval` | prośba do pdi o decyzję „Approve for implementation” dla zmiany niegotowej (`gate.requested` z blokadami jako pytaniami) |
 | GET | `/api/events` | Server-Sent Events (`analysis`, `status`) |
 | GET | `/api/openapi.json` | kontrakt API (OpenAPI 3) |
 

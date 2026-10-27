@@ -202,6 +202,12 @@ waits until the decision it reopens has its DEC and sends it as `supersedes`. De
 `MAX_ATTEMPTS`; a 400 from pdi marks the entry `failed` with pdi's reason and is not retried. Plan:
 `docs/PDI-F4-PLAN.md`, "A2b".
 
+For a change that is not ready, a person can ask pdi to decide "Approve for implementation" anyway
+(`POST /api/changes/:change/request-approval`, "Ask pdi to approve" on the story page): `gateRequestedEvent()` in core
+lists what blocks the stories as `questions`, and the request goes to the same outbox and is kept like a decision.
+`GET /api/changes` lists the changes with their readiness and the last request. A ready change reaches pdi through
+`readiness.changed` alone.
+
 ## Persistence
 
 `CI_DATA_DIR` (default `.ci-data/`): `settings.json`, `decisions.json`, `approvals.json`, `snapshot.json`,
