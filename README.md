@@ -245,6 +245,8 @@ MVP celowo obejmuje tylko **Level 1 — Definition Intelligence** (Jira + Conflu
 
 ### Co dalej (stan 27.10.2026)
 
+Lista kontrolna tych kroków jest na górze [`TODO.md`](TODO.md).
+
 1. **Do zrobienia ręcznie:** odświeżyć wzorzec wizualny `e2e/__screenshots__/settings.png` — w *Integrations* doszedł
    blok *Tests (JUnit XML)*, więc nocny test wizualny strony *Settings* jest czerwony do czasu nowego wzorca.
    *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt `visual-baselines`
