@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
-import { CHANGE_LABEL_PREFIX, approvalQuestions, changeKeyOf, changeReadiness, decisionRecordedEvent, gateRequestedEvent, parseGateDecided, readinessEvents, type DecisionRecordedInput, type ItemAnalysis, type RequirementItem } from '../src/index.js';
+import { CHANGE_LABEL_PREFIX, approvalQuestions, mergeChangeReadiness, workspacePath, changeKeyOf, changeReadiness, decisionRecordedEvent, gateRequestedEvent, parseGateDecided, readinessEvents, type DecisionRecordedInput, type ItemAnalysis, type RequirementItem } from '../src/index.js';
 
 // F4 (pdi docs/plan-jeden-flow-sdlc.md §6): readiness of a pdi change (CHG-n) from the stories labelled `change:CHG-n`,
 // sent to pdi as readiness.changed; gate.decided from pdi approves the stories. Envelopes: pdi contract 0.4.0.
@@ -235,5 +235,35 @@ describe('gate.requested (F4)', () => {
     expect(validate(e)).toBe(true);
     const many = story('PAY-3', 'not_ready', { challenges: Array.from({ length: 30 }, (_, n) => `Question ${n}?`) });
     expect(approvalQuestions([many])).toHaveLength(20);
+  });
+});
+
+// F5 (docs/WORKSPACES-F5-PLAN.md): one change across the stories of several workspaces.
+describe('changes across workspaces (F5)', () => {
+  const c = (change: string, readiness: 'ready' | 'not_ready' | 'drift', items: string[], openQuestions = 0) => ({ change, readiness, openQuestions, items });
+
+  it.each([
+    ['ready in both', ['ready', 'ready'], 'ready'],
+    ['not ready in one', ['ready', 'not_ready'], 'not_ready'],
+    ['drift wins', ['drift', 'not_ready'], 'drift'],
+  ] as const)('WS-01: %s', (_, [a, b], expected) => {
+    expect(mergeChangeReadiness([[c('CHG-12', a, ['PAY-1'], 1)], [c('CHG-12', b, ['APP-7'], 2)]])).toEqual([c('CHG-12', expected, ['PAY-1', 'APP-7'], 3)]);
+  });
+
+  it('WS-02: changes only in one workspace stay as they are, ordered by key', () => {
+    expect(mergeChangeReadiness([[c('CHG-10', 'ready', ['PAY-1'])], [c('CHG-2', 'not_ready', ['APP-7'])]]).map((x) => x.change)).toEqual(['CHG-2', 'CHG-10']);
+  });
+
+  it('WS-03: links, refs and ids of another workspace carry it; default keeps the old form', () => {
+    expect(workspacePath()).toBe('');
+    expect(workspacePath('default')).toBe('');
+    expect(workspacePath('mobile')).toBe('/w/mobile');
+    const input: DecisionRecordedInput = { outcome: 'accepted', proposalId: 'ans:1a2b', itemKey: 'APP-7', findingId: 'ERR-003:APP-7', question: 'Q?', quote: 'A.', source: { title: 'Page' }, decidedBy: 'Ann', publicUrl: 'https://ci.example.com' };
+    const e = decisionRecordedEvent({ ...input, workspace: 'mobile' }, '2026-10-27T12:00:00Z');
+    expect(e.payload).toMatchObject({ ref: 'mobile/APP-7/ERR-003:APP-7', url: 'https://ci.example.com/#/w/mobile/item/APP-7/ERR-003%3AAPP-7' });
+    expect(e.id).toBe('ci-ac-mobile-1a2b-accepted-20261027T120000Z');
+    expect(decisionRecordedEvent({ ...input, workspace: 'default' }, '2026-10-27T12:00:00Z').payload.ref).toBe('APP-7/ERR-003:APP-7');
+    const g = gateRequestedEvent({ change: c('CHG-12', 'not_ready', ['APP-7']), stories: [], requestedBy: 'Ann', publicUrl: 'https://ci.example.com', workspace: 'mobile' }, '2026-10-27T12:00:00Z');
+    expect(g.payload.url).toBe('https://ci.example.com/#/w/mobile/item/APP-7');
   });
 });

@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { api, currentUser, readToken, type AnalysisResult, errMsg } from './api';
+import { api, currentUser, currentWorkspace, readToken, setWorkspace, workspaceApi, type AnalysisResult, errMsg } from './api';
+import { WorkspaceSelect } from './components/WorkspaceSelect';
+import { hashPath, parseHashPath } from './lib/workspace';
 import { ago, Sdot, Source, Spinner } from './components/ui';
 import {
   ActivityIcon,
@@ -45,14 +47,27 @@ interface AppCtx {
 const Ctx = createContext<AppCtx>(null as unknown as AppCtx);
 export const useApp = () => useContext(Ctx);
 
-function useHashRoute(): [string, (p: string) => void] {
-  const [path, setPath] = useState(() => location.hash.slice(1) || '/overview');
+/**
+ * The page path and the workspace (F5): `#/w/<id>/…` switches to a workspace; a link without it stays in the current
+ * one, and the address is rewritten so it can be copied.
+ */
+function readHashRoute() {
+  const hash = location.hash.slice(1);
+  const { ws, path } = parseHashPath(hash);
+  if (ws) setWorkspace(ws);
+  const canonical = hashPath(path, currentWorkspace());
+  if (hash && hash !== canonical) history.replaceState(null, '', `#${canonical}`);
+  return { ws: currentWorkspace(), path };
+}
+
+function useHashRoute(): [string, string, (p: string) => void] {
+  const [route, setRoute] = useState(readHashRoute);
   useEffect(() => {
-    const on = () => setPath(location.hash.slice(1) || '/overview');
+    const on = () => setRoute(readHashRoute());
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  return [path, (p: string) => (location.hash = p)];
+  return [route.path, route.ws, (p: string) => (location.hash = hashPath(p, currentWorkspace()))];
 }
 
 const NAV = [
@@ -167,7 +182,7 @@ function AccountMenu({ navigate }: { navigate: (p: string) => void }) {
 }
 
 export function App() {
-  const [path, navigate] = useHashRoute();
+  const [path, ws, navigate] = useHashRoute();
   const [analysis, setAnalysis] = useState<Analysis>();
   const [error, setError] = useState<string>();
   const [running, setRunning] = useState(false);
@@ -208,11 +223,13 @@ export function App() {
   }, [toast]);
 
   useEffect(() => {
+    // Another workspace is another analysis: drop the one shown before fetching.
+    setAnalysis(undefined);
     void refresh();
     // Live updates: server pushes an event after every analysis (schedule, webhook, other users).
     // Read with fetch, not EventSource, so the read token (CI_READ_TOKEN) goes in a header (lib/sse.ts).
-    return subscribeEvents('/api/events', { analysis: () => void refresh(), status: (data) => setRunning(!!JSON.parse(data).running) }, { token: readToken });
-  }, [refresh]);
+    return subscribeEvents(workspaceApi('/api/events'), { analysis: () => void refresh(), status: (data) => setRunning(!!JSON.parse(data).running) }, { token: readToken });
+  }, [refresh, ws]);
 
   // Close the drawer/rail-overlay on route change, and whenever the matching
   // breakpoint no longer applies (resize back to desktop).
@@ -267,7 +284,7 @@ export function App() {
     <a
       key={n.path}
       className={`nav-item ${activePath === n.path ? 'active' : ''}`}
-      href={`#${n.path}`}
+      href={`#${hashPath(n.path, ws)}`}
       onClick={() => setDrawerOpen(false)}
     >
       <span className="nav-icon">
@@ -379,6 +396,7 @@ export function App() {
             {analysis && (
               <div className="mobile-status-row">
                 <div className="mobile-status-row-top">
+                  <WorkspaceSelect ws={ws} toast={toast} />
                   <span className="topbar-project">
                     Project: <strong>{analysis.project.name}</strong>
                   </span>
@@ -395,6 +413,7 @@ export function App() {
             )}
           </div>
           <header className="topbar">
+            <WorkspaceSelect ws={ws} toast={toast} />
             <div className="topbar-project">
               Project: <strong>{analysis?.project.name ?? '…'}</strong>
             </div>
@@ -412,7 +431,9 @@ export function App() {
             </button>
             <AccountMenu navigate={navigate} />
           </header>
-          <main className="content">{page}</main>
+          <main className="content" key={ws}>
+            {page}
+          </main>
         </div>
       </div>
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}

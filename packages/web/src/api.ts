@@ -1,6 +1,14 @@
 import type { AcceptanceStats, AnalysisResult, Approval, Decision, DeepPartial, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem, Settings } from '@ci/core';
 import { authStep } from './lib/auth';
 import type { ChangeState } from './lib/changes';
+import { DEFAULT_WORKSPACE, apiUrl } from './lib/workspace';
+
+let workspace = DEFAULT_WORKSPACE;
+/** The workspace this page shows (F5); every request of a workspace goes to its routes. */
+export const currentWorkspace = () => workspace;
+export const setWorkspace = (ws: string) => void (workspace = ws);
+/** An API URL of the current workspace (also for the live updates). */
+export const workspaceApi = (url: string) => apiUrl(url, workspace);
 
 export type { AnalysisResult, ItemAnalysis, Decision, DriftEvent, ImpactReport };
 
@@ -115,7 +123,7 @@ async function req<T>(method: string, url: string, body?: unknown, headers: Reco
 
 async function send(method: string, url: string, body?: unknown, headers: Record<string, string> = {}, retried = false): Promise<{ json: unknown; res: Response }> {
   const token = readToken();
-  const res = await fetch(url, {
+  const res = await fetch(workspaceApi(url), {
     method,
     headers: {
       ...(body !== undefined && { 'content-type': 'application/json' }),
@@ -176,6 +184,9 @@ export const api = {
     return req<AnalysisResult>('POST', `/api/decisions/${encodeURIComponent(id)}/reopen`, { by: currentUser(), reason: reason.trim() || undefined });
   },
   acceptance: () => req<AcceptanceStats[]>('GET', '/api/decisions/acceptance'),
+  /** F5: the workspaces of this installation. */
+  workspaces: () => req<{ id: string; name: string }[]>('GET', '/api/workspaces'),
+  createWorkspace: (id: string, name: string) => req<{ id: string; name: string }>('POST', '/api/workspaces', { id, name, by: currentUser() }),
   /** F4: pdi changes (stories labelled `change:CHG-n`) and whether the pdi link is on. */
   changes: () => req<{ pdi: boolean; changes: ChangeState[] }>('GET', '/api/changes'),
   /** F4: ask pdi to decide the approval of a change that is not ready. Returns undefined when the user cancels. */

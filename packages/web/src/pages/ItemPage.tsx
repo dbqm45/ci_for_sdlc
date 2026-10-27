@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import type { ContextRef, ItemAnalysis } from '@ci/core';
 import { useApp } from '../App';
-import { api, currentUser, type GraphData, type ItemDetail, errMsg } from '../api';
+import { api, currentUser, currentWorkspace, type GraphData, type ItemDetail, errMsg } from '../api';
 import { FindingCard, QuestionBox } from '../components/FindingCard';
 import { GraphView } from '../components/GraphView';
 import { Modal } from '../components/Modal';
@@ -36,7 +36,7 @@ export function ItemPage({ itemKey, focusFinding }: { itemKey: string; focusFind
   useEffect(() => void load(), [load, version]);
   const [changes, setChanges] = useState<{ pdi: boolean; changes: ChangeState[] }>({ pdi: false, changes: [] });
   useEffect(() => void api.changes().then(setChanges).catch(() => undefined), [version]);
-  const change = changeOfItem(changes.changes, itemKey);
+  const change = changeOfItem(changes.changes, itemKey, currentWorkspace());
   const askPdi = async (c: ChangeState) => {
     try {
       if (!(await api.requestApproval(c.change))) return;

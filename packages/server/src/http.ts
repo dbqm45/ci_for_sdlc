@@ -58,7 +58,7 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
   app.decorateRequest('principal', null);
 
   app.addHook('onRequest', async (req) => {
-    if (!req.url.startsWith('/api/') || req.url.startsWith('/api/webhooks/')) return;
+    if (!req.url.startsWith('/api/') || req.url.startsWith('/api/webhooks/') || /^\/api\/w\/[^/]+\/webhooks\//.test(req.url)) return;
     const host = (req.headers.host ?? '').toLowerCase();
     const hostOk = hosts.has(host) || hosts.has(hostnameOf(host)) || isLoopbackName(hostnameOf(host)) || (!hosts.size && !!(cfg.adminToken || cfg.readToken));
     if (!hostOk) throw httpError(403, `Host "${host}" is not allowed. Add it to CI_ALLOWED_HOSTS.`);

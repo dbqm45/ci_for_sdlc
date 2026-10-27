@@ -84,6 +84,29 @@ export function changeReadiness(items: ItemAnalysis[], requirements: Requirement
 
 const isoSeconds = (at: string) => `${at.slice(0, 19)}Z`;
 
+/** The workspace of an installation that has only one (F5, docs/WORKSPACES-F5-PLAN.md); its links and refs keep their old form. */
+export const DEFAULT_WORKSPACE = 'default';
+const inWorkspace = (ws: string | undefined) => !!ws && ws !== DEFAULT_WORKSPACE;
+/** The UI route prefix of a workspace: `/w/<id>` (empty for `default`). */
+export const workspacePath = (ws?: string) => (inWorkspace(ws) ? `/w/${encodeURIComponent(ws!)}` : '');
+
+/**
+ * One readiness per change from the changes of several workspaces (F5): a change spans the stories of all of them,
+ * `drift` if any part drifted, `ready` only if every part is ready, open questions added up. Ordered by change key.
+ */
+export function mergeChangeReadiness(parts: ChangeReadiness[][]): ChangeReadiness[] {
+  const byChange = new Map<string, ChangeReadiness[]>();
+  for (const c of parts.flat()) byChange.set(c.change, [...(byChange.get(c.change) ?? []), c]);
+  return [...byChange.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true }))
+    .map(([change, cs]) => ({
+      change,
+      readiness: cs.some((c) => c.readiness === 'drift') ? 'drift' : cs.every((c) => c.readiness === 'ready') ? 'ready' : 'not_ready',
+      openQuestions: cs.reduce((n, c) => n + c.openQuestions, 0),
+      items: cs.flatMap((c) => c.items),
+    }));
+}
+
 /** `readiness.changed` for each change whose state differs from the last one sent; `sent` is the new last-sent map. */
 export function readinessEvents(current: ChangeReadiness[], lastSent: Record<string, string>, at: string): { events: PdiEvent[]; sent: Record<string, string> } {
   const sent = { ...lastSent };
@@ -152,6 +175,8 @@ export interface DecisionRecordedInput {
   why?: string;
   /** CI_PUBLIC_URL, for a link to the finding. */
   publicUrl?: string;
+  /** F5: the workspace of the item; another than `default` prefixes the ref, the link and the event id. */
+  workspace?: string;
 }
 
 /** The `decision.recorded` event of one A2a step: a person's decision on an AI draft, or the automat's (`applied`). */
@@ -166,16 +191,17 @@ export function decisionRecordedEvent(i: DecisionRecordedInput, at: string): Pdi
   }[i.outcome];
   const automatic = i.outcome === 'applied';
   const base = i.publicUrl?.replace(/\/+$/, '');
+  const ws = inWorkspace(i.workspace) ? `${i.workspace}/` : '';
   return {
-    id: `ci-ac-${i.proposalId.replace(/^ans:/, '').replace(/[^A-Za-z0-9._-]/g, '-')}-${i.outcome}-${isoSeconds(at).replace(/[-:]/g, '')}`,
+    id: `ci-ac-${ws.replace('/', '-')}${i.proposalId.replace(/^ans:/, '').replace(/[^A-Za-z0-9._-]/g, '-')}-${i.outcome}-${isoSeconds(at).replace(/[-:]/g, '')}`,
     type: 'decision.recorded',
     occurred_at: isoSeconds(at),
     source: 'ci_for_sdlc',
     contract_version: PDI_DECISION_CONTRACT_VERSION,
     payload: {
       decision_type: 'finding.auto_close',
-      ref: `${i.itemKey}/${i.findingId}`.slice(0, MAX_REF),
-      ...(base && { url: `${base}/#/item/${encodeURIComponent(i.itemKey)}/${encodeURIComponent(i.findingId)}` }),
+      ref: `${ws}${i.itemKey}/${i.findingId}`.slice(0, MAX_REF),
+      ...(base && { url: `${base}/#${workspacePath(i.workspace)}/item/${encodeURIComponent(i.itemKey)}/${encodeURIComponent(i.findingId)}` }),
       statement,
       ...(i.why?.trim() && { why: i.why.trim() }),
       decided_by: automatic ? PDI_AUTOMAT : i.decidedBy,
@@ -203,6 +229,8 @@ export interface GateRequestInput {
   note?: string;
   /** CI_PUBLIC_URL, for the link to the first story. */
   publicUrl?: string;
+  /** F5: the workspace of the first story. */
+  workspace?: string;
 }
 
 /**
@@ -244,7 +272,7 @@ export function gateRequestedEvent(i: GateRequestInput, at: string): PdiEvent {
       gate: APPROVE_GATE,
       summary: `${i.change.change}: ${i.requestedBy} asks to approve it for implementation although ${state}${note ? ` — ${note.slice(0, 500)}` : ''}`,
       artifact: `stories ${i.change.items.join(', ')}`.slice(0, 500),
-      ...(i.publicUrl && first && { url: `${i.publicUrl.replace(/\/$/, '')}/#/item/${encodeURIComponent(first)}` }),
+      ...(i.publicUrl && first && { url: `${i.publicUrl.replace(/\/$/, '')}/#${workspacePath(i.workspace)}/item/${encodeURIComponent(first)}` }),
       ...(questions.length && { questions }),
     },
   };
