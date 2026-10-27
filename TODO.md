@@ -1,6 +1,6 @@
 # TODO
 
-## Następne kroki (stan 27.10.2026, po G4)
+## Następne kroki (stan 27.10.2026, po G4 i krokach 1–2 G3)
 
 - [ ] **Wzorzec wizualny `e2e/__screenshots__/settings.png` (ręcznie, właściciel repo).** W *Settings → Integrations*
       doszedł blok *Tests (JUnit XML)* (#77), więc nocny test wizualny strony *Settings* jest czerwony do czasu nowego
@@ -11,9 +11,10 @@
 - [ ] **G8 — incydenty.** Incydent jako nowe zgłoszenie PRB w pdi. Najpierw decyzja: które narzędzie (PagerDuty,
       Opsgenie, …).
 - [ ] **G3 — kalibracja prognozy automatu** (od D-E1 prognozę liczy automat, sprintdeck głosuje nad ryzykiem):
-      1. ShipScope: czas przepływu zmiany i cięcia (pierwszy commit → pierwsze wydanie na PROD) w API usług;
-      2. tf/pdi: prognoza (cięcia × mediana czasu przepływu) i porównanie z wynikiem po wydaniu;
-      3. sprintdeck, po jego MVP (konta, import z Jiry): prognoza przy zadaniu w pokoju.
+      - [x] ShipScope: czas przepływu zmiany i cięcia (pierwszy commit → pierwsze wydanie na PROD) w API usług
+            (dbqm45/evdt-service-shipscope#119);
+      - [x] pdi: prognoza (cięcia × mediana dni na cięcie) i porównanie z wynikiem po wydaniu (dbqm45/pdi#37);
+      - [ ] sprintdeck, po jego MVP (konta, import z Jiry): prognoza przy zadaniu w pokoju.
 - [ ] **G6, G7, P1, P2** (jedno wejście dla ludzi, miary przepływu, wspólna platforma, Jira czy repo) — decyzje
       architektoniczne do podjęcia, nie pojedyncze PR-y.
 - [ ] **W tym repo:** OpenAPI jako źródło (Faza 2, `docs/ROADMAP.md`) i wiele repozytoriów / projektów w jednej
