@@ -1,6 +1,6 @@
 {
   "name": "@ci/sandbox",
-  "version": "0.1.27",
+  "version": "0.1.28",
   "private": true,
   "type": "module",
   "description": "Test data world, change scenarios and the rule coverage guard (docs/TEST-DATA-GENERATOR.md)",

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Continuous Intelligence for the SDLC",
-    "version": "0.1.27",
+    "version": "0.1.28",
     "description": "State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state. Reads need the read token (or the admin token) when CI_READ_TOKEN is set, except /api/health."
   },
   "components": {
