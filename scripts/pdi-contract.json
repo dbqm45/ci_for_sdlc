@@ -1,0 +1,35 @@
+{
+  "repo": "dbqm45/pdi",
+  "sets": [
+    {
+      "version": "0.4.0",
+      "ref": "5d5ca9c41e66fe1f93e80df3cee70e83352ca825",
+      "files": {
+        "fixtures/story-shape/README.md": "packages/core/test/fixtures/pdi-contract/0.4.0/story-shape/README.md",
+        "fixtures/story-shape/stories.json": "packages/core/test/fixtures/pdi-contract/0.4.0/story-shape/stories.json",
+        "fixtures/story-shape/stories.schema.json": "packages/core/test/fixtures/pdi-contract/0.4.0/story-shape/stories.schema.json",
+        "fixtures/story-shape/expected.json": "packages/core/test/fixtures/pdi-contract/0.4.0/story-shape/expected.json",
+        "fixtures/story-shape/expected.schema.json": "packages/core/test/fixtures/pdi-contract/0.4.0/story-shape/expected.schema.json",
+        "fixtures/story-shape/vocabulary.json": "packages/core/test/fixtures/pdi-contract/0.4.0/story-shape/vocabulary.json",
+        "examples/event-readiness.changed.json": "packages/core/test/fixtures/pdi-contract/0.4.0/events/event-readiness.changed.json",
+        "examples/event-gate.decided.json": "packages/core/test/fixtures/pdi-contract/0.4.0/events/event-gate.decided.json"
+      }
+    },
+    {
+      "version": "0.7.0",
+      "ref": "6e2b16604d55838b5e1eeb1e3f9a3020a5ecaf3c",
+      "files": {
+        "event.schema.json": "packages/core/test/fixtures/pdi-contract/0.7.0/event.schema.json",
+        "examples/event-decision.recorded.json": "packages/core/test/fixtures/pdi-contract/0.7.0/event-decision.recorded.json",
+        "examples/event-gate.requested.json": "packages/core/test/fixtures/pdi-contract/0.7.0/event-gate.requested.json"
+      }
+    },
+    {
+      "version": "0.8.0",
+      "files": {
+        "reconstruction.schema.json": "packages/core/test/fixtures/tf-reconstruction/reconstruction-export.schema.json",
+        "examples/reconstruction.json": "packages/core/test/fixtures/tf-reconstruction/reconstruction.json"
+      }
+    }
+  ]
+}

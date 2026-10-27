@@ -1,62 +1,172 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dbqm45/tf/packs/pack-it/reconstruction-export.schema.json",
-  "title": "Eksport rekonstrukcji z kodu (tf, recon_export.py, wersja 1)",
-  "description": "reconstruction.json obok rules.md, requirements.md i domain.md: te same treści z dowodami plik:linia. Źródło „stanu obecnego” dla narzędzi (np. ci_for_sdlc). Identyfikator pozycji jest stały, gdy przesuwają się linie; zmienia się, gdy zmienia się treść.",
+  "$id": "https://github.com/dbqm45/pdi/contract/reconstruction.schema.json",
+  "title": "Eksport rekonstrukcji z kodu (pdi, kontrakt 0.8.0)",
+  "description": "reconstruction.json obok rules.md, requirements.md i domain.md: te same treści z dowodami plik:linia. Źródło „stanu obecnego” dla narzędzi (np. ci_for_sdlc). Identyfikator pozycji jest stały, gdy przesuwają się linie; zmienia się, gdy zmienia się treść. W kontrakcie od 0.8.0 (przeniesiony z tf bez zmian pól; format tf-reconstruction, wersja 1).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["format", "format_version", "generated_at", "commit", "modules", "rules", "requirements", "domain"],
+  "required": [
+    "format",
+    "format_version",
+    "generated_at",
+    "commit",
+    "modules",
+    "rules",
+    "requirements",
+    "domain"
+  ],
   "properties": {
-    "format": {"const": "tf-reconstruction"},
-    "format_version": {"const": 1},
-    "generated_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
-    "commit": {"type": ["string", "null"], "description": "Commit z manifest.json, którego dotyczy rekonstrukcja."},
+    "format": {
+      "const": "tf-reconstruction"
+    },
+    "format_version": {
+      "const": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "commit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Commit z manifest.json, którego dotyczy rekonstrukcja."
+    },
     "modules": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["module", "card"],
+        "required": [
+          "module",
+          "card"
+        ],
         "properties": {
-          "module": {"type": "string"},
-          "purpose": {"type": ["string", "null"]},
-          "card": {"type": "string", "description": "Ścieżka karty względem katalogu rekonstrukcji."}
+          "module": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "card": {
+            "type": "string",
+            "description": "Ścieżka karty względem katalogu rekonstrukcji."
+          }
         }
       }
     },
-    "rules": {"type": "array", "items": {"$ref": "#/$defs/item"}},
-    "requirements": {"type": "array", "items": {"$ref": "#/$defs/item"}},
-    "domain": {"type": "array", "items": {"$ref": "#/$defs/item"}}
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "domain": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    }
   },
   "$defs": {
     "item": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "text", "section", "module", "evidence", "status", "source"],
+      "required": [
+        "id",
+        "text",
+        "section",
+        "module",
+        "evidence",
+        "status",
+        "source"
+      ],
       "properties": {
-        "id": {"type": "string", "pattern": "^(rules|requirements|domain)-[0-9a-f]{10}(-[0-9]+)?$"},
-        "text": {"type": "string"},
-        "section": {"type": ["string", "null"]},
-        "module": {"type": ["string", "null"], "description": "Moduł reguły z sekcji modułu w rules.md."},
+        "id": {
+          "type": "string",
+          "pattern": "^(rules|requirements|domain)-[0-9a-f]{10}(-[0-9]+)?$"
+        },
+        "text": {
+          "type": "string"
+        },
+        "section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "module": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Moduł reguły z sekcji modułu w rules.md."
+        },
         "evidence": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["path", "line", "line_end"],
+            "required": [
+              "path",
+              "line",
+              "line_end"
+            ],
             "properties": {
-              "path": {"type": "string"},
-              "line": {"type": "integer", "minimum": 1},
-              "line_end": {"type": "integer", "minimum": 1},
-              "verified": {"type": "boolean", "description": "Tylko z --repo: plik i linie istnieją, cytat pasuje ±2 linie."}
+              "path": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "line_end": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "verified": {
+                "type": "boolean",
+                "description": "Tylko z --repo: plik i linie istnieją, cytat pasuje ±2 linie."
+              }
             }
           }
         },
-        "quote": {"type": "string"},
-        "confidence": {"type": "string", "description": "Z „(pewność: …)”, np. test, kod, do potwierdzenia."},
-        "status": {"enum": ["evidence", "assumption", "unverified", "question"]},
-        "cells": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Wiersz tabeli: nagłówek → wartość."},
-        "source": {"type": "string", "description": "plik:linia w katalogu rekonstrukcji."}
+        "quote": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "string",
+          "description": "Z „(pewność: …)”, np. test, kod, do potwierdzenia."
+        },
+        "status": {
+          "enum": [
+            "evidence",
+            "assumption",
+            "unverified",
+            "question"
+          ]
+        },
+        "cells": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Wiersz tabeli: nagłówek → wartość."
+        },
+        "source": {
+          "type": "string",
+          "description": "plik:linia w katalogu rekonstrukcji."
+        }
       }
     }
   }

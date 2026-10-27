@@ -27,6 +27,8 @@
     "test:parity": "npm run test:parity -w @ci/core",
     "test:mutation": "npm run test:mutation -w @ci/core",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
+    "contract:sync": "node scripts/pdi-contract.mjs sync",
+    "contract:check": "node scripts/pdi-contract.mjs check",
     "typecheck": "tsc -p packages/core && tsc -p packages/server && tsc -p packages/web && tsc -p packages/sandbox && tsc -p packages/mcp && tsc -p e2e",
     "analyze": "npm run analyze --silent -w @ci/server --",
     "release": "node scripts/release.mjs",
