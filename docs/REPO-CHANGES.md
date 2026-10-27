@@ -56,3 +56,9 @@ Copy [`templates/change-check.yml`](templates/change-check.yml) to `.github/work
 pull requests that touch `docs/project/changes/**` (a change to `release.yaml` or `plan.md` alone is enough), checks out ci_for_sdlc next to the repository and runs the command
 above. Pin its `ref` to a release tag of ci_for_sdlc. To make it a required check, add "Definition check / check" to
 the branch protection rule of the default branch.
+
+To trace acceptance criteria to tests, set `TEST_REPORTS` in the template to where your test step writes JUnit XML
+(relative to the repository, a file or a directory) and add that step before the check; the template has a Vitest
+example. Empty (the default) means no test results. Once it is set, a report that is missing or cannot be read fails
+the check, so tests that did not run never read as "no tests". Criteria can break when code changes, so widen or drop
+the template's `paths` too.

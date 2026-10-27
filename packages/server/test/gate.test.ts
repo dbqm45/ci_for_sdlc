@@ -139,6 +139,14 @@ describe('the workflow template for repositories (docs/templates/change-check.ym
     expect(globs).toEqual(['docs/project/changes/**']);
     const re = (g: string) => new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '.+').replace(/(?<!\.)\*/g, '[^/]*')}$`);
     for (const file of ['release.yaml', 'plan.md']) expect(globs.some((g) => re(g).test(`${C}/CHG-12/${file}`))).toBe(true);
-    expect(yml).toMatch(/npm run analyze -- --repo "\$GITHUB_WORKSPACE"/);
+    expect(yml).toMatch(/set -- --repo "\$GITHUB_WORKSPACE"/);
+    expect(yml).toMatch(/npm run analyze -- "\$@"/);
+  });
+
+  it('GATE-10: test results are opt-in through TEST_REPORTS; once set, a missing report fails the check instead of being skipped', () => {
+    const yml = readFileSync(fileURLToPath(new URL('../../../docs/templates/change-check.yml', import.meta.url)), 'utf8');
+    expect(yml).toMatch(/^\s+TEST_REPORTS: ''/m);
+    expect(yml).toMatch(/if \[ -n "\$TEST_REPORTS" \]; then set -- "\$@" --tests "\$GITHUB_WORKSPACE\/\$TEST_REPORTS"; fi/);
+    expect(yml, 'no -e check that would skip a report the tests did not write').not.toMatch(/-e "\$GITHUB_WORKSPACE\/\$TEST_REPORTS"/);
   });
 });
