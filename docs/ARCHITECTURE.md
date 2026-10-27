@@ -150,8 +150,13 @@ The fixture in `packages/core/test/fixtures/tf-reconstruction/` was produced by 
 `packages/mcp` is a local MCP server (stdio, newline-delimited JSON-RPC 2.0, no dependencies, plain JavaScript checked
 by `tsc` with `checkJs`) that Claude runs next to pdi's and ShipScope's. It reads the REST API only (`GET /api/analysis`,
 `/api/items/:key`, `/graph`, `/api/decisions`, `/api/drift`, `/api/rules`, `/api/pdi`) and summarizes answers before
-the model sees them; there is no MCP endpoint in the server and no write tool. It sends no credential: reads are open
-today and `CI_ADMIN_TOKEN` guards only changes. Plan: `docs/MCP-K1-PLAN.md`; setup: `packages/mcp/README.md`.
+the model sees them; there is no MCP endpoint in the server and no write tool. It sends `CI_SDLC_TOKEN`, the server's
+read token, when set, and never the admin token. Plan: `docs/MCP-K1-PLAN.md`; setup: `packages/mcp/README.md`.
+
+`CI_READ_TOKEN` (K1b, `docs/READ-TOKEN-K1B-PLAN.md`): when set, `registerGuards()` (`packages/server/src/http.ts`)
+requires it, or the admin token, for every read of `/api/*` except `/api/health` and the Atlassian OAuth callback;
+webhooks keep their own secrets. The UI asks for it once per session (`lib/auth.ts`) and reads the live updates with
+fetch instead of EventSource so the header goes along (`lib/sse.ts`).
 
 ## Claim packs per domain
 

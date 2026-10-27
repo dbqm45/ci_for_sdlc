@@ -3,7 +3,7 @@
   "info": {
     "title": "Continuous Intelligence for the SDLC",
     "version": "0.1.24",
-    "description": "State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state."
+    "description": "State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state. Reads need the read token (or the admin token) when CI_READ_TOKEN is set, except /api/health."
   },
   "components": {
     "securitySchemes": {
@@ -11,6 +11,11 @@
         "type": "http",
         "scheme": "bearer",
         "description": "CI_ADMIN_TOKEN"
+      },
+      "readToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "CI_READ_TOKEN (the admin token reads too)"
       }
     },
     "schemas": {

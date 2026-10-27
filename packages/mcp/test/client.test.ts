@@ -12,9 +12,9 @@ afterEach(async () => {
 });
 
 type ToolAnswer = { result: { isError?: boolean; content: { type: string; text: string }[]; structuredContent?: any } };
-async function tool(routes: Record<string, Canned | (() => Canned)>, name: string, args?: unknown): Promise<ToolAnswer['result']> {
+async function tool(routes: Record<string, Canned | (() => Canned)>, name: string, args?: unknown, env: Record<string, string> = {}): Promise<ToolAnswer['result']> {
   api = await fakeApi(routes);
-  const server = createServer({ env: { CI_SDLC_URL: api.url } });
+  const server = createServer({ env: { CI_SDLC_URL: api.url, ...env } });
   const res = (await server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })) as ToolAnswer;
   return res.result;
 }
@@ -142,5 +142,25 @@ describe('refusals and limits', () => {
     expect((await tool({ '/api/analysis': { body: analysis } }, 'get_readiness_summary')).structuredContent.total).toBe(4);
     await api!.close();
     expect((await tool({ '/api/analysis': { raw: JSON.stringify({ ...ANALYSIS, pad: 'x'.repeat(33 * 1024 * 1024) }) } }, 'get_readiness_summary')).content[0]!.text).toBe("ci_for_sdlc's answer is larger than 32 MB");
+  });
+});
+
+describe('the read token (K1b, docs/READ-TOKEN-K1B-PLAN.md)', () => {
+  const token = 'r3ad-token-0123456789';
+
+  it('CL-11: CI_SDLC_TOKEN goes as a bearer token on every request', async () => {
+    await tool({ '/api/rules': { body: [] } }, 'list_rules', undefined, { CI_SDLC_TOKEN: ` ${token} ` });
+    expect(api!.requests[0]!.headers.authorization).toBe(`Bearer ${token}`);
+  });
+
+  it('CL-12: a 401 says to set CI_SDLC_TOKEN to the server\'s CI_READ_TOKEN, and never repeats the token', async () => {
+    const refused = { status: 401, body: { status: 401, detail: `Reading requires a token; got ${token}` }, headers: { 'www-authenticate': 'Bearer realm="ci"' } };
+    const without = await tool({ '/api/rules': refused }, 'list_rules');
+    expect(without.isError).toBe(true);
+    expect(without.content[0]!.text).toMatch(/^ci_for_sdlc answered 401: .*; set CI_SDLC_TOKEN to the server's CI_READ_TOKEN$/);
+    await api!.close();
+    const wrong = await tool({ '/api/rules': refused }, 'list_rules', undefined, { CI_SDLC_TOKEN: token });
+    expect(wrong.content[0]!.text).not.toContain(token);
+    expect(wrong.content[0]!.text).toMatch(/check CI_SDLC_TOKEN: it must be the server's CI_READ_TOKEN$/);
   });
 });

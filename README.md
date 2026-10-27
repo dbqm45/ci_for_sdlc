@@ -105,6 +105,7 @@ na `127.0.0.1`, sekrety ze zmiennych środowiskowych (najlepiej wstrzykiwanych z
 
 ```bash
 export CI_ADMIN_TOKEN=$(openssl rand -hex 32)
+export CI_READ_TOKEN=$(openssl rand -hex 32)
 docker compose up -d --build
 ```
 
@@ -178,6 +179,7 @@ Wszystko poza sekretami ustawiasz w UI (*Settings*). Sekrety — zmienne środow
 | `CI_WEBHOOK_SECRET` | zabezpieczenie `/api/webhooks/{jira,confluence,figma}` (nagłówek `x-ci-webhook-secret`) |
 | `PDI_EVENTS_URL`, `PDI_SIGNING_SECRET` | połączenie z pdi (F4, [`docs/PDI-F4-PLAN.md`](docs/PDI-F4-PLAN.md)): adres odbiornika pdi (`pdi-receiver`, https albo http tylko dla localhost) i sekret podpisu wspólny z pdi (tam `PDI_CI_FOR_SDLC_SIGNING_SECRET`). Z obiema zmiennymi gotowość każdej zmiany (historyjki z etykietą `change:CHG-n`, prefiks w Settings → Jira) trafia do pdi jako `readiness.changed`; sam sekret wystarcza do przyjmowania decyzji z pdi na `/api/webhooks/pdi` |
 | `CI_ADMIN_TOKEN` | token administratora; gdy ustawiony, każda zmiana przez API wymaga `Authorization: Bearer <token>` (UI zapyta o niego raz na sesję). Bez tokenu zmiany przyjmowane są tylko z tej samej maszyny (loopback) |
+| `CI_READ_TOKEN` | token odczytu; gdy ustawiony, każdy odczyt `/api/*` (także zdarzenia na żywo) wymaga `Authorization: Bearer <token>` — tokenu odczytu albo administratora; bez tokenu zostają tylko `/api/health`, webhooki i powrót OAuth. Bez niego odczyty są otwarte. UI zapyta o niego raz na sesję; serwer MCP bierze go z `CI_SDLC_TOKEN` |
 | `CI_ALLOWED_HOSTS` | dodatkowe wartości nagłówka `Host` (po przecinku, np. `ci.firma.local:4317`), gdy serwer jest dostępny pod inną nazwą niż `localhost` — ochrona przed DNS rebinding |
 | `CI_ALLOWED_ORIGINS` | dodatkowe originy przeglądarki, które mogą zmieniać dane (po przecinku, np. `https://ci.firma.pl`) — ochrona przed CSRF |
 | `CI_FIGMA_API_BASE` | adres atrapy API Figmy dla testów (np. `http://127.0.0.1:4010/v1`); przyjmowany tylko host lokalny (`localhost`, `127.0.0.1`, `::1`), inny adres zatrzymuje pobieranie z Figmy, zanim token opuści maszynę |

@@ -18,3 +18,6 @@ if (!process.env.CI_ADMIN_TOKEN) {
   console.log('  No CI_ADMIN_TOKEN: only this machine (loopback) can change data.');
   if (!['127.0.0.1', 'localhost', '::1'].includes(host)) console.log('  Listening beyond loopback: set CI_ADMIN_TOKEN and CI_ALLOWED_HOSTS to use it from other machines.\n');
 }
+if (!process.env.CI_READ_TOKEN && !['127.0.0.1', 'localhost', '::1'].includes(host)) {
+  console.log('  No CI_READ_TOKEN: anyone who reaches this server can read the analysis, decisions and drift. Set CI_READ_TOKEN.\n');
+}
