@@ -123,6 +123,8 @@ export interface RepoFacts {
   unblocks?: string;
   /** Slices in `plan.md`: requirement ids of the "Wymagania"/"Requirements" column (US-02, FR-007, AC-1). */
   requirements?: string[];
+  /** Changes: the frame table of their `design.md` (pdi contract 0.9.0), when it has one that parses. */
+  design?: { path: string; url?: string; rows: import('./connectors/design.js').DesignRow[] };
 }
 
 /** DocumentationContext — one Confluence page, or one item of tf's reconstruction from code (`source: 'code'`). */

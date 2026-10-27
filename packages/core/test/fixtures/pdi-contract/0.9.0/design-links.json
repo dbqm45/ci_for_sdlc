@@ -1,0 +1,64 @@
+{
+  "rows": [
+    {
+      "requirement": "US-3",
+      "journey": "wybór ładowarek",
+      "state": "idle",
+      "status": "linked",
+      "frame": {
+        "file_key": "AbC123xyz",
+        "node_id": "12:34",
+        "url": "https://www.figma.com/design/AbC123xyz/Taryfy?node-id=12-34"
+      }
+    },
+    {
+      "requirement": "US-3",
+      "journey": "wybór ładowarek",
+      "state": "empty",
+      "status": "linked",
+      "frame": {
+        "file_key": "AbC123xyz",
+        "node_id": "12:40",
+        "url": "https://www.figma.com/design/AbC123xyz/Taryfy?node-id=12-40"
+      },
+      "note": "brak ładowarek w lokacji"
+    },
+    {
+      "requirement": "US-3/AC-2",
+      "journey": "zastosowanie taryfy",
+      "state": "processing",
+      "status": "linked",
+      "frame": {
+        "file_key": "AbC123xyz",
+        "node_id": "13:2",
+        "url": "https://www.figma.com/design/AbC123xyz/Taryfy?node-id=13-2"
+      },
+      "note": "postęp N z M"
+    },
+    {
+      "requirement": "US-3/AC-2",
+      "journey": "zastosowanie taryfy",
+      "state": "success",
+      "status": "linked",
+      "frame": {
+        "file_key": "AbC123xyz",
+        "node_id": "13:9",
+        "url": "https://www.figma.com/design/AbC123xyz/Taryfy?node-id=13-9"
+      }
+    },
+    {
+      "requirement": "US-3/AC-3",
+      "journey": "zastosowanie taryfy",
+      "state": "server_error",
+      "status": "missing",
+      "note": "ramka dla błędu częściowego (3 z 200 offline) — pytanie do projektanta"
+    },
+    {
+      "requirement": "US-3/AC-3",
+      "journey": "zastosowanie taryfy",
+      "state": "session_expired",
+      "status": "not_applicable",
+      "note": "operacja trwa w tle, sesja nie jest potrzebna do końca"
+    }
+  ]
+}
