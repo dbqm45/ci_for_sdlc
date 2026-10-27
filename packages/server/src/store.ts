@@ -39,6 +39,12 @@ export interface PdiState {
   requested?: Record<string, { at: string; by: string; event: string }>;
 }
 const pdiStateShape: Shape<PdiState> = (v): v is PdiState => isRecord(v);
+/** A workspace other than `default` (F5, docs/WORKSPACES-F5-PLAN.md), listed in the default data directory. */
+export interface WorkspaceInfo {
+  id: string;
+  name: string;
+  createdAt: string;
+}
 export interface PdiOutboxEntry {
   event: PdiEvent;
   attempts: number;
@@ -46,6 +52,8 @@ export interface PdiOutboxEntry {
   lastError?: string;
   /** A2b: pdi refused the event (400) for this reason; it stays here and is not retried. */
   failed?: string;
+  /** F5: the workspace whose decision this is; `default` when absent. */
+  workspace?: string;
   /** A2b: the local decision that gets the DEC pdi answers. */
   decisionId?: string;
   /** A2b: a reopen waits until this decision has its DEC, then supersedes it. */
@@ -80,7 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export interface AuditEntry {
   at: string;
-  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection' | 'pdi' | 'auto_close';
+  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection' | 'pdi' | 'auto_close' | 'workspace';
   /** A display name; `via` is how the change was authorized (admin token or a loopback client). */
   actor: string;
   via?: Principal;
@@ -303,6 +311,13 @@ export class Store {
   }
   updatePdiState(fn: (s: PdiState) => PdiState | void) {
     return this.update('pdi-state.json', { sent: {}, seen: [] }, pdiStateShape, fn, false);
+  }
+  /** F5: the workspaces besides `default`; only the default data directory holds this list. */
+  workspaces() {
+    return this.readJson('workspaces.json', [], listOf<WorkspaceInfo>());
+  }
+  updateWorkspaces(fn: (all: WorkspaceInfo[]) => WorkspaceInfo[] | void) {
+    return this.update('workspaces.json', [], listOf<WorkspaceInfo>(), fn, false);
   }
   /** A2a: the life of each answer proposal (proposed, accepted, edited, rejected, applied, reopened). */
   autoCloseLog() {

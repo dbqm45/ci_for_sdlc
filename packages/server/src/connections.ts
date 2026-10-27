@@ -209,6 +209,11 @@ export class AtlassianConnection {
     return { url: `${ATLASSIAN_AUTH}/authorize?${q}`, state };
   }
 
+  /** Whether this connection issued `state` (F5: the callback finds the workspace that started the flow). */
+  issued(state: string | undefined): boolean {
+    return !!state && this.pending.has(state);
+  }
+
   /** Finishes the flow: the state must be one this server issued and the one this browser holds. */
   async complete(input: { code?: string; state?: string; cookieState?: string; error?: string }): Promise<{ site?: AtlassianSite; actor: string }> {
     this.assertUsable();
