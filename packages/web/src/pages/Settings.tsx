@@ -5,6 +5,7 @@ import { api, ApiError, currentUser, errMsg, setCurrentUser, type AtlassianStatu
 import { Card, Sdot, SourceLogo, Spinner, StatusIcon } from '../components/ui';
 import { parseFigmaFileKey } from '../components/figmaFileKey';
 import { SparkleIcon, SyncIcon } from '../components/icons';
+import { WorkspaceAdmin } from '../components/WorkspaceAdmin';
 
 const EFFORTS: readonly AiEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -137,6 +138,7 @@ export function Settings() {
             </select>
           </Field>
         </div>
+        <WorkspaceAdmin toast={toast} />
       </Card>
 
       <Card title="Integrations" actions={<button className="btn sm" onClick={async () => setTest(await api.testConnections())}>Test connections</button>}>

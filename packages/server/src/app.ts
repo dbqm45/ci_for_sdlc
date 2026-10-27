@@ -8,10 +8,10 @@ import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
 import { guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { ensure, who, workspaceRoutes } from './routes-workspace.js';
-import { MUTATION, approvalRequestBody, changeParams, errors, oauthCallbackQuery, problem, workspaceBody, workspaceParams } from './schemas.js';
+import { MUTATION, approvalRequestBody, changeParams, errors, oauthCallbackQuery, problem, workspaceBody, workspaceDeleteBody, workspaceParams, workspaceRenameBody } from './schemas.js';
 import type { Store } from './store.js';
 import { APP_VERSION } from './version.js';
-import { DEFAULT_WORKSPACE, WorkspaceExistsError, Workspaces, type Workspace } from './workspaces.js';
+import { DEFAULT_WORKSPACE, WorkspaceExistsError, WorkspaceRefusedError, Workspaces, type Workspace } from './workspaces.js';
 
 export { awsCredentialsConfigured } from './routes-workspace.js';
 
@@ -129,6 +129,40 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
         return reply.status(201).send({ id: w.id, name: w.name });
       } catch (e) {
         if (e instanceof WorkspaceExistsError) throw httpError(409, e.message);
+        throw e;
+      }
+    },
+  );
+
+  app.patch<{ Params: { ws: string }; Body: { name: string; by?: string } }>(
+    '/api/workspaces/:ws',
+    { schema: { summary: 'Rename a workspace (its id and addresses stay)', params: workspaceParams, body: workspaceRenameBody, response: errors(404, 422), ...MUTATION } },
+    async (req) => {
+      if (!workspaces.get(req.params.ws)) throw httpError(404, `No workspace ${req.params.ws}`);
+      const at = new Date().toISOString();
+      const before = workspaces.get(req.params.ws)!.name;
+      const w = await workspaces.rename(req.params.ws, req.body.name.slice(0, 100), at);
+      await main.store.audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${w.id} renamed from ${before} to ${w.name}` });
+      return { id: w.id, name: w.name };
+    },
+  );
+
+  /** Deleting moves the workspace's data aside (nothing is erased); the id must be typed back. */
+  app.delete<{ Params: { ws: string }; Body: { confirm: string; by?: string } }>(
+    '/api/workspaces/:ws',
+    { schema: { summary: 'Delete a workspace: it stops and its data moves to workspaces-deleted/ in the data directory', params: workspaceParams, body: workspaceDeleteBody, response: errors(400, 404, 409, 422), ...MUTATION } },
+    async (req) => {
+      const id = req.params.ws;
+      if (!workspaces.get(id)) throw httpError(404, `No workspace ${id}`);
+      if (id === DEFAULT_WORKSPACE) throw httpError(409, 'The default workspace cannot be deleted.');
+      if (req.body.confirm !== id) throw httpError(400, `Type the workspace id (${id}) in confirm to delete it.`);
+      const at = new Date().toISOString();
+      try {
+        const { archivedTo } = await workspaces.remove(id, at);
+        await main.store.audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${id} deleted; its data moved to ${archivedTo}` });
+        return { deleted: id, archivedTo };
+      } catch (e) {
+        if (e instanceof WorkspaceRefusedError) throw httpError(409, e.message);
         throw e;
       }
     },

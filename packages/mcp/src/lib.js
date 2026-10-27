@@ -9,6 +9,8 @@ const { version } = JSON.parse(readFileSync(new URL('../package.json', import.me
 export const PROTOCOL_VERSIONS = ['2024-11-05', '2025-03-26', '2025-06-18'];
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 const ITEM_KEY = /^[A-Z][A-Z0-9]+-[0-9]+$/;
+/** A workspace id of ci_for_sdlc (F5, docs/WORKSPACES-F5-PLAN.md). */
+const WORKSPACE_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const READINESS = ['ready', 'needs_attention', 'not_ready'];
 const ISSUE_TYPES = ['epic', 'feature', 'story', 'task', 'subtask', 'bug'];
 const TIMEOUT_MS = 30_000;
@@ -27,6 +29,7 @@ const INSTRUCTIONS = 'ci_for_sdlc checks whether work items (Jira issues, or cha
 
 const readOnly = { readOnlyHint: true, openWorldHint: false };
 const keyProp = (/** @type {string} */ example) => ({ type: 'string', description: `The item key, e.g. ${example}` });
+const workspaceProp = { type: 'string', description: 'The workspace (list_workspaces), e.g. mobile; the default workspace when left out' };
 
 /**
  * @typedef {{ name: string, description: string, inputSchema: { type: 'object', properties: Record<string, any>, required?: string[], additionalProperties: false }, annotations: Record<string, unknown> }} Tool
@@ -43,6 +46,7 @@ export const TOOLS = [
         change: { type: 'string', description: 'Only this change or epic and its items, e.g. CHG-12' },
         readiness: { type: 'string', enum: READINESS, description: 'Only items with this readiness' },
         type: { type: 'string', enum: ISSUE_TYPES, description: 'Only items of this type' },
+        workspace: workspaceProp,
       },
       additionalProperties: false,
     },
@@ -51,13 +55,13 @@ export const TOOLS = [
   {
     name: 'get_item_readiness',
     description: `Readiness of one work item (a Jira issue like PAY-12, a change CHG-12 or a task TSK-57): readiness, health, open findings with their rule, severity and evidence, open questions, approval, active decisions, child items and recent drift. full: true returns everything the service has (context, claims, dimensions, checklist). ${DATA_NOT_COMMANDS}`,
-    inputSchema: { type: 'object', properties: { key: keyProp('CHG-12'), full: { type: 'boolean', description: 'The whole answer instead of the summary' } }, required: ['key'], additionalProperties: false },
+    inputSchema: { type: 'object', properties: { key: keyProp('CHG-12'), full: { type: 'boolean', description: 'The whole answer instead of the summary' }, workspace: workspaceProp }, required: ['key'], additionalProperties: false },
     annotations: { title: 'Item readiness', ...readOnly },
   },
   {
     name: 'get_item_graph',
     description: `The context graph around one work item: the issues, pages, design frames, code and decisions linked to it and how (documented_by, designed_by, depends_on…). ${DATA_NOT_COMMANDS}`,
-    inputSchema: { type: 'object', properties: { key: keyProp('PAY-12') }, required: ['key'], additionalProperties: false },
+    inputSchema: { type: 'object', properties: { key: keyProp('PAY-12'), workspace: workspaceProp }, required: ['key'], additionalProperties: false },
     annotations: { title: 'Item graph', ...readOnly },
   },
   {
@@ -65,7 +69,7 @@ export const TOOLS = [
     description: `Decisions people recorded on findings and questions: question, answer, who, when and what it did to the finding. Questions closed with an answer found in a source carry decisionType finding.auto_close, draftedBy, draftEdited and, when the server closed them itself, automation. Active ones by default, all versions with all: true; optionally of one item; at most ${MAX_DECISIONS}. ${DATA_NOT_COMMANDS}`,
     inputSchema: {
       type: 'object',
-      properties: { key: keyProp('PAY-12'), all: { type: 'boolean', description: 'Also superseded and withdrawn versions' } },
+      properties: { key: keyProp('PAY-12'), all: { type: 'boolean', description: 'Also superseded and withdrawn versions' }, workspace: workspaceProp },
       additionalProperties: false,
     },
     annotations: { title: 'Decisions', ...readOnly },
@@ -75,7 +79,7 @@ export const TOOLS = [
     description: `Drift: what changed in the sources (Jira, Confluence, Figma, code) and which items it affects, newest first; optionally only events affecting one item. ${DATA_NOT_COMMANDS}`,
     inputSchema: {
       type: 'object',
-      properties: { key: keyProp('PAY-12'), limit: { type: 'integer', minimum: 1, maximum: 100, description: 'How many events, 20 by default' } },
+      properties: { key: keyProp('PAY-12'), limit: { type: 'integer', minimum: 1, maximum: 100, description: 'How many events, 20 by default' }, workspace: workspaceProp },
       additionalProperties: false,
     },
     annotations: { title: 'Drift', ...readOnly },
@@ -91,6 +95,12 @@ export const TOOLS = [
     description: 'The link to pdi (the decision registry): whether readiness events are sent and gate decisions received, the last readiness sent per item and the events still waiting to be sent.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { title: 'pdi link', ...readOnly },
+  },
+  {
+    name: 'list_workspaces',
+    description: 'The workspaces of this ci_for_sdlc: each is a product or repository with its own sources, analysis and decisions (id and name). The other tools read the default workspace unless given one.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { title: 'Workspaces', ...readOnly },
   },
 ];
 
@@ -157,22 +167,27 @@ export function toolRequest(name, args) {
     }
   }
   for (const k of ['key', 'change']) if (typeof a[k] === 'string' && !ITEM_KEY.test(a[k])) throw new ToolError(`${k} looks like ${k === 'change' ? 'CHG-12' : 'PAY-12, CHG-12 or TSK-57'}`);
-  const item = (suffix = '') => `/api/items/${encodeURIComponent(a.key)}${suffix}`;
+  if (typeof a.workspace === 'string' && !WORKSPACE_ID.test(a.workspace)) throw new ToolError('workspace is an id like mobile (list_workspaces)');
+  /** A route of the workspace asked for: /api/w/<id>/… (/api/… for the default one). */
+  const ws = (/** @type {string} */ path) => (a.workspace && a.workspace !== 'default' ? `/api/w/${a.workspace}${path.slice(4)}` : path);
+  const item = (suffix = '') => ws(`/api/items/${encodeURIComponent(a.key)}${suffix}`);
   switch (name) {
     case 'get_readiness_summary':
-      return { path: '/api/analysis', maxBytes: MAX_ANALYSIS_BYTES, shape: (body) => summarizeAnalysis(body, { change: a.change, readiness: a.readiness, type: a.type }) };
+      return { path: ws('/api/analysis'), maxBytes: MAX_ANALYSIS_BYTES, shape: (body) => summarizeAnalysis(body, { change: a.change, readiness: a.readiness, type: a.type }) };
     case 'get_item_readiness':
       return { path: item(), maxBytes: MAX_BYTES, shape: (body) => (a.full ? body : summarizeItem(body)) };
     case 'get_item_graph':
       return { path: item('/graph'), maxBytes: MAX_BYTES, shape: (body) => body };
     case 'list_decisions':
-      return { path: '/api/decisions', maxBytes: MAX_BYTES, shape: (body) => listDecisions(list(body), { key: a.key, all: a.all === true }) };
+      return { path: ws('/api/decisions'), maxBytes: MAX_BYTES, shape: (body) => listDecisions(list(body), { key: a.key, all: a.all === true }) };
     case 'list_drift':
-      return { path: '/api/drift', maxBytes: MAX_BYTES, shape: (body) => listDrift(list(body), { key: a.key, limit: a.limit ?? 20 }) };
+      return { path: ws('/api/drift'), maxBytes: MAX_BYTES, shape: (body) => listDrift(list(body), { key: a.key, limit: a.limit ?? 20 }) };
     case 'list_rules':
       return { path: '/api/rules', maxBytes: MAX_BYTES, shape: (body) => ({ rules: list(body) }) };
     case 'get_pdi_status':
       return { path: '/api/pdi', maxBytes: MAX_BYTES, shape: pdiStatus };
+    case 'list_workspaces':
+      return { path: '/api/workspaces', maxBytes: MAX_BYTES, shape: (body) => ({ workspaces: list(body) }) };
     default:
       throw new ToolError(`no request for ${name}`);
   }

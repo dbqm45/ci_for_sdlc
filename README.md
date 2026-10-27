@@ -232,6 +232,7 @@ Konfiguracja: [`packages/mcp/README.md`](packages/mcp/README.md).
 | GET | `/api/events` | Server-Sent Events (`analysis`, `status`) |
 | GET | `/api/openapi.json` | kontrakt API (OpenAPI 3) |
 | GET / POST | `/api/workspaces` | przestrzenie robocze: lista / nowa (`{ id, name }`, F5) |
+| PATCH / DELETE | `/api/workspaces/:ws` | zmiana nazwy (`{ name }`) / usunięcie (`{ confirm: <id> }`; dane przenoszone do `workspaces-deleted/`, przestrzeni `default` nie da się usunąć) |
 | * | `/api/w/:ws/…` | te same trasy przestrzeni (analiza, elementy, decyzje, ustawienia, połączenia, dryf, audyt, demo, webhooki źródeł, SSE) dla przestrzeni `:ws`; bez prefiksu — przestrzeń `default` |
 
 Zasady kontraktu:
@@ -239,7 +240,7 @@ Zasady kontraktu:
 - **Błędy** zwracane są jako `application/problem+json` (RFC 9457): `{type, title, status, detail, instance}`; błędy walidacji to `422` z listą `errors: [{field, message}]`. Odpowiedzi `5xx` nie ujawniają szczegółów — przyczyna jest w logu serwera.
 - **Walidacja**: ciała żądań mają schematy JSON i odrzucają nieznane pola.
 - **Ustawienia**: `GET /api/settings` zwraca `ETag`; `PUT` wymaga nagłówka `If-Match` (`428` bez niego, `412` gdy ktoś zmienił ustawienia w międzyczasie).
-- **Przestrzenie robocze** (F5, [`docs/WORKSPACES-F5-PLAN.md`](docs/WORKSPACES-F5-PLAN.md)): każda ma własne ustawienia, źródła, analizę, decyzje, zatwierdzenia, dryf i audyt (`CI_DATA_DIR/workspaces/<id>/`); `default` to dotychczasowy katalog danych. Wspólne są pdi (`/api/pdi`, `/api/changes`, `/api/webhooks/pdi`: zmiana `CHG-n` obejmuje historyjki ze wszystkich przestrzeni), `/api/rules` i `/api/health`. Serwer MCP czyta przestrzeń `default`.
+- **Przestrzenie robocze** (F5, [`docs/WORKSPACES-F5-PLAN.md`](docs/WORKSPACES-F5-PLAN.md)): każda ma własne ustawienia, źródła, analizę, decyzje, zatwierdzenia, dryf i audyt (`CI_DATA_DIR/workspaces/<id>/`); `default` to dotychczasowy katalog danych. Wspólne są pdi (`/api/pdi`, `/api/changes`, `/api/webhooks/pdi`: zmiana `CHG-n` obejmuje historyjki ze wszystkich przestrzeni), `/api/rules` i `/api/health`. Narzędzia serwera MCP przyjmują opcjonalny `workspace` (bez niego — `default`), a `list_workspaces` je wymienia.
 - **Kto działa**: nagłówek `X-CI-Actor` (nazwa wyświetlana, URL-encoded) trafia do audytu razem ze sposobem autoryzacji (`via`: `admin_token`, `loopback` albo `pdi_signature` dla zatwierdzeń z pdi).
 
 ## Wersjonowanie i wydania

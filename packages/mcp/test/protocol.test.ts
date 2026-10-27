@@ -23,7 +23,7 @@ describe('MCP protocol', () => {
 
   it('MCP-02: tools/list lists the read-only tools with closed schemas', async () => {
     const res = (await createServer({ env, fetchImpl: noFetch() }).handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' })) as { result: { tools: typeof TOOLS } };
-    expect(res.result.tools.map((t) => t.name)).toEqual(['get_readiness_summary', 'get_item_readiness', 'get_item_graph', 'list_decisions', 'list_drift', 'list_rules', 'get_pdi_status']);
+    expect(res.result.tools.map((t) => t.name)).toEqual(['get_readiness_summary', 'get_item_readiness', 'get_item_graph', 'list_decisions', 'list_drift', 'list_rules', 'get_pdi_status', 'list_workspaces']);
     for (const t of res.result.tools) {
       expect(t.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
       expect(t.inputSchema).toMatchObject({ type: 'object', additionalProperties: false });

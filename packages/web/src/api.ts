@@ -187,6 +187,9 @@ export const api = {
   /** F5: the workspaces of this installation. */
   workspaces: () => req<{ id: string; name: string }[]>('GET', '/api/workspaces'),
   createWorkspace: (id: string, name: string) => req<{ id: string; name: string }>('POST', '/api/workspaces', { id, name, by: currentUser() }),
+  renameWorkspace: (id: string, name: string) => req<{ id: string; name: string }>('PATCH', `/api/workspaces/${encodeURIComponent(id)}`, { name, by: currentUser() }),
+  /** Deleting needs the id typed back (`confirm`). */
+  deleteWorkspace: (id: string, confirm: string) => req<{ deleted: string; archivedTo: string }>('DELETE', `/api/workspaces/${encodeURIComponent(id)}`, { confirm, by: currentUser() }),
   /** F4: pdi changes (stories labelled `change:CHG-n`) and whether the pdi link is on. */
   changes: () => req<{ pdi: boolean; changes: ChangeState[] }>('GET', '/api/changes'),
   /** F4: ask pdi to decide the approval of a change that is not ready. Returns undefined when the user cancels. */

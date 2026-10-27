@@ -51,5 +51,14 @@ zewnątrz 401/403), rozdzielenie danych (decyzja w jednej przestrzeni nie widać
 zatwierdza w obu, `decision.recorded` z `ref`/`url` przestrzeni. `packages/web/test/workspace.test.ts`: ścieżki API
 i adresy w UI.
 
+## Domknięcie (2026-10-27, drugi PR)
+- `PATCH /api/workspaces/:ws` (`{ name }`) zmienia nazwę, także `default` (zapisana w `workspaces.json`); `id`
+  i adresy zostają.
+- `DELETE /api/workspaces/:ws` (`{ confirm: <id> }`, wpisany ponownie) zatrzymuje przestrzeń i przenosi jej katalog
+  do `workspaces-deleted/<id>-<czas>/` — nic nie jest kasowane; `default` nie da się usunąć (409). Ten sam `id`
+  można potem użyć dla nowej przestrzeni.
+- Settings → Workspace: nazwa przestrzeni, *Rename workspace*, *Delete workspace…*.
+- MCP: `workspace` w narzędziach gotowości, elementu, grafu, decyzji i dryfu; nowe `list_workspaces`.
+
 ## Poza zakresem
-Postgres, konta i role, usuwanie i zmiana nazwy przestrzeni, MCP z wyborem przestrzeni (na razie `default`).
+Postgres (krok 2 `docs/SAAS.md`) oraz konta i role (krok 3) — kolejne PR-y.

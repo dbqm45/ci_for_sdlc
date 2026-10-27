@@ -171,3 +171,33 @@ describe('the read token (K1b, docs/READ-TOKEN-K1B-PLAN.md)', () => {
     expect(wrong.content[0]!.text).toMatch(/check CI_SDLC_TOKEN: it must be the server's CI_READ_TOKEN$/);
   });
 });
+
+// F5 (docs/WORKSPACES-F5-PLAN.md): the tools read the default workspace, or the one named; list_workspaces lists them.
+describe('workspaces', () => {
+  it('CL-WS-01: list_workspaces reads /api/workspaces', async () => {
+    const r = await tool({ '/api/workspaces': { body: [{ id: 'default', name: 'Web' }, { id: 'mobile', name: 'Mobile app' }] } }, 'list_workspaces');
+    expect(r.structuredContent).toEqual({ workspaces: [{ id: 'default', name: 'Web' }, { id: 'mobile', name: 'Mobile app' }] });
+  });
+
+  it.each([
+    ['get_readiness_summary', {}, '/api/w/mobile/analysis', ANALYSIS],
+    ['get_item_readiness', { key: 'TSK-57' }, '/api/w/mobile/items/TSK-57', ITEM],
+    ['get_item_graph', { key: 'TSK-57' }, '/api/w/mobile/items/TSK-57/graph', { nodes: [], edges: [] }],
+    ['list_decisions', {}, '/api/w/mobile/decisions', DECISIONS],
+    ['list_drift', {}, '/api/w/mobile/drift', DRIFT],
+  ] as const)('CL-WS-02: %s with a workspace reads its route', async (name, args, path, body) => {
+    const r = await tool({ [path]: { body } }, name, { ...args, workspace: 'mobile' });
+    expect(r.isError).toBeUndefined();
+    expect(api!.requests.map((x) => x.path)).toEqual([path]);
+  });
+
+  it('CL-WS-03: "default" is the plain route; a malformed workspace is refused before any request', async () => {
+    await tool({ '/api/decisions': { body: DECISIONS } }, 'list_decisions', { workspace: 'default' });
+    expect(api!.requests.map((x) => x.path)).toEqual(['/api/decisions']);
+    await api!.close();
+    const bad = await tool({}, 'list_decisions', { workspace: '../settings' });
+    expect(bad.isError).toBe(true);
+    expect(bad.content[0]!.text).toMatch(/workspace is an id like mobile/);
+    expect(api!.requests).toEqual([]);
+  });
+});

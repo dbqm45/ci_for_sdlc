@@ -18,6 +18,10 @@ delivery state (ShipScope). Read only. Plan: [`docs/MCP-K1-PLAN.md`](../../docs/
 | `list_drift` | `key`, `limit` (optional, 20 by default) | What changed in the sources and which items it affects, newest first |
 | `list_rules` | — | The rules: id, name, what they check, item types |
 | `get_pdi_status` | — | The link to pdi: events sent and received, the last readiness sent, events waiting |
+| `list_workspaces` | — | The workspaces (products or repositories, each with its own sources, analysis and decisions): id and name |
+
+The readiness, item, graph, decision and drift tools take an optional `workspace` (an id from `list_workspaces`, e.g.
+`mobile`) and read the default workspace without it. pdi's status is shared by all workspaces.
 
 Approving, withdrawing an approval, recording a decision and starting an analysis are not tools: approval stays a
 button in the UI or a gate decision from pdi.
