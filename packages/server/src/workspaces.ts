@@ -1,5 +1,7 @@
 import { mkdir, rename } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Pool } from 'pg';
+import { FileBackend, PgBackend, archiveWorkspace, type Backend } from './backend.js';
 import type { AutoCloseSink } from './auto-close.js';
 import { AtlassianConnection, type ConnectConfig } from './connections.js';
 import { Engine } from './engine.js';
@@ -12,6 +14,7 @@ import { DEFAULT_WORKSPACE } from '@ci/core';
  * drift and audit. `default` is the data directory itself, so an existing installation keeps its data; the others
  * live in `<data>/workspaces/<id>/` and are listed in `<data>/workspaces.json` (with `default` only when renamed).
  * A deleted workspace's directory moves to `<data>/workspaces-deleted/<id>-<time>/`: nothing is erased.
+ * With CI_DATABASE_URL the same lives in Postgres instead (`PgStorage`), one workspace per `workspace` value.
  */
 export { DEFAULT_WORKSPACE } from '@ci/core';
 const WORKSPACE_ID = new RegExp(WORKSPACE_ID_PATTERN);
@@ -26,6 +29,45 @@ export interface Workspace {
   sink?: AutoCloseSink;
 }
 
+/** Where the workspaces keep their state. */
+export interface Storage {
+  readonly kind: 'files' | 'postgres';
+  backend(id: string): Backend;
+  /** Moves a deleted workspace's state aside; returns where it went. */
+  archive(id: string, at: string): Promise<string>;
+}
+
+const stamp = (at: string) => at.replace(/[-:.]/g, '');
+
+/** JSON files: `default` in the data directory itself, the others in `workspaces/<id>/`. */
+export class FileStorage implements Storage {
+  readonly kind = 'files';
+  constructor(private readonly dataDir: string) {}
+  backend(id: string) {
+    return new FileBackend(id === DEFAULT_WORKSPACE ? this.dataDir : join(this.dataDir, 'workspaces', id));
+  }
+  async archive(id: string, at: string) {
+    const to = join('workspaces-deleted', `${id}-${stamp(at)}`);
+    await mkdir(join(this.dataDir, 'workspaces-deleted'), { recursive: true });
+    await rename(join(this.dataDir, 'workspaces', id), join(this.dataDir, to));
+    return to;
+  }
+}
+
+/** Postgres (CI_DATABASE_URL): rows of every workspace in the same tables, kept apart by row-level security. */
+export class PgStorage implements Storage {
+  readonly kind = 'postgres';
+  constructor(private readonly pool: Pool) {}
+  backend(id: string) {
+    return new PgBackend(this.pool, id);
+  }
+  async archive(id: string, at: string) {
+    const to = `deleted:${id}-${stamp(at)}`;
+    await archiveWorkspace(this.pool, id, to);
+    return to;
+  }
+}
+
 export class WorkspaceExistsError extends Error {}
 export class WorkspaceRefusedError extends Error {}
 
@@ -34,7 +76,7 @@ export class Workspaces {
 
   /** `setup` wires each workspace (pdi, schedule) as it opens. */
   constructor(
-    private readonly dataDir: string,
+    private readonly storage: Storage,
     private readonly connect: ConnectConfig,
     private readonly setup: (w: Workspace) => void | Promise<void>,
   ) {}
@@ -90,14 +132,11 @@ export class Workspaces {
     w.engine.stop();
     this.byId.delete(id);
     await this.default.store.updateWorkspaces((all) => all.filter((x) => x.id !== id));
-    const archivedTo = join('workspaces-deleted', `${id}-${at.replace(/[-:.]/g, '')}`);
-    await mkdir(join(this.dataDir, 'workspaces-deleted'), { recursive: true });
-    await rename(join(this.dataDir, 'workspaces', id), join(this.dataDir, archivedTo));
-    return { archivedTo };
+    return { archivedTo: await this.storage.archive(id, at) };
   }
 
   private async open(info: WorkspaceInfo): Promise<Workspace> {
-    const store = new Store(info.id === DEFAULT_WORKSPACE ? this.dataDir : join(this.dataDir, 'workspaces', info.id));
+    const store = new Store(this.storage.backend(info.id));
     await store.init();
     const atlassian = new AtlassianConnection(store, this.connect);
     const engine = new Engine(store, this.connect.mode === 'oauth' ? atlassian : undefined);

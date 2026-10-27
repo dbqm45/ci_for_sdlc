@@ -170,6 +170,9 @@ Każdy krok zachowuje działanie trybu self-hosted.
 
 1. **Warstwy wymienne:** interfejsy `Storage`, `CredentialProvider`, `Identity`, z obecnymi implementacjami jako *self-hosted*. Bez zmiany zachowania.
 2. **Postgres + multi-tenancy:** schemat z `org_id` i RLS, migracje, implementacja `Storage` dla Postgresa.
+   *Stan 2026-10-27:* zrobione dla przestrzeni roboczych (`CI_DATABASE_URL`, dokumenty jsonb z RLS po przestrzeni,
+   `npm run db:import`; [`docs/WORKSPACES-F5-PLAN.md`](WORKSPACES-F5-PLAN.md)). Organizacja ponad przestrzeniami
+   przyjdzie z kontami (krok 3).
 3. **Konta i organizacje:** logowanie OIDC (Google/Microsoft/Atlassian), zaproszenia, role.
 4. **OAuth Atlassian i Figma** z szyfrowaniem tokenów przez KMS. Automatyczna rejestracja webhooków.
 5. **Kolejka i workery:** analizy w tle, analiza przyrostowa po webhookach.

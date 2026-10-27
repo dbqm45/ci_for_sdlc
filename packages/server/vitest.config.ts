@@ -6,7 +6,7 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.ts'],
       // Process entry points (listen / CLI wiring) are exercised by running the app, not by unit tests.
-      exclude: ['src/index.ts', 'src/cli.ts'],
+      exclude: ['src/index.ts', 'src/cli.ts', 'src/db-import-cli.ts'],
       reporter: ['text', 'text-summary'],
       thresholds: { lines: 80, statements: 80, functions: 80, branches: 80 },
     },

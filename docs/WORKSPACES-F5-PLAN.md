@@ -60,5 +60,25 @@ i adresy w UI.
 - Settings → Workspace: nazwa przestrzeni, *Rename workspace*, *Delete workspace…*.
 - MCP: `workspace` w narzędziach gotowości, elementu, grafu, decyzji i dryfu; nowe `list_workspaces`.
 
+## Postgres (2026-10-27, trzeci PR; krok 2 `docs/SAAS.md`)
+Decyzje właściciela: **dokumenty jsonb** (nie pełny schemat relacyjny — ta sama logika `Store`, mniejsze ryzyko),
+**`CI_DATABASE_URL` + import** istniejących danych.
+- `server/src/backend.ts`: `Backend` (dokumenty po nazwie i logi dopisywane) z dwiema implementacjami — `FileBackend`
+  (pliki jak dotąd) i `PgBackend`. `Store` zostaje właścicielem kształtów, szyfrowania i kolejki zapisów.
+- Schemat (`MIGRATIONS`, tabela `ci_schema_migrations`, uruchamiany przy starcie pod blokadą doradczą):
+  `ci_documents (workspace, name, value jsonb)`, `ci_log_entries (workspace, log, value jsonb)`. Row-level security
+  (włączone i wymuszone) po `current_setting('ci.workspace')`, ustawianym w każdej transakcji: zapytanie bez
+  przestrzeni nie widzi nic, a zapis do cudzej przestrzeni jest odrzucany. Rola aplikacji nie może być
+  superużytkownikiem ani mieć `BYPASSRLS`.
+- Przestrzenie: `FileStorage` / `PgStorage`; usunięta przestrzeń w bazie dostaje nazwę `deleted:<id>-<czas>`
+  (jedna transakcja, nic nie jest kasowane).
+- `npm run db:import` kopiuje `CI_DATA_DIR` (`default` i przestrzenie z `workspaces.json`) do bazy: dokumenty bez
+  zmian (zaszyfrowane zostają zaszyfrowane), logi w kolejności; przestrzeń, która ma już dane w bazie, jest
+  odrzucana (bez podwójnego audytu). Pliki zostają.
+- `GET /api/health` mówi `storage: files | postgres`.
+- Testy: `packages/server/test/postgres.test.ts` na prawdziwym Postgresie (`CI_TEST_DATABASE_URL`, rola bez
+  superużytkownika); w CI kontener `postgres:17` w jobie `test`. Bez zmiennej testy są pomijane.
+- Ograniczenie: jeden serwer na bazę (kolejka zapisów jest w procesie).
+
 ## Poza zakresem
-Postgres (krok 2 `docs/SAAS.md`) oraz konta i role (krok 3) — kolejne PR-y.
+Konta i role (krok 3 `docs/SAAS.md`) — kolejny PR.

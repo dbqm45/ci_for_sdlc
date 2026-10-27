@@ -14,8 +14,27 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Postgres storage tests (F5, packages/server/test/postgres.test.ts). The passwords are throwaway values of a
+    # container that lives for this job only.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci_admin
+          POSTGRES_PASSWORD: ci-throwaway
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci_admin" --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      CI_TEST_DATABASE_URL: postgres://ci_app:ci-throwaway@localhost:5432/ci_test
     steps:
       - uses: actions/checkout@v7
+      # Row-level security does not apply to a superuser: the tests use a plain role that owns its database.
+      - name: Database role for the Postgres tests
+        run: |
+          psql "postgres://ci_admin:ci-throwaway@localhost:5432/postgres" -v ON_ERROR_STOP=1 \
+            -c "create role ci_app login password 'ci-throwaway'" -c "create database ci_test owner ci_app"
       - uses: actions/setup-node@v7
         with:
           node-version: 22

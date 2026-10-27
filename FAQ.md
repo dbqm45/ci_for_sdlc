@@ -437,6 +437,16 @@ W katalogu `CI_DATA_DIR` (domyślnie `.ci-data/`), w zwykłych plikach:
 - `audit.jsonl`;
 - `demo-context.json`.
 
+Każda przestrzeń robocza poza domyślną ma taki sam zestaw w `workspaces/<id>/`.
+
+**Czy zamiast plików może być baza danych?**
+Tak, Postgres: ustaw `CI_DATABASE_URL`. Te same dane (każdy plik jako dokument JSON, audyt jako wpisy) trafiają do
+dwóch tabel, a row-level security oddziela przestrzenie robocze. Schemat tworzy się sam przy starcie. Rola, którą
+łączy się aplikacja, nie może być superużytkownikiem — inaczej baza nie egzekwuje rozdzielenia. Istniejące pliki
+przeniesiesz poleceniem `npm run db:import` (z ustawionymi `CI_DATA_DIR` i `CI_DATABASE_URL`); pliki zostają na
+miejscu, a powtórny import do bazy z danymi jest odrzucany. Szyfrowanie z `CI_ENCRYPTION_KEY` działa tak samo:
+w bazie leży tylko zaszyfrowana koperta. Na jedną bazę przypada jeden serwer.
+
 **Co z `settings.json` ze starszej wersji?**
 Przy starcie serwer oczyszcza plik: usuwa pola, których obecna wersja nie zna (np. dawne klucze API), i wartości spoza dozwolonego zakresu. Dla usuniętych wartości obowiązują ustawienia domyślne. Dzięki temu zapis z UI nie kończy się błędem `422`, a stare sekrety znikają z dysku. Każde takie czyszczenie trafia do audytu (aktor `system`) z listą ścieżek usuniętych pól, bez ich wartości.
 
