@@ -82,8 +82,19 @@ describe('MCP protocol', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('MCP-08: a CI_SDLC_TOKEN with spaces or control characters is a tool error that does not show it', async () => {
+    const fetchImpl = noFetch();
+    for (const bad of ['two words', 'line\nbreak', 'x'.repeat(513)]) {
+      const res = (await call(createServer({ env: { ...env, CI_SDLC_TOKEN: bad }, fetchImpl }), 'list_rules')) as { result: { isError: boolean; content: { text: string }[] } };
+      expect(res.result.isError).toBe(true);
+      expect(res.result.content[0]!.text).toBe('CI_SDLC_TOKEN does not look like a token: one line without spaces, at most 512 characters (the server\'s CI_READ_TOKEN)');
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('MCP-07: accepted addresses: https anywhere, http on localhost, a path prefix without its trailing slash', () => {
     expect(readConfig({ CI_SDLC_URL: 'https://ci.example.com/sdlc/' })).toEqual({ base: 'https://ci.example.com/sdlc' });
+    expect(readConfig({ CI_SDLC_URL: 'https://ci.example.com', CI_SDLC_TOKEN: ' abc ' })).toEqual({ base: 'https://ci.example.com', token: 'abc' });
     expect(readConfig({ CI_SDLC_URL: ' http://127.0.0.1:3000 ' })).toEqual({ base: 'http://127.0.0.1:3000' });
     expect(readConfig({ CI_SDLC_URL: 'http://[::1]:3000' })).toEqual({ base: 'http://[::1]:3000' });
   });

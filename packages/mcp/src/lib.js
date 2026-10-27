@@ -96,12 +96,16 @@ export const TOOLS = [
 
 export class ToolError extends Error {}
 
+/** A bearer token: one line without spaces. */
+const TOKEN = /^[\x21-\x7e]{1,512}$/;
+const TOKEN_HINT = "the server's CI_READ_TOKEN";
+
 /**
- * CI_SDLC_URL checked: https (http only for localhost), no login in the address. Reads need no credential today
- * (docs/MCP-K1-PLAN.md), and the admin token, which can change state, is never used.
+ * CI_SDLC_URL checked: https (http only for localhost), no login in the address. CI_SDLC_TOKEN, optional, is the
+ * server's read token (K1b, docs/READ-TOKEN-K1B-PLAN.md); the admin token, which can change state, does not belong here.
  *
  * @param {Record<string, string | undefined>} env
- * @returns {{ base: string }}
+ * @returns {{ base: string, token?: string }}
  * @throws {ToolError} with what to set
  */
 export function readConfig(env) {
@@ -115,7 +119,11 @@ export function readConfig(env) {
   }
   if (url.username || url.password) throw new ToolError('CI_SDLC_URL must not carry a login');
   if (!(url.protocol === 'https:' || (url.protocol === 'http:' && LOCAL_HOSTS.has(url.hostname)))) throw new ToolError('CI_SDLC_URL must be https:// (http only for localhost)');
-  return { base: url.origin + url.pathname.replace(/\/+$/, '') };
+  const base = url.origin + url.pathname.replace(/\/+$/, '');
+  const token = (env.CI_SDLC_TOKEN || '').trim();
+  if (!token) return { base };
+  if (!TOKEN.test(token)) throw new ToolError(`CI_SDLC_TOKEN does not look like a token: one line without spaces, at most 512 characters (${TOKEN_HINT})`);
+  return { base, token };
 }
 
 /**
@@ -345,14 +353,14 @@ async function readBody(res, max) {
 /**
  * GET a route; a refusal or an unreadable answer is a ToolError naming the status and the service's reason.
  *
- * @param {{ base: string }} config
+ * @param {{ base: string, token?: string }} config
  * @param {ToolRequest} request
  * @param {typeof fetch} fetchImpl
  */
-async function getJson({ base }, { path, maxBytes }, fetchImpl) {
+async function getJson({ base, token }, { path, maxBytes }, fetchImpl) {
   let res;
   try {
-    res = await fetchImpl(`${base}${path}`, { headers: { accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS) });
+    res = await fetchImpl(`${base}${path}`, { headers: { accept: 'application/json', ...(token && { authorization: `Bearer ${token}` }) }, redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch (err) {
     const e = /** @type {{ cause?: { code?: string }, name?: string }} */ (err);
     throw new ToolError(`cannot reach ci_for_sdlc at ${base} (${e.cause?.code || e.name})`);
@@ -367,7 +375,8 @@ async function getJson({ base }, { path, maxBytes }, fetchImpl) {
   if (!res.ok) {
     const why = typeof body?.detail === 'string' ? body.detail : typeof body?.message === 'string' ? body.message : '';
     const wait = res.status === 429 && res.headers.get('retry-after') ? `; try again in ${res.headers.get('retry-after')} s` : '';
-    throw new ToolError(`ci_for_sdlc answered ${res.status}${why ? `: ${why}` : ''}${wait}`);
+    const hint = res.status === 401 ? (token ? `; check CI_SDLC_TOKEN: it must be ${TOKEN_HINT}` : `; set CI_SDLC_TOKEN to ${TOKEN_HINT}`) : '';
+    throw new ToolError(`ci_for_sdlc answered ${res.status}${why ? `: ${token ? why.replaceAll(token, '…') : why}` : ''}${wait}${hint}`);
   }
   return body;
 }

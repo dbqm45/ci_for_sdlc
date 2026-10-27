@@ -30,6 +30,9 @@ Claude Code (from a checkout of this repository, with `npm install` done once):
 claude mcp add ci-sdlc -e CI_SDLC_URL=http://localhost:4317 -- node /path/to/ci_for_sdlc/packages/mcp/src/ci-sdlc-mcp.js
 ```
 
+With a read token on the server (`CI_READ_TOKEN`), add `-e CI_SDLC_TOKEN=…` with its value, from the environment or a
+password manager, never from a file in the repository.
+
 Claude Desktop (`claude_desktop_config.json`):
 
 ```json
@@ -38,7 +41,7 @@ Claude Desktop (`claude_desktop_config.json`):
     "ci-sdlc": {
       "command": "node",
       "args": ["/path/to/ci_for_sdlc/packages/mcp/src/ci-sdlc-mcp.js"],
-      "env": { "CI_SDLC_URL": "https://ci.example.com" }
+      "env": { "CI_SDLC_URL": "https://ci.example.com", "CI_SDLC_TOKEN": "<the server's CI_READ_TOKEN>" }
     }
   }
 }
@@ -52,10 +55,10 @@ decide about the retry limit?".
 
 - `CI_SDLC_URL` must be `https://` (`http://` only for localhost) without a login in it. A missing or wrong address
   is a tool error saying what to set, and nothing is sent.
-- **No credential is sent.** ci_for_sdlc's reads (`GET /api/*`) need no token today: `CI_ADMIN_TOKEN` guards only
-  changes, and the server never uses it, since a read-only client should not hold a credential that can change state.
-  On a network deployment anyone who reaches the service can read it, with or without this server (FAQ §12); a read
-  token is a separate step ([`docs/BACKLOG-DEFERRED.md`](../../docs/BACKLOG-DEFERRED.md)).
+- **`CI_SDLC_TOKEN`** (optional) is sent as `Authorization: Bearer` on every request. Set it to the server's
+  `CI_READ_TOKEN` when the server has one (without `CI_READ_TOKEN` the server's reads are open and no token is needed).
+  Do not put the admin token there: a read-only client should not hold a credential that can change state. A 401 is a
+  tool error saying to set or check `CI_SDLC_TOKEN`; the token never appears in a message.
 - Arguments are checked before any request (only the declared ones, keys like `PAY-12`, values from their lists);
   paths are built with `encodeURIComponent`.
 - A refusal from ci_for_sdlc (404 unknown item, 403 host not allowed, 422, 429 with `Retry-After`) is a tool error with

@@ -9,6 +9,8 @@ export type Principal = 'admin_token' | 'loopback' | 'pdi_signature';
 export interface GuardConfig {
   /** CI_ADMIN_TOKEN. Empty = local mode: only loopback clients may change state. */
   adminToken: string;
+  /** CI_READ_TOKEN. Empty = reads are open (K1b, docs/READ-TOKEN-K1B-PLAN.md); set, every read needs it or the admin token. */
+  readToken: string;
   /** CI_ALLOWED_HOSTS: extra Host header values (with or without port). */
   allowedHosts: string[];
   /** CI_ALLOWED_ORIGINS: extra browser origins allowed to change state. */
@@ -24,6 +26,7 @@ declare module 'fastify' {
 const list = (v: string | undefined) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 export const guardConfigFromEnv = (env = process.env): GuardConfig => ({
   adminToken: env.CI_ADMIN_TOKEN ?? '',
+  readToken: env.CI_READ_TOKEN ?? '',
   allowedHosts: list(env.CI_ALLOWED_HOSTS),
   allowedOrigins: list(env.CI_ALLOWED_ORIGINS),
 });
@@ -37,10 +40,17 @@ const isLoopbackIp = (ip: string) => ip === '::1' || /^(::ffff:)?127(\.\d{1,3}){
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 const sameSecret = (given: string, expected: string) => given.length === expected.length && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+const bearerOf = (req: FastifyRequest) => {
+  const auth = req.headers.authorization ?? '';
+  return auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+};
+/** Reads reachable without the read token: liveness for monitors, and the OAuth redirect a browser follows without headers. */
+const OPEN_READS = new Set(['/api/health', '/api/connections/atlassian/callback']);
 
 /**
- * Host check against DNS rebinding, Origin check against CSRF and the admin
- * token for every state-changing API call. Webhooks have their own secret.
+ * Host check against DNS rebinding, Origin check against CSRF, the admin
+ * token for every state-changing API call and, when set, the read token
+ * (or the admin token) for every read. Webhooks have their own secret.
  */
 export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
   const hosts = new Set(cfg.allowedHosts.map((h) => h.toLowerCase()));
@@ -50,9 +60,14 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
   app.addHook('onRequest', async (req) => {
     if (!req.url.startsWith('/api/') || req.url.startsWith('/api/webhooks/')) return;
     const host = (req.headers.host ?? '').toLowerCase();
-    const hostOk = hosts.has(host) || hosts.has(hostnameOf(host)) || isLoopbackName(hostnameOf(host)) || (!hosts.size && !!cfg.adminToken);
+    const hostOk = hosts.has(host) || hosts.has(hostnameOf(host)) || isLoopbackName(hostnameOf(host)) || (!hosts.size && !!(cfg.adminToken || cfg.readToken));
     if (!hostOk) throw httpError(403, `Host "${host}" is not allowed. Add it to CI_ALLOWED_HOSTS.`);
-    if (!MUTATING.has(req.method)) return;
+    if (!MUTATING.has(req.method)) {
+      if (!cfg.readToken || OPEN_READS.has(req.url.split('?')[0]!)) return;
+      const given = bearerOf(req);
+      if (given && (sameSecret(given, cfg.readToken) || (!!cfg.adminToken && sameSecret(given, cfg.adminToken)))) return;
+      throw httpError(401, 'Reading requires a token (Authorization: Bearer …): the CI_READ_TOKEN or the admin token of this server.', { 'www-authenticate': 'Bearer realm="ci"' });
+    }
 
     const origin = req.headers.origin?.toLowerCase();
     if (origin && origin !== 'null') {
@@ -67,8 +82,7 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
     }
 
     if (cfg.adminToken) {
-      const auth = req.headers.authorization ?? '';
-      const given = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+      const given = bearerOf(req);
       if (!given || !sameSecret(given, cfg.adminToken)) throw httpError(401, 'This change requires the admin token (Authorization: Bearer …).', { 'www-authenticate': 'Bearer realm="ci"' });
       req.principal = 'admin_token';
     } else if (isLoopbackIp(req.ip)) {

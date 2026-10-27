@@ -11,7 +11,7 @@ let dir: string;
 
 const start = async (opts: Partial<AppOptions> = {}) => {
   dir = mkdtempSync(join(tmpdir(), 'ci-sec-'));
-  ctx = await buildApp({ dataDir: dir, adminToken: '', allowedHosts: [], allowedOrigins: [], ...opts });
+  ctx = await buildApp({ dataDir: dir, adminToken: '', readToken: '', allowedHosts: [], allowedOrigins: [], ...opts });
   return ctx;
 };
 afterEach(async () => {
@@ -81,6 +81,57 @@ describe('with CI_ADMIN_TOKEN', () => {
     const entry = (await ctx!.store.auditLog()).find((a) => a.kind === 'approval_removed')!;
     expect(entry.actor).toBe('Łucja');
     expect(entry.via).toBe('admin_token');
+  });
+});
+
+describe('with CI_READ_TOKEN (K1b, docs/READ-TOKEN-K1B-PLAN.md)', () => {
+  const read = 'r3ad-token';
+  const admin = 'adm1n-token';
+  const bearer = (t: string) => ({ authorization: `Bearer ${t}` });
+
+  it('RT-01: every read needs the read or the admin token; none or a wrong one is a 401 that says why', async () => {
+    await start({ readToken: read, adminToken: admin });
+    for (const url of ['/api/analysis', '/api/items/PAY-123', '/api/decisions', '/api/settings', '/api/openapi.json', '/api/events', '/api/nope']) {
+      const r = await call({ method: 'GET', url });
+      expect(r.status, url).toBe(401);
+      expect(r.headers['www-authenticate']).toMatch(/^Bearer/);
+      expect(r.body.detail).toMatch(/CI_READ_TOKEN/);
+    }
+    expect((await call({ method: 'GET', url: '/api/rules', headers: bearer('wrong') })).status).toBe(401);
+    expect((await call({ method: 'HEAD', url: '/api/rules' })).status).toBe(401);
+    expect((await call({ method: 'GET', url: '/api/rules', headers: bearer(read) })).status).toBe(200);
+    expect((await call({ method: 'GET', url: '/api/rules', headers: bearer(admin), remoteAddress: '10.0.0.5' })).status).toBe(200);
+    const refused = await call({ method: 'GET', url: '/api/rules', headers: bearer('wrong') });
+    expect(JSON.stringify(refused)).not.toContain(read);
+  });
+
+  it('RT-02: health, webhooks and the OAuth callback stay reachable without it', async () => {
+    await start({ readToken: read });
+    expect((await call({ method: 'GET', url: '/api/health' })).status).toBe(200);
+    expect((await call({ method: 'POST', url: '/api/webhooks/jira', payload: {} })).status).toBe(202);
+    expect((await call({ method: 'GET', url: '/api/connections/atlassian/callback?error=access_denied' })).status).not.toBe(401);
+  });
+
+  it('RT-03: the read token never allows a change', async () => {
+    await start({ readToken: read, adminToken: admin });
+    expect((await call({ method: 'POST', url: '/api/analyze', headers: bearer(read) })).status).toBe(401);
+    await ctx!.app.close();
+    await start({ readToken: read });
+    expect((await call({ method: 'POST', url: '/api/analyze', headers: bearer(read), remoteAddress: '10.0.0.5' })).status).toBe(401);
+    expect((await call({ method: 'POST', url: '/api/analyze', headers: bearer(read) })).status).toBe(200);
+  });
+
+  it('RT-04: like the admin token, it lets the server answer under any Host when CI_ALLOWED_HOSTS is empty', async () => {
+    await start({ readToken: read });
+    expect((await call({ method: 'GET', url: '/api/rules', headers: { host: 'ci.firma.local:4317', ...bearer(read) } })).status).toBe(200);
+    await ctx!.app.close();
+    await start({ readToken: read, allowedHosts: ['ci.firma.local:4317'] });
+    expect((await call({ method: 'GET', url: '/api/rules', headers: { host: 'evil.example', ...bearer(read) } })).status).toBe(403);
+  });
+
+  it('RT-05: without CI_READ_TOKEN reads stay open, as before', async () => {
+    await start({ adminToken: admin });
+    expect((await call({ method: 'GET', url: '/api/rules' })).status).toBe(200);
   });
 });
 
