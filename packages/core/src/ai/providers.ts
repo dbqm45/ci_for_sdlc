@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { AnthropicBedrockMantle } from '@anthropic-ai/bedrock-sdk';
-import { OUTPUT_SCHEMA, SYSTEM_PROMPT, renderUserPrompt, type SemanticAnalyzer, type SemanticChallenge, type SemanticFinding, type SemanticInput, type SemanticOutput } from './types.js';
+import { OUTPUT_SCHEMA, SYSTEM_PROMPT, renderUserPrompt, type SemanticAnalyzer, type SemanticAnswer, type SemanticChallenge, type SemanticFinding, type SemanticInput, type SemanticOutput } from './types.js';
 import { isRecord, isStringArray, oneOf } from '../guards.js';
 
 /**
@@ -137,6 +137,7 @@ export function parseOutput(text: string): SemanticOutput {
   return {
     findings: Array.isArray(parsed.findings) ? parsed.findings.filter(isSemanticFinding) : [],
     challenges: Array.isArray(parsed.challenges) ? parsed.challenges.filter(isSemanticChallenge) : [],
+    ...(Array.isArray(parsed.answers) && { answers: parsed.answers.filter(isSemanticAnswer) }),
   };
 }
 
@@ -157,6 +158,8 @@ function isSemanticFinding(v: unknown): v is SemanticFinding {
     (v.question === undefined || isQuestion(v.question))
   );
 }
+
+const isSemanticAnswer = (v: unknown): v is SemanticAnswer => isRecord(v) && typeof v.questionId === 'string' && typeof v.ref === 'string' && typeof v.quote === 'string';
 
 const isSemanticChallenge = (v: unknown): v is SemanticChallenge =>
   isRecord(v) && typeof v.question === 'string' && typeof v.rationale === 'string' && isStringArray(v.options) && typeof v.topic === 'string';

@@ -2,7 +2,7 @@
  * JSON Schemas for request validation and the OpenAPI document. Bodies reject
  * unknown properties; the server still trims and caps free text.
  */
-import { AC_FORMATS, CLAIM_PACKS, AI_EFFORTS, AI_FINDINGS_ACTIONS, AI_PROVIDERS, AI_RUN_ON, DECISION_EFFECTS, DRIFT_REACTIONS, ISSUE_TYPES, SCHEDULE_MODES, SETTINGS_MODES, SEVERITY_ACTIONS, REQUIRE_FLAG, RELEASE_LINE_SOURCES } from '@ci/core';
+import { AC_FORMATS, AUTO_CLOSE_MODES, CLAIM_PACKS, AI_EFFORTS, AI_FINDINGS_ACTIONS, AI_PROVIDERS, AI_RUN_ON, DECISION_EFFECTS, DRIFT_REACTIONS, ISSUE_TYPES, SCHEDULE_MODES, SETTINGS_MODES, SEVERITY_ACTIONS, REQUIRE_FLAG, RELEASE_LINE_SOURCES } from '@ci/core';
 
 const str = (maxLength: number, extra: object = {}) => ({ type: 'string', maxLength, ...extra }) as const;
 const bool = { type: 'boolean' } as const;
@@ -79,6 +79,7 @@ export const settingsBody = obj({
       maxMvpPercent: { type: 'integer', minimum: 1, maximum: 100 },
       requireFlag: { enum: REQUIRE_FLAG },
     }),
+    autoClose: { enum: AUTO_CLOSE_MODES },
   }),
 });
 
@@ -104,6 +105,9 @@ export const decisionBody = obj(
 export const approveBody = obj({ by: str(200), force: bool, reason: str(5000) });
 /** DELETE bodies are optional. */
 export const withdrawBody = { ...obj({ by: str(200), reason: str(5000) }), nullable: true } as const;
+/** A2a: what a person does with an answer proposal; `answer` is the edited text. */
+export const answerActionBody = obj({ action: { enum: ['accept', 'edit', 'reject'] }, answer: str(5000), by: str(200) }, ['action']);
+export const answerParams = obj({ key: str(64, { pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]*$' }), proposalId: str(128, { minLength: 1 }) }, ['key', 'proposalId']);
 
 export const impactQuery = obj({ q: str(500) });
 

@@ -401,6 +401,23 @@ export interface Finding {
   blocks?: boolean;
   /** Set when a human confirmed an AI finding; it stays open and counts at full severity. */
   confirmation?: { decisionId: string; by: string; at: string };
+  /** A2a: the answer to the finding's question found in one of the item's sources, with a verbatim quote. */
+  answer?: AnswerProposal;
+}
+
+/** The decision type of closing a finding with an answer found in a source (pdi contract 0.5.0, `autonomy.decision_types`). */
+export const AUTO_CLOSE_DECISION_TYPE = 'finding.auto_close';
+
+/** An answer to a finding's question found in a Confluence page, a Figma frame or an earlier decision (A2a). */
+export interface AnswerProposal {
+  /** Stable for the same question, source and quote: a rejected proposal stays rejected. */
+  id: string;
+  origin: 'rule' | 'ai';
+  /** What found it: `auto-close:<rule id>` for a pattern, `auto-close:ai` for the AI reviewer. */
+  rule: string;
+  /** Verbatim text of the source. */
+  quote: string;
+  source: Evidence;
 }
 
 interface DecisionBase {
@@ -425,6 +442,18 @@ interface DecisionBase {
   readonly supersedes?: string;
   /** Why the previous version was changed (required when superseding an active decision). */
   readonly changeReason?: string;
+  /** pdi contract 0.5.0: the decision type, e.g. `finding.auto_close` (A2a). */
+  readonly decisionType?: string;
+  /** Who drafted the answer: an AI proposal accepted or edited by a person, or a person alone. */
+  readonly draftedBy?: 'ai' | 'human';
+  /** Whether the person changed the AI draft before deciding (the acceptance measure, DA2). */
+  readonly draftEdited?: boolean;
+  /** Set when an automat recorded the decision (`autoClose: apply`): level 1 = automatic with a log entry. */
+  readonly automation?: { readonly level: 1; readonly rule: string };
+  /** The quote and its source the answer rests on. */
+  readonly evidence?: readonly Evidence[];
+  /** The answer proposal this decision accepted. */
+  readonly proposalId?: string;
 }
 
 export interface ActiveDecision extends DecisionBase {

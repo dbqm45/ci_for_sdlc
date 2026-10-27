@@ -19,5 +19,6 @@ export const SCENARIOS: Scenario[] = [
   { id: 'story-card-limit', source: 'jira', touches: { requirements: ['PAY-123'] } },
   { id: 'backlog-intake', source: 'jira', touches: { requirements: ['GFT-400', 'GFT-401', 'GFT-402', 'GFT-403', 'GFT-404', 'GFT-405', 'GFT-410', 'GFT-420', 'GFT-421'] } },
   { id: 'api-idempotency', source: 'confluence', touches: { documents: ['1002'] } },
+  { id: 'answers-in-sources', source: 'confluence', touches: { documents: ['1004'] } },
   { id: 'release-planning', source: 'jira', touches: { requirements: ['CHK-200', 'CHK-201', 'CHK-202', 'CHK-203', 'CHK-204', 'PAY-125', 'PAY-126', 'PAY-128', 'PAY-129'] } },
 ];

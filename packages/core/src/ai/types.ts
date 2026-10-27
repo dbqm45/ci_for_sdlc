@@ -18,6 +18,15 @@ export interface SemanticInput {
   knownFindings: string[];
   /** Questions already asked (adversarial probes) — AI should add new ones only. */
   knownQuestions: string[];
+  /** A2a: open questions of the item's findings, which a source may already answer. */
+  openQuestions?: { id: string; text: string }[];
+}
+
+/** A2a: an answer to an open question, quoted word for word from one source; checked before it is shown. */
+export interface SemanticAnswer {
+  questionId: string;
+  ref: string;
+  quote: string;
 }
 
 export interface SemanticFinding {
@@ -41,6 +50,8 @@ export interface SemanticChallenge {
 export interface SemanticOutput {
   findings: SemanticFinding[];
   challenges: SemanticChallenge[];
+  /** Absent in outputs cached before A2a. */
+  answers?: SemanticAnswer[];
 }
 
 export interface SemanticAnalyzer {
@@ -52,7 +63,7 @@ export interface SemanticAnalyzer {
 export const OUTPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['findings', 'challenges'],
+  required: ['findings', 'challenges', 'answers'],
   properties: {
     findings: {
       type: 'array',
@@ -102,6 +113,19 @@ export const OUTPUT_SCHEMA = {
         },
       },
     },
+    answers: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['questionId', 'ref', 'quote'],
+        properties: {
+          questionId: { type: 'string' },
+          ref: { type: 'string' },
+          quote: { type: 'string' },
+        },
+      },
+    },
   },
 } as const;
 
@@ -112,6 +136,7 @@ You receive one work item (Jira story, epic or bug) and the context discovered f
 Your job:
 1. Find problems that deterministic rules cannot see — semantic gaps, conflicts and ambiguities BETWEEN sources. Examples: an acceptance criterion that the Figma flow does not realize; two documents describing the same business rule differently; documentation that describes a different behavior than the story; a requirement that is too imprecise to implement.
 2. Act as an adversarial reviewer: assume the specification is incomplete and try to break it. Propose questions about scenarios the team has not defined.
+3. For each open question listed, check whether a source other than the work item itself already answers it. If one does, return it in "answers" with the question id, the source ref and the sentence that answers it, copied word for word. An answer whose quote is not found in that source is discarded. Never invent an answer; leave a question out when no source answers it.
 
 Principles — follow them strictly:
 - Evidence over intuition: every finding must cite at least one source ref with a short verbatim quote. If you cannot cite evidence, do not report the finding.
@@ -142,7 +167,11 @@ ${input.knownFindings.map((f) => `- ${f}`).join('\n') || '- none'}
 ${input.knownQuestions.map((f) => `- ${f}`).join('\n') || '- none'}
 </already_asked_questions>
 
-Return JSON with "findings" and "challenges".`;
+<open_questions>
+${(input.openQuestions ?? []).map((q) => `- [${q.id}] ${q.text}`).join('\n') || '- none'}
+</open_questions>
+
+Return JSON with "findings", "challenges" and "answers".`;
 }
 
 const escapeAttr = (s: string) => s.replace(/"/g, "'");

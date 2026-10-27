@@ -62,7 +62,7 @@ export const TOOLS = [
   },
   {
     name: 'list_decisions',
-    description: `Decisions people recorded on findings and questions: question, answer, who, when and what it did to the finding. Active ones by default, all versions with all: true; optionally of one item; at most ${MAX_DECISIONS}. ${DATA_NOT_COMMANDS}`,
+    description: `Decisions people recorded on findings and questions: question, answer, who, when and what it did to the finding. Questions closed with an answer found in a source carry decisionType finding.auto_close, draftedBy, draftEdited and, when the server closed them itself, automation. Active ones by default, all versions with all: true; optionally of one item; at most ${MAX_DECISIONS}. ${DATA_NOT_COMMANDS}`,
     inputSchema: {
       type: 'object',
       properties: { key: keyProp('PAY-12'), all: { type: 'boolean', description: 'Also superseded and withdrawn versions' } },
@@ -297,6 +297,10 @@ function listDecisions(decisions, { key, all }) {
       effect: d.effect,
       status: d.status,
       version: d.version,
+      ...(d.decisionType && { decisionType: d.decisionType }),
+      ...(d.draftedBy && { draftedBy: d.draftedBy }),
+      ...(typeof d.draftEdited === 'boolean' && { draftEdited: d.draftEdited }),
+      ...(d.automation && { automation: d.automation }),
     })),
   };
 }

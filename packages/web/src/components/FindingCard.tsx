@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Decision, Finding, Question } from '@ci/core';
 import { api, currentUser, errMsg } from '../api';
+import { AUTO_CLOSE } from '../lib/autoClose';
 import { CATEGORY_LABELS, Chevron, DIMENSION_LABELS, QuestionMark, SeverityBadge, Source, StatusIcon } from './ui';
 
 /** Finding → Explanation → Evidence → Question → Decision */
@@ -49,19 +50,87 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
       {finding.resolution && (
         <div className="resolution row" style={{ gap: 8 }}>
           <StatusIcon status="ok" />
+          {decision?.decisionType === AUTO_CLOSE && (
+            <span className="badge accent" title={decision.automation ? `Closed automatically by ${decision.automation.rule}` : 'Closed with an answer found in a source'}>
+              Auto-closed
+            </span>
+          )}
           {finding.status === 'accepted_risk' ? 'Risk accepted' : finding.status === 'dismissed' ? 'Dismissed' : 'Decided'}: {finding.resolution.summary}
           {decision && (
             <span className="small" style={{ color: 'var(--muted)' }}>
               {' '}
               — {decision.decidedBy}, {new Date(decision.decidedAt).toLocaleString()}{' '}
-              <button className="btn ghost sm" onClick={async () => (await api.reopen(decision.id)) && onChanged()}>
+              <button className="btn ghost sm" onClick={async () => (await (decision.decisionType === AUTO_CLOSE ? api.reopenAutoClosed(decision.id) : api.reopen(decision.id))) && onChanged()}>
                 Re-open
               </button>
             </span>
           )}
         </div>
       )}
+      {!closed && finding.answer && <AnswerBox finding={finding} onChanged={onChanged} />}
       {!closed && finding.question && <QuestionBox question={finding.question} findingId={finding.id} itemKey={finding.itemKey} onDecided={onChanged} allowRisk />}
+    </div>
+  );
+}
+
+/** A2a: the answer to the question found in a source, with its verbatim quote; one click to accept, edit or reject. */
+function AnswerBox({ finding, onChanged }: { finding: Finding; onChanged: () => void }) {
+  const a = finding.answer!;
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(a.quote);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string>();
+  const act = async (action: 'accept' | 'edit' | 'reject') => {
+    setBusy(true);
+    setErr(undefined);
+    try {
+      await api.answer(finding.itemKey, a.id, action, action === 'edit' ? text : undefined);
+      onChanged();
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="answer-found" role="group" aria-label="Answer found in a source">
+      <div className="row wrap" style={{ gap: 8 }}>
+        <Source source={a.source.source} />
+        <span>
+          Answer found in{' '}
+          {a.source.url ? (
+            <a href={a.source.url} target="_blank" rel="noreferrer">
+              {a.source.title} ↗
+            </a>
+          ) : (
+            a.source.title
+          )}
+          :
+        </span>
+        {a.origin === 'ai' && <span className="badge accent" title="Proposed by the AI reviewer; the quote was checked word for word against the source">AI</span>}
+      </div>
+      <blockquote>«{a.quote}»</blockquote>
+      {editing && <textarea className="input" aria-label="Edited answer" maxLength={5000} value={text} onChange={(e) => setText(e.target.value)} />}
+      <div className="row wrap decision-actions">
+        {editing ? (
+          <button className="btn accent-outline sm" disabled={busy || !text.trim()} onClick={() => act('edit')}>
+            Save edited answer
+          </button>
+        ) : (
+          <>
+            <button className="btn accent-outline sm" disabled={busy} onClick={() => act('accept')} title="Close the finding with this answer">
+              Accept
+            </button>
+            <button className="btn sm" disabled={busy} onClick={() => setEditing(true)}>
+              Edit
+            </button>
+          </>
+        )}
+        <button className="btn ghost sm" disabled={busy} onClick={() => act('reject')} title="This does not answer the question; it will not be proposed again">
+          Reject
+        </button>
+      </div>
+      {err && <div className="banner bad">{err}</div>}
     </div>
   );
 }

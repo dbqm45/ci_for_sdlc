@@ -1,7 +1,11 @@
 import { EventEmitter } from 'node:events';
 import {
+  AUTO_CLOSE_ACTOR,
   DEMO_SCENARIOS,
   activeDecisions,
+  autoCloseDecision,
+  autoCloseOf,
+  recordDecision,
   analyzeProject,
   approvalBaseline,
   errorMessage,
@@ -21,6 +25,7 @@ import {
   type SemanticOutput,
   type TestCase,
 } from '@ci/core';
+import { proposalEvent, recordAutoClose } from './auto-close.js';
 import type { AtlassianConnection } from './connections.js';
 import type { Principal } from './http.js';
 import type { Settings, Store } from './store.js';
@@ -134,15 +139,19 @@ export class Engine extends EventEmitter {
       const cacheSize = this.aiCache.size;
       const audits: Promise<void>[] = [];
 
-      const { result, snapshot, graph } = await analyzeProject(context, {
-        decisions,
+      const autoCloseLog = await this.store.autoCloseLog();
+      // A2a: a proposal a person rejected or reopened is not made again.
+      const suppressedAnswers = autoCloseLog.filter((e) => e.outcome === 'rejected' || e.outcome === 'reopened').map((e) => e.proposalId);
+      const runAnalysis = (decs: typeof decisions) => analyzeProject(context, {
+        decisions: decs,
         approvals,
         previous: previous ?? undefined,
         policy: settings.policy,
+        suppressedAnswers,
         ai: analyzer
           ? {
               analyzer,
-              cache: this.aiCache,
+              cache: this.aiCache!,
               maxCharsPerSource: settings.security.maxCharsPerSource,
               redactPersonalData: settings.security.redactPersonalData,
               cacheOnly: settings.ai.runOn === 'on_demand',
@@ -163,6 +172,27 @@ export class Engine extends EventEmitter {
             }
           : undefined,
       });
+      let { result, snapshot, graph } = await runAnalysis(decisions);
+
+      // A2a: log each new answer proposal once; under `apply` record it as the automat's decision and analyze again.
+      const known = new Set(autoCloseLog.map((e) => e.proposalId));
+      const proposals = result.items.flatMap((i) => i.findings.filter((f) => f.answer));
+      await recordAutoClose(this.store, proposals.filter((f) => !known.has(f.answer!.id)).map((f) => ({ event: proposalEvent(f, 'proposed', result.analyzedAt), question: f.question!.text, actor: f.answer!.rule })));
+      if (autoCloseOf(settings.policy) === 'apply' && proposals.length) {
+        const at = new Date().toISOString();
+        const applied: { f: (typeof proposals)[number]; id: string }[] = [];
+        await this.store.updateDecisions((all) => {
+          let next = all;
+          for (const f of proposals) {
+            const r = recordDecision(next, autoCloseDecision(f, { by: AUTO_CLOSE_ACTOR, at, automatic: true }));
+            next = r.all;
+            applied.push({ f, id: r.decision.id });
+          }
+          return next;
+        });
+        await recordAutoClose(this.store, applied.map(({ f, id }) => ({ event: proposalEvent(f, 'applied', at, { by: AUTO_CLOSE_ACTOR, decisionId: id }), question: f.question!.text, actor: f.answer!.rule })));
+        ({ result, snapshot, graph } = await runAnalysis(await this.store.decisions().then(activeDecisions)));
+      }
       await Promise.all(audits);
       if (this.aiCache.size !== cacheSize) await this.store.saveAiCache(this.aiCache);
 

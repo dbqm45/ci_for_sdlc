@@ -1,4 +1,4 @@
-import type { AnalysisResult, Approval, Decision, DeepPartial, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem, Settings } from '@ci/core';
+import type { AcceptanceStats, AnalysisResult, Approval, Decision, DeepPartial, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem, Settings } from '@ci/core';
 
 export type { AnalysisResult, ItemAnalysis, Decision, DriftEvent, ImpactReport };
 
@@ -159,6 +159,16 @@ export const api = {
     return req<AnalysisResult>('DELETE', `/api/decisions/${encodeURIComponent(id)}`, { by: currentUser(), reason: reason.trim() || undefined });
   },
   decisions: () => req<Decision[]>('GET', '/api/decisions'),
+  /** A2a: accept, edit or reject an answer found in a source. */
+  answer: (key: string, proposalId: string, action: 'accept' | 'edit' | 'reject', answer?: string) =>
+    req<{ decision?: Decision; item?: ItemAnalysis }>('POST', `/api/items/${encodeURIComponent(key)}/answers/${encodeURIComponent(proposalId)}`, { action, ...(answer !== undefined && { answer }), by: currentUser() }),
+  /** A2a: reopen an auto-closed finding; the proposal counts as rejected. Returns undefined when the user cancels. */
+  reopenAutoClosed: async (id: string) => {
+    const reason = window.prompt('Why reopen this auto-closed finding? (optional, recorded in the audit log)');
+    if (reason === null) return undefined;
+    return req<AnalysisResult>('POST', `/api/decisions/${encodeURIComponent(id)}/reopen`, { by: currentUser(), reason: reason.trim() || undefined });
+  },
+  acceptance: () => req<AcceptanceStats[]>('GET', '/api/decisions/acceptance'),
   impact: (q: string) => req<ImpactReport>('GET', `/api/impact?q=${encodeURIComponent(q)}`),
   drift: () => req<DriftEvent[]>('GET', '/api/drift'),
   history: () => req<HistoryPoint[]>('GET', '/api/history'),

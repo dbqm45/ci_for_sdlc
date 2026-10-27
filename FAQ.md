@@ -302,6 +302,24 @@ To odpowiedź człowieka na pytanie z ustalenia. Zapisujemy w niej:
 
 Odpowiedź z decyzji staje się nowym twierdzeniem w analizie. Dzięki temu aplikacja wykryje dokument, który przeczy podjętej decyzji (reguła `CON-001`).
 
+**Czy aplikacja sama zamyka pytania, na które odpowiedź już jest?**
+Proponuje to. Gdy odpowiedź na pytanie ustalenia jest już na połączonej stronie Confluence, w ramce Figmy albo we
+wcześniejszej decyzji, ustalenie pokazuje „Answer found in <źródło>: «cytat»” z przyciskami:
+
+- *Accept* — zapisuje decyzję `resolve` z cytatem jako odpowiedzią;
+- *Edit* — zapisuje Twoją poprawioną treść (decyzja oznaczona jako poprawiony szkic);
+- *Reject* — nic nie zapisuje, a ta sama propozycja już nie wróci.
+
+Cytat jest zawsze dosłownym fragmentem źródła; propozycja AI bez cytatu albo z cytatem, którego w źródle nie ma, nie
+jest pokazywana. Takie decyzje mają typ `finding.auto_close` (kontrakt pdi) i są na liście *Decisions → Auto-closed*
+z przyciskiem *Reopen*: ustalenie wraca, a propozycja liczy się jako odrzucona i już się nie pojawi.
+
+Zachowanie ustawisz w *Settings → Policy → Answers found in sources*: `suggest` (domyślnie), `off` albo `apply`
+(aplikacja zamyka sama, z regułą, która znalazła odpowiedź). `apply` ustawia tylko administrator — nigdy nie jest
+domyślne. W pdi to obniżenie poziomu autonomii, które wymaga zmierzonej akceptacji: *Decisions → Auto-closed* pokazuje
+ostatnie 30 ocenionych propozycji (bez zmian, poprawione, odrzucone, otwarte ponownie) i progi pdi (co najmniej 95%
+bez zmian; powrót do człowieka powyżej 10% poprawionych). Aplikacja niczego nie zmienia sama na podstawie tych liczb.
+
 **Czy decyzję można zmienić albo usunąć?**
 Decyzje są niezmienne i wersjonowane (`packages/core/src/decisions.ts`):
 

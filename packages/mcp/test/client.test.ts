@@ -89,6 +89,13 @@ describe('decisions, drift, rules and pdi', () => {
     expect(all.structuredContent.decisions.map((d: { id: string }) => d.id)).toEqual(['d1', 'd0']);
   });
 
+  it('CL-05b: an auto-closed decision (A2a) shows its type, the AI draft, whether it was edited and the automat', async () => {
+    const auto = { ...DECISIONS[0], id: 'd9', decisionType: 'finding.auto_close', draftedBy: 'ai', draftEdited: false, automation: { level: 1, rule: 'auto-close:ERR-003' }, evidence: [{ source: 'confluence', title: 'Spec', excerpt: 'q' }], decidedBy: 'auto-close' };
+    const r = await tool({ '/api/decisions': { body: [auto] } }, 'list_decisions');
+    expect(r.structuredContent.decisions[0]).toMatchObject({ id: 'd9', decisionType: 'finding.auto_close', draftedBy: 'ai', draftEdited: false, automation: { level: 1, rule: 'auto-close:ERR-003' } });
+    expect(r.structuredContent.decisions[0].evidence).toBeUndefined();
+  });
+
   it('CL-06: list_drift gives the newest events, 20 by default, filtered by impacted item', async () => {
     const r = await tool({ '/api/drift': { body: DRIFT } }, 'list_drift');
     expect(r.structuredContent).toMatchObject({ total: 30 });

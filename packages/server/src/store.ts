@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_POLICY, errorMessage, normalizeDecision, type Approval, type Decision, type StoredDecision, type DriftEvent, type IssueType, type PdiEvent, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, errorMessage, normalizeDecision, type Approval, type AutoCloseEvent, type Decision, type StoredDecision, type DriftEvent, type IssueType, type PdiEvent, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
 import type { Principal } from './http.js';
 import { pruneToSchema, settingsBody } from './schemas.js';
 
@@ -70,7 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export interface AuditEntry {
   at: string;
-  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection' | 'pdi';
+  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection' | 'pdi' | 'auto_close';
   /** A display name; `via` is how the change was authorized (admin token or a loopback client). */
   actor: string;
   via?: Principal;
@@ -293,6 +293,13 @@ export class Store {
   }
   updatePdiState(fn: (s: PdiState) => PdiState | void) {
     return this.update('pdi-state.json', { sent: {}, seen: [] }, pdiStateShape, fn, false);
+  }
+  /** A2a: the life of each answer proposal (proposed, accepted, edited, rejected, applied, reopened). */
+  autoCloseLog() {
+    return this.readJson('auto-close.json', [], listOf<AutoCloseEvent>());
+  }
+  appendAutoClose(events: AutoCloseEvent[]) {
+    return this.update('auto-close.json', [], listOf<AutoCloseEvent>(), (all) => [...all, ...events].slice(-5000), false);
   }
   /** Events waiting for delivery to pdi, with their retry state. */
   pdiOutbox() {

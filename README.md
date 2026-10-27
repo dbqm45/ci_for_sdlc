@@ -216,6 +216,9 @@ Konfiguracja: [`packages/mcp/README.md`](packages/mcp/README.md).
 | POST | `/api/items/:key/ai-review` | semantyczna recenzja AI jednego elementu |
 | POST / DELETE | `/api/items/:key/approve` | zatwierdzenie (baseline dla driftu) / wycofanie |
 | GET / POST / DELETE | `/api/decisions[/:id]` | log decyzji / nowa decyzja / ponowne otwarcie |
+| POST | `/api/items/:key/answers/:proposalId` | odpowiedź znaleziona w źródle: przyjęcie, poprawka albo odrzucenie (A2a) |
+| POST | `/api/decisions/:id/reopen` | ponowne otwarcie ustalenia zamkniętego odpowiedzią ze źródła |
+| GET | `/api/decisions/acceptance` | odsetek propozycji przyjętych bez zmian (ostatnie 30, progi pdi) |
 | GET | `/api/impact?q=` | analiza wpływu |
 | GET | `/api/drift` · `/api/history` · `/api/audit` · `/api/rules` | drift log · trend · audyt · reguły |
 | GET / PUT | `/api/settings` | ustawienia |
