@@ -1,6 +1,6 @@
 # TODO
 
-## Następne kroki (stan 27.10.2026, po G4 i krokach 1–2 G3)
+## Następne kroki (stan 27.10.2026 wieczorem)
 
 - [ ] **Wzorzec wizualny `e2e/__screenshots__/settings.png` (ręcznie, właściciel repo).** W *Settings → Integrations*
       doszedł blok *Tests (JUnit XML)* (#77), więc nocny test wizualny strony *Settings* jest czerwony do czasu nowego
@@ -17,8 +17,10 @@
       - [ ] sprintdeck, po jego MVP (konta, import z Jiry): prognoza przy zadaniu w pokoju.
 - [ ] **G6, G7, P1, P2** (jedno wejście dla ludzi, miary przepływu, wspólna platforma, Jira czy repo) — decyzje
       architektoniczne do podjęcia, nie pojedyncze PR-y.
-- [ ] **W tym repo:** OpenAPI jako źródło (Faza 2, `docs/ROADMAP.md`) i wiele repozytoriów / projektów w jednej
-      przestrzeni roboczej (F5 planu jednego flow, `docs/SAAS.md`).
+- [ ] **W tym repo:** OpenAPI jako źródło (Faza 2, `docs/ROADMAP.md`); konta i role w przestrzeniach roboczych
+      (krok 3 `docs/SAAS.md`).
+  - [x] Wiele przestrzeni roboczych w jednej instalacji (#86, #88), w Postgresie z `CI_DATABASE_URL` (#89).
+  - [x] Ramki Figmy z tabeli `design.md` zmiany (kontrakt pdi 0.9.0, #87).
 
 ## Plan: przyciski „Connect” dla Figma/Jira/Confluence (OAuth zamiast/obok env-secret)
 
