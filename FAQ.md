@@ -85,6 +85,15 @@ To tryb domyślny. Pokazuje przykładowy projekt *Checkout* (klucz `CHK`, zgłos
 - `story-card-limit` — w Jira PAY-123 pozwala zapisać 10 kart, a Confluence nie zostaje zaktualizowany;
 - `release-planning` — w Jira produkt oznacza MVP etykietami `release:R1` i linkuje flagi: *Checkout Experience* dostaje poprawny plan, *Payment Reliability* plan z problemami (`REL-002`…`REL-006`).
 
+**Czy jedna instalacja może analizować kilka produktów albo repozytoriów?**
+Tak, przez przestrzenie robocze. Przycisk *+ Workspace* (a gdy jest ich więcej, lista w nagłówku z pozycją
+*New workspace…*) tworzy przestrzeń z własnymi ustawieniami, źródłami, analizą, decyzjami, zatwierdzeniami
+i audytem. Nowa przestrzeń zaczyna w trybie demo; źródła ustawiasz w jej *Settings*. Adres przestrzeni to
+`#/w/<id>/…`; bez niego jesteś w przestrzeni domyślnej. Połączenie z pdi jest wspólne: zmiana `CHG-n` obejmuje
+historyjki z etykietą `change:CHG-n` ze wszystkich przestrzeni, a zatwierdzenie z pdi trafia do każdej z nich.
+Klucze historyjek jednej zmiany powinny być różne w różnych przestrzeniach (np. dwie witryny Jiry z `PAY-1` w tej
+samej zmianie): aplikacja policzy obie, ale w pdi i w jego linkach trudno je rozróżnić.
+
 **Jak przejść na prawdziwe dane?**
 
 1. Ustaw tokeny w zmiennych środowiskowych serwera (patrz [12](#12-bezpieczeństwo-i-dostęp)).

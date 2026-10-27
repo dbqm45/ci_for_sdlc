@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { changeReadiness, decisionRecordedEvent, errorMessage, gateRequestedEvent, readinessEvents, type GateRequestInput, type AnalysisResult, type DecisionRecordedInput, type RequirementItem } from '@ci/core';
+import { decisionRecordedEvent, errorMessage, gateRequestedEvent, readinessEvents, type ChangeReadiness, type DecisionRecordedInput, type GateRequestInput } from '@ci/core';
 import type { AutoCloseStep } from './auto-close.js';
 import type { PdiOutboxEntry, Store } from './store.js';
 
@@ -80,13 +80,25 @@ export class PdiLink {
     return this.clock();
   }
 
-  /** After an analysis: queue `readiness.changed` for every change whose readiness differs from the last one sent. */
-  async enqueue(result: AnalysisResult, requirements: RequirementItem[], prefix?: string) {
+  /**
+   * F5: the store of a workspace, for the DEC of its decisions; the link's own store (`default`) when unset or for a
+   * workspace that is gone.
+   */
+  storeOf?: (workspace: string) => Store | undefined;
+  private storeFor(workspace?: string) {
+    return (workspace && this.storeOf?.(workspace)) || this.store;
+  }
+
+  /**
+   * After an analysis: queue `readiness.changed` for every change whose readiness differs from the last one sent.
+   * `changes` are those of all workspaces together (F5).
+   */
+  async enqueue(changes: ChangeReadiness[]) {
     if (!this.enabled) return;
     const now = this.clock().toISOString();
     let events: ReturnType<typeof readinessEvents>['events'] = [];
     await this.store.updatePdiState((s) => {
-      const r = readinessEvents(changeReadiness(result.items, requirements, prefix || undefined), s.sent ?? {}, now);
+      const r = readinessEvents(changes, s.sent ?? {}, now);
       events = r.events;
       return { ...s, sent: r.sent, seen: s.seen ?? [] };
     });
@@ -106,7 +118,7 @@ export class PdiLink {
    * A2b: one `decision.recorded` per decided A2a step (accept, edit, reject, reopen, apply). A reopen waits in the queue
    * until the decision it reopens has its DEC; `changeOf` gives the item's CHG from its `change:` label.
    */
-  async enqueueDecisions(steps: AutoCloseStep[], changeOf: (itemKey: string) => string | undefined) {
+  async enqueueDecisions(steps: AutoCloseStep[], changeOf: (itemKey: string) => string | undefined, workspace?: string) {
     if (!this.enabled || !steps.length) return;
     const now = this.clock().toISOString();
     const entries = steps.map(({ event: e, question, actor, answer, why }): PdiOutboxEntry => {
@@ -126,6 +138,7 @@ export class PdiLink {
           change: e.itemKey ? changeOf(e.itemKey) : undefined,
           why,
           publicUrl: this.publicUrl,
+          workspace,
         },
         e.at,
       );
@@ -137,6 +150,7 @@ export class PdiLink {
         ...(!reopen && e.decisionId && { decisionId: e.decisionId }),
         ...(reopen && e.decisionId && { reopensDecisionId: e.decisionId }),
         logRef: { proposalId: e.proposalId, outcome: e.outcome, at: e.at },
+        ...(workspace && { workspace }),
       };
     });
     await this.store.updatePdiOutbox((all) => [...all, ...entries]);
@@ -165,7 +179,7 @@ export class PdiLink {
       let entry = queued;
       if (entry.reopensDecisionId) {
         // A reopen supersedes the DEC of the decision it reopens; until pdi has given that one, it waits (no attempt).
-        const dec = (await this.store.decisions()).find((d) => d.id === entry.reopensDecisionId)?.pdiDecision;
+        const dec = (await this.storeFor(entry.workspace).decisions()).find((d) => d.id === entry.reopensDecisionId)?.pdiDecision;
         if (!dec) continue;
         entry = { ...entry, event: { ...entry.event, payload: { ...entry.event.payload, supersedes: dec } } };
       }
@@ -197,9 +211,10 @@ export class PdiLink {
 
   /** pdi's DEC on the local decision (accept, edit, apply) and on the step in the proposal log. */
   private async keepDecisionNumber(entry: PdiOutboxEntry, dec: string) {
-    if (entry.decisionId) await this.store.updateDecisions((all) => all.map((d) => (d.id === entry.decisionId ? { ...d, pdiDecision: dec } : d)));
+    const store = this.storeFor(entry.workspace);
+    if (entry.decisionId) await store.updateDecisions((all) => all.map((d) => (d.id === entry.decisionId ? { ...d, pdiDecision: dec } : d)));
     const ref = entry.logRef;
-    if (ref) await this.store.updateAutoCloseLog((all) => all.map((e) => (e.proposalId === ref.proposalId && e.outcome === ref.outcome && e.at === ref.at ? { ...e, pdiDecision: dec } : e)));
+    if (ref) await store.updateAutoCloseLog((all) => all.map((e) => (e.proposalId === ref.proposalId && e.outcome === ref.outcome && e.at === ref.at ? { ...e, pdiDecision: dec } : e)));
   }
 
   private async send(entry: PdiOutboxEntry): Promise<{ error?: string; status?: number; decision?: string }> {

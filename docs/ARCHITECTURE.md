@@ -208,9 +208,22 @@ lists what blocks the stories as `questions`, and the request goes to the same o
 `GET /api/changes` lists the changes with their readiness and the last request. A ready change reaches pdi through
 `readiness.changed` alone.
 
+## Workspaces (F5)
+
+One installation holds several workspaces (`server/src/workspaces.ts`, plan `docs/WORKSPACES-F5-PLAN.md`): each is a
+`Store`, an `Engine` and an `AtlassianConnection` with its own settings, sources, analysis, decisions, approvals,
+drift and audit. `default` is `CI_DATA_DIR` itself; the others live in `CI_DATA_DIR/workspaces/<id>/`, listed in
+`workspaces.json`. `routes-workspace.ts` registers the routes of a workspace twice: under `/api` for `default` and
+under `/api/w/:ws` (an `onRoute` hook adds the `ws` param, a `preHandler` answers 404 for an unknown one). The
+Atlassian OAuth callback finds the workspace that issued the `state`. pdi is shared: its queue and state stay with
+`default`, readiness is `mergeChangeReadiness()` of every workspace's changes, `gate.decided` approves a change's
+stories in each workspace, and `decision.recorded` of another workspace carries it in `ref`, link and event id
+(`workspacePath()` in core). The UI keeps the workspace in the address (`#/w/<id>/…`, `lib/workspace.ts`) and sends
+its requests to `/api/w/<id>/…`.
+
 ## Persistence
 
-`CI_DATA_DIR` (default `.ci-data/`): `settings.json`, `decisions.json`, `approvals.json`, `snapshot.json`,
+`CI_DATA_DIR` (default `.ci-data/`; one directory per workspace, see above): `settings.json`, `decisions.json`, `approvals.json`, `snapshot.json`,
 `drift.json`, `history.json`, `ai-cache.json`, `audit.jsonl`, `demo-context.json`, `auto-close.json`. Context-bearing files are
 encrypted with AES-256-GCM when *Encrypt stored context* is on and `CI_ENCRYPTION_KEY` is set.
 

@@ -9,6 +9,9 @@ describe('changes on the item page', () => {
   it('CHG-UI-01: the change of a story, or none', () => {
     expect(changeOfItem([c('ready')], 'PAY-2')?.change).toBe('CHG-12');
     expect(changeOfItem([c('ready')], 'PAY-9')).toBeUndefined();
+    const across = { ...c('ready'), workspaces: { 'PAY-1': 'default', 'PAY-2': 'mobile' } };
+    expect(changeOfItem([across], 'PAY-2', 'mobile')?.change).toBe('CHG-12');
+    expect(changeOfItem([across], 'PAY-2')).toBeUndefined();
   });
 
   it.each([

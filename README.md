@@ -231,12 +231,15 @@ Konfiguracja: [`packages/mcp/README.md`](packages/mcp/README.md).
 | POST | `/api/changes/:change/request-approval` | prośba do pdi o decyzję „Approve for implementation” dla zmiany niegotowej (`gate.requested` z blokadami jako pytaniami) |
 | GET | `/api/events` | Server-Sent Events (`analysis`, `status`) |
 | GET | `/api/openapi.json` | kontrakt API (OpenAPI 3) |
+| GET / POST | `/api/workspaces` | przestrzenie robocze: lista / nowa (`{ id, name }`, F5) |
+| * | `/api/w/:ws/…` | te same trasy przestrzeni (analiza, elementy, decyzje, ustawienia, połączenia, dryf, audyt, demo, webhooki źródeł, SSE) dla przestrzeni `:ws`; bez prefiksu — przestrzeń `default` |
 
 Zasady kontraktu:
 
 - **Błędy** zwracane są jako `application/problem+json` (RFC 9457): `{type, title, status, detail, instance}`; błędy walidacji to `422` z listą `errors: [{field, message}]`. Odpowiedzi `5xx` nie ujawniają szczegółów — przyczyna jest w logu serwera.
 - **Walidacja**: ciała żądań mają schematy JSON i odrzucają nieznane pola.
 - **Ustawienia**: `GET /api/settings` zwraca `ETag`; `PUT` wymaga nagłówka `If-Match` (`428` bez niego, `412` gdy ktoś zmienił ustawienia w międzyczasie).
+- **Przestrzenie robocze** (F5, [`docs/WORKSPACES-F5-PLAN.md`](docs/WORKSPACES-F5-PLAN.md)): każda ma własne ustawienia, źródła, analizę, decyzje, zatwierdzenia, dryf i audyt (`CI_DATA_DIR/workspaces/<id>/`); `default` to dotychczasowy katalog danych. Wspólne są pdi (`/api/pdi`, `/api/changes`, `/api/webhooks/pdi`: zmiana `CHG-n` obejmuje historyjki ze wszystkich przestrzeni), `/api/rules` i `/api/health`. Serwer MCP czyta przestrzeń `default`.
 - **Kto działa**: nagłówek `X-CI-Actor` (nazwa wyświetlana, URL-encoded) trafia do audytu razem ze sposobem autoryzacji (`via`: `admin_token`, `loopback` albo `pdi_signature` dla zatwierdzeń z pdi).
 
 ## Wersjonowanie i wydania
@@ -269,7 +272,8 @@ Lista kontrolna tych kroków jest na górze [`TODO.md`](TODO.md).
    - **G8 — incydenty:** incydent (PagerDuty, Opsgenie, …) jako nowe zgłoszenie PRB w pdi. Wymaga wyboru narzędzia.
    - Przekrojowe **G6** (jedno wejście dla ludzi), **G7** (miary przepływu) oraz platformowe **P1** (wspólna
      platforma) i **P2** (Jira czy repo) to decyzje architektoniczne, nie pojedyncze PR-y.
-3. **W tym repo:** OpenAPI jako źródło (Faza 2 w [`docs/ROADMAP.md`](docs/ROADMAP.md)) i wiele repozytoriów /
-   projektów w jednej przestrzeni roboczej (F5 planu jednego flow).
+3. **W tym repo:** OpenAPI jako źródło (Faza 2 w [`docs/ROADMAP.md`](docs/ROADMAP.md)). Wiele przestrzeni roboczych
+   (F5 planu jednego flow) działa na plikach ([`docs/WORKSPACES-F5-PLAN.md`](docs/WORKSPACES-F5-PLAN.md)); dalej
+   Postgres oraz konta i role (kroki 2–3 w [`docs/SAAS.md`](docs/SAAS.md)).
 
 Docelowy model dystrybucji to **SaaS z abonamentem**: OAuth zamiast tokenów, AI wliczone w usługę, szyfrowanie per organizacja, multi-tenancy, billing. Obecny tryb self-hosted (tokeny w zmiennych środowiskowych) zostaje do testów i instalacji u klienta. Szczegóły: [`docs/SAAS.md`](docs/SAAS.md).

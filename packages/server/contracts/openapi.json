@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Continuous Intelligence for the SDLC",
-    "version": "0.1.29",
-    "description": "State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state. Reads need the read token (or the admin token) when CI_READ_TOKEN is set, except /api/health."
+    "version": "0.1.30",
+    "description": "State-changing calls need the admin token when CI_ADMIN_TOKEN is set; without it only loopback clients may change state. Reads need the read token (or the admin token) when CI_READ_TOKEN is set, except /api/health. Workspaces: the routes of a workspace are under /api/w/{ws}/…; the same routes under /api/… address the workspace \"default\"."
   },
   "components": {
     "securitySchemes": {
@@ -63,6 +63,83 @@
         "responses": {
           "200": {
             "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/rules": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/workspaces": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a workspace with its own sources, analysis and decisions",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "by": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
           }
         }
       }
@@ -771,15 +848,6 @@
         }
       }
     },
-    "/api/rules": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
     "/api/settings": {
       "get": {
         "responses": {
@@ -1479,6 +1547,1781 @@
         }
       }
     },
+    "/api/webhooks/{source}": {
+      "post": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "source",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/analysis": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/analyze": {
+      "post": {
+        "summary": "Run an analysis now",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/items/{key}": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+            },
+            "in": "path",
+            "name": "key",
+            "required": true
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/items/{key}/graph": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+            },
+            "in": "path",
+            "name": "key",
+            "required": true
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/items/{key}/ai-review": {
+      "post": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+            },
+            "in": "path",
+            "name": "key",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/items/{key}/approve": {
+      "post": {
+        "summary": "Approve a story as ready for implementation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "by": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "force": {
+                    "type": "boolean"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 5000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+            },
+            "in": "path",
+            "name": "key",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "by": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 5000
+                  }
+                },
+                "nullable": true
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+            },
+            "in": "path",
+            "name": "key",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/decisions": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "Answer a question or confirm a finding",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "questionId": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
+                  },
+                  "findingId": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "itemKey": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "minLength": 1
+                  },
+                  "topic": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "question": {
+                    "type": "string",
+                    "maxLength": 5000
+                  },
+                  "answer": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "decidedBy": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "by": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "effect": {
+                    "enum": [
+                      "resolve",
+                      "accept_risk",
+                      "dismiss",
+                      "confirm"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "changeReason": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "questionId",
+                  "itemKey",
+                  "answer"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/items/{key}/answers/{proposalId}": {
+      "post": {
+        "summary": "Accept, edit or reject an answer found in a source",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "accept",
+                      "edit",
+                      "reject"
+                    ]
+                  },
+                  "answer": {
+                    "type": "string",
+                    "maxLength": 5000
+                  },
+                  "by": {
+                    "type": "string",
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+            },
+            "in": "path",
+            "name": "key",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "proposalId",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/decisions/{id}/reopen": {
+      "post": {
+        "summary": "Reopen a finding closed with an answer found in a source",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "by": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 5000
+                  }
+                },
+                "nullable": true
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/decisions/acceptance": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/decisions/{id}": {
+      "delete": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "by": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 5000
+                  }
+                },
+                "nullable": true
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/impact": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "in": "query",
+            "name": "q",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/drift": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/history": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/audit": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/settings": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update settings (partial). Requires If-Match with the ETag from GET /api/settings.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "demo",
+                      "live"
+                    ]
+                  },
+                  "project": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      "name": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "claimPack": {
+                        "enum": [
+                          "general",
+                          "ev"
+                        ]
+                      }
+                    }
+                  },
+                  "integrations": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "jira": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "baseUrl": {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          "email": {
+                            "type": "string",
+                            "maxLength": 320
+                          },
+                          "projectKey": {
+                            "type": "string",
+                            "maxLength": 40
+                          },
+                          "acceptanceCriteriaField": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "storyPointsField": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "releaseLineSource": {
+                            "enum": [
+                              "label",
+                              "fixVersion",
+                              "field"
+                            ]
+                          },
+                          "releaseLabelPrefix": {
+                            "type": "string",
+                            "maxLength": 50
+                          },
+                          "releaseLineField": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "flagLabelPrefix": {
+                            "type": "string",
+                            "maxLength": 50
+                          },
+                          "flagField": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "changeLabelPrefix": {
+                            "type": "string",
+                            "maxLength": 50
+                          },
+                          "jqlFilter": {
+                            "type": "string",
+                            "maxLength": 4000
+                          },
+                          "issueTypeMap": {
+                            "type": "object",
+                            "maxProperties": 100,
+                            "propertyNames": {
+                              "minLength": 1,
+                              "maxLength": 100,
+                              "pattern": "\\S"
+                            },
+                            "additionalProperties": {
+                              "enum": [
+                                "epic",
+                                "feature",
+                                "story",
+                                "task",
+                                "subtask",
+                                "bug"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "confluence": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "baseUrl": {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          "email": {
+                            "type": "string",
+                            "maxLength": 320
+                          },
+                          "spaceKeys": {
+                            "type": "array",
+                            "maxItems": 200,
+                            "items": {
+                              "type": "string",
+                              "maxLength": 200
+                            }
+                          }
+                        }
+                      },
+                      "figma": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "fileKeys": {
+                            "type": "array",
+                            "maxItems": 200,
+                            "items": {
+                              "type": "string",
+                              "maxLength": 200
+                            }
+                          }
+                        }
+                      },
+                      "code": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "reconstructionPath": {
+                            "type": "string",
+                            "maxLength": 1000
+                          },
+                          "repoUrl": {
+                            "type": "string",
+                            "maxLength": 500,
+                            "pattern": "^(https://[^\\s]+)?$"
+                          }
+                        }
+                      },
+                      "tests": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "reportsPath": {
+                            "type": "string",
+                            "maxLength": 1000
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "ai": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "provider": {
+                        "enum": [
+                          "none",
+                          "anthropic",
+                          "bedrock",
+                          "openai",
+                          "azure-openai",
+                          "custom"
+                        ]
+                      },
+                      "model": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "temperature": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 2
+                      },
+                      "effort": {
+                        "enum": [
+                          "low",
+                          "medium",
+                          "high",
+                          "xhigh",
+                          "max"
+                        ]
+                      },
+                      "region": {
+                        "type": "string",
+                        "maxLength": 50
+                      },
+                      "baseUrl": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      "apiVersion": {
+                        "type": "string",
+                        "maxLength": 50
+                      },
+                      "runOn": {
+                        "enum": [
+                          "every_analysis",
+                          "on_demand"
+                        ]
+                      }
+                    }
+                  },
+                  "security": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "organizationManagedAi": {
+                        "type": "boolean"
+                      },
+                      "redactPersonalData": {
+                        "type": "boolean"
+                      },
+                      "maxCharsPerSource": {
+                        "type": "integer",
+                        "minimum": 100,
+                        "maximum": 200000
+                      },
+                      "localCacheOnly": {
+                        "type": "boolean"
+                      },
+                      "encryptStoredContext": {
+                        "type": "boolean"
+                      },
+                      "auditAiDecisions": {
+                        "type": "boolean"
+                      },
+                      "recordEvidenceSources": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "schedule": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "mode": {
+                        "enum": [
+                          "on_demand",
+                          "interval",
+                          "continuous"
+                        ]
+                      },
+                      "intervalMinutes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10080
+                      },
+                      "onJiraChange": {
+                        "type": "boolean"
+                      },
+                      "onConfluenceChange": {
+                        "type": "boolean"
+                      },
+                      "onFigmaChange": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "policy": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "actions": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "critical": {
+                            "enum": [
+                              "block",
+                              "notify",
+                              "record"
+                            ]
+                          },
+                          "warning": {
+                            "enum": [
+                              "block",
+                              "notify",
+                              "record"
+                            ]
+                          },
+                          "info": {
+                            "enum": [
+                              "block",
+                              "notify",
+                              "record"
+                            ]
+                          }
+                        }
+                      },
+                      "disabledRules": {
+                        "type": "array",
+                        "maxItems": 200,
+                        "items": {
+                          "type": "string",
+                          "maxLength": 200
+                        }
+                      },
+                      "aiFindings": {
+                        "enum": [
+                          "block",
+                          "require_confirmation",
+                          "notify"
+                        ]
+                      },
+                      "driftReaction": {
+                        "enum": [
+                          "warn",
+                          "review_required",
+                          "invalidate"
+                        ]
+                      },
+                      "storyShape": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "acFormat": {
+                            "enum": [
+                              "gwt",
+                              "ears",
+                              "any",
+                              "off"
+                            ]
+                          },
+                          "maxScenarios": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          "maxActions": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 20
+                          },
+                          "maxStoryPoints": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                          }
+                        }
+                      },
+                      "release": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "maxMvpPercent": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                          },
+                          "requireFlag": {
+                            "enum": [
+                              "user_facing",
+                              "all",
+                              "off"
+                            ]
+                          }
+                        }
+                      },
+                      "autoClose": {
+                        "enum": [
+                          "off",
+                          "suggest",
+                          "apply"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "header",
+            "name": "if-match",
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/settings/test-connections": {
+      "post": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/connections": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/connections/atlassian/start": {
+      "post": {
+        "summary": "Start connecting Atlassian (Jira and Confluence); returns the consent URL to open",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/connections/atlassian/site": {
+      "put": {
+        "summary": "Choose the Atlassian site the analysis reads",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "cloudId": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "cloudId"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/connections/atlassian": {
+      "delete": {
+        "summary": "Forget the Atlassian connection (revoke the app in Atlassian account settings too)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/demo/scenarios": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/demo/scenarios/{id}": {
+      "post": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/demo/reset": {
+      "post": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/webhooks/{source}": {
+      "post": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/api/w/{ws}/events": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/pdi": {
       "get": {
         "responses": {
@@ -1569,34 +3412,6 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/api/webhooks/{source}": {
-      "post": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "source",
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Default Response"
-          }
-        }
-      }
-    },
-    "/api/events": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "Default Response"
           }
         }
       }
