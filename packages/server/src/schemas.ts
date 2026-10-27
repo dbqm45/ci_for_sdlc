@@ -108,6 +108,9 @@ export const withdrawBody = { ...obj({ by: str(200), reason: str(5000) }), nulla
 /** F5: a workspace (docs/WORKSPACES-F5-PLAN.md): lower-case letters, digits and `-`, up to 40. */
 export const WORKSPACE_ID_PATTERN = '^[a-z0-9][a-z0-9-]{0,39}$';
 export const workspaceParams = obj({ ws: str(40, { pattern: WORKSPACE_ID_PATTERN }) }, ['ws']);
+export const workspaceRenameBody = obj({ name: str(100, { minLength: 1 }), by: str(200) }, ['name']);
+/** Deleting needs the id typed back. */
+export const workspaceDeleteBody = obj({ confirm: str(40), by: str(200) }, ['confirm']);
 export const workspaceBody = obj({ id: str(40, { pattern: WORKSPACE_ID_PATTERN }), name: str(100), by: str(200) }, ['id']);
 /** F4: a request for approval of a change in pdi (`gate.requested`). */
 export const changeParams = obj({ change: str(64, { pattern: '^[A-Z][A-Z0-9]+-[0-9]+$' }) }, ['change']);

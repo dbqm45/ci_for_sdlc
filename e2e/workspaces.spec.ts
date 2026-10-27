@@ -24,3 +24,20 @@ test('WSE-01: another workspace shows its own settings; links stay in it; switch
   await expect(page).toHaveURL(/#\/settings$/);
   await expect(page.getByLabel('Project name')).toHaveValue('Checkout');
 });
+
+test('WSE-02: a workspace is renamed and deleted from its settings; deleting asks for its id', async ({ page, request }) => {
+  const id = `e2e-del-${Date.now().toString(36)}`;
+  expect((await request.post('/api/workspaces', { data: { id, name: 'Temp' } })).status()).toBe(201);
+  await page.goto(`/#/w/${id}/settings`);
+
+  const name = page.getByLabel(`Workspace name (id: ${id})`);
+  await expect(name).toHaveValue('Temp');
+  await name.fill('Temporary');
+  await page.getByRole('button', { name: 'Rename workspace' }).click();
+  await expect(page.getByRole('status')).toHaveText('Workspace renamed to Temporary');
+
+  page.once('dialog', (d) => void d.accept(id));
+  await page.getByRole('button', { name: 'Delete workspace…' }).click();
+  await expect(page).toHaveURL(/#\/overview$/);
+  expect((await (await request.get('/api/workspaces')).json()).map((w: { id: string }) => w.id)).not.toContain(id);
+});

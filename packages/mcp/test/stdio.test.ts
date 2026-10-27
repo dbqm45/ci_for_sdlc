@@ -34,7 +34,7 @@ describe('ci-sdlc-mcp.js over stdio', () => {
     ]);
     expect(out.map((m) => (m as { id: number }).id)).toEqual([1, 2, 3]);
     expect(out[0]).toMatchObject({ result: { protocolVersion: '2025-06-18', serverInfo: { name: 'ci-sdlc' } } });
-    expect((out[1] as { result: { tools: unknown[] } }).result.tools).toHaveLength(7);
+    expect((out[1] as { result: { tools: unknown[] } }).result.tools).toHaveLength(8);
     expect(out[2]).toMatchObject({ result: { structuredContent: { key: 'TSK-57', readiness: 'not_ready' } } });
   });
 

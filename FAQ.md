@@ -91,6 +91,8 @@ Tak, przez przestrzenie robocze. Przycisk *+ Workspace* (a gdy jest ich więcej,
 i audytem. Nowa przestrzeń zaczyna w trybie demo; źródła ustawiasz w jej *Settings*. Adres przestrzeni to
 `#/w/<id>/…`; bez niego jesteś w przestrzeni domyślnej. Połączenie z pdi jest wspólne: zmiana `CHG-n` obejmuje
 historyjki z etykietą `change:CHG-n` ze wszystkich przestrzeni, a zatwierdzenie z pdi trafia do każdej z nich.
+Nazwę zmienisz, a przestrzeń usuniesz w jej *Settings → Workspace* (usunięcie wymaga wpisania jej `id`; dane
+nie znikają, tylko trafiają na serwerze do `workspaces-deleted/`; przestrzeni domyślnej nie da się usunąć).
 Klucze historyjek jednej zmiany powinny być różne w różnych przestrzeniach (np. dwie witryny Jiry z `PAY-1` w tej
 samej zmianie): aplikacja policzy obie, ale w pdi i w jego linkach trudno je rozróżnić.
 

@@ -33,7 +33,7 @@ async function start(opts: { pdi?: boolean; keepDir?: boolean } = {}) {
   ctx = await buildApp({ dataDir: dir, adminToken: '', allowedHosts: [], allowedOrigins: [], connect: undefined, pdi: opts.pdi ? { eventsUrl: 'https://pdi.example.com', secret: SECRET, fetch: fakeFetch as typeof fetch, clock: () => now } : { eventsUrl: '', secret: '' } });
   return ctx;
 }
-async function call(method: 'GET' | 'POST' | 'PUT', url: string, payload?: unknown, headers: Record<string, string> = {}) {
+async function call(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: unknown, headers: Record<string, string> = {}) {
   const res = await ctx!.app.inject({ method, url, payload: payload as object, headers: { 'x-ci-actor': 'Ann', ...headers } });
   return { status: res.statusCode, body: res.body ? res.json() : undefined, headers: res.headers };
 }
@@ -187,5 +187,29 @@ describe('workspaces', () => {
     expect((await call('POST', '/api/w/mobile/webhooks/jira', {}, { origin: 'https://jira.example.com' })).status).toBe(202);
     expect((await call('GET', '/api/w/mobile/audit')).body[0].summary).toBe('Change notification from jira');
     expect((await call('GET', '/api/audit')).body.some((a: { kind: string }) => a.kind === 'webhook')).toBe(false);
+  });
+
+  it('WS-09: a workspace is renamed (default too) and deleted with its id typed back; its data moves aside', async () => {
+    await start();
+    await call('POST', '/api/workspaces', { id: 'mobile', name: 'Mobile' });
+    expect((await call('PATCH', '/api/workspaces/mobile', { name: 'Mobile app' })).body).toEqual({ id: 'mobile', name: 'Mobile app' });
+    expect((await call('PATCH', '/api/workspaces/default', { name: 'Web' })).status).toBe(200);
+    expect((await call('PATCH', '/api/workspaces/nope', { name: 'X' })).status).toBe(404);
+
+    expect((await call('DELETE', '/api/workspaces/default', { confirm: 'default' })).status).toBe(409);
+    expect((await call('DELETE', '/api/workspaces/mobile', { confirm: 'mobil' })).status).toBe(400);
+    const del = await call('DELETE', '/api/workspaces/mobile', { confirm: 'mobile' });
+    expect(del.status).toBe(200);
+    expect(del.body.archivedTo).toMatch(/^workspaces-deleted\/mobile-/);
+    expect(existsSync(join(dir, del.body.archivedTo))).toBe(true);
+    expect(existsSync(join(dir, 'workspaces', 'mobile'))).toBe(false);
+    expect((await call('GET', '/api/w/mobile/analysis')).status).toBe(404);
+    expect((await call('GET', '/api/audit')).body.map((a: { summary: string }) => a.summary)).toContain(`Workspace mobile deleted; its data moved to ${del.body.archivedTo}`);
+
+    await ctx!.app.close();
+    await start({ keepDir: true });
+    expect((await call('GET', '/api/workspaces')).body).toEqual([{ id: 'default', name: 'Web' }]);
+    // The same id can be used again, for a fresh workspace.
+    expect((await call('POST', '/api/workspaces', { id: 'mobile' })).status).toBe(201);
   });
 });

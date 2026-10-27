@@ -1,3 +1,4 @@
+import { mkdir, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AutoCloseSink } from './auto-close.js';
 import { AtlassianConnection, type ConnectConfig } from './connections.js';
@@ -9,7 +10,8 @@ import { DEFAULT_WORKSPACE } from '@ci/core';
 /**
  * Workspaces (F5, docs/WORKSPACES-F5-PLAN.md): each has its own settings, sources, analysis, decisions, approvals,
  * drift and audit. `default` is the data directory itself, so an existing installation keeps its data; the others
- * live in `<data>/workspaces/<id>/` and are listed in `<data>/workspaces.json`.
+ * live in `<data>/workspaces/<id>/` and are listed in `<data>/workspaces.json` (with `default` only when renamed).
+ * A deleted workspace's directory moves to `<data>/workspaces-deleted/<id>-<time>/`: nothing is erased.
  */
 export { DEFAULT_WORKSPACE } from '@ci/core';
 const WORKSPACE_ID = new RegExp(WORKSPACE_ID_PATTERN);
@@ -25,6 +27,7 @@ export interface Workspace {
 }
 
 export class WorkspaceExistsError extends Error {}
+export class WorkspaceRefusedError extends Error {}
 
 export class Workspaces {
   private readonly byId = new Map<string, Workspace>();
@@ -39,7 +42,10 @@ export class Workspaces {
   /** Opens `default` and every listed workspace. */
   async init() {
     await this.open({ id: DEFAULT_WORKSPACE, name: 'Default', createdAt: '' });
-    for (const info of await this.default.store.workspaces()) if (WORKSPACE_ID.test(info.id) && info.id !== DEFAULT_WORKSPACE) await this.open(info);
+    for (const info of await this.default.store.workspaces()) {
+      if (info.id === DEFAULT_WORKSPACE) this.default.name = info.name;
+      else if (WORKSPACE_ID.test(info.id)) await this.open(info);
+    }
   }
 
   get default(): Workspace {
@@ -65,6 +71,29 @@ export class Workspaces {
     const info: WorkspaceInfo = { id, name: name.trim() || id, createdAt: at };
     await this.default.store.updateWorkspaces((all) => [...all.filter((w) => w.id !== id), info]);
     return this.open(info);
+  }
+
+  /** A new name; the id, and so every address, stays. */
+  async rename(id: string, name: string, at: string): Promise<Workspace> {
+    const w = this.byId.get(id);
+    if (!w) throw new WorkspaceRefusedError(`No workspace ${id}`);
+    w.name = name.trim() || id;
+    await this.default.store.updateWorkspaces((all) => (all.some((x) => x.id === id) ? all.map((x) => (x.id === id ? { ...x, name: w.name } : x)) : [...all, { id, name: w.name, createdAt: at }]));
+    return w;
+  }
+
+  /** Stops the workspace and moves its directory aside; `default`, which is the data directory itself, stays. */
+  async remove(id: string, at: string): Promise<{ archivedTo: string }> {
+    if (id === DEFAULT_WORKSPACE) throw new WorkspaceRefusedError('The default workspace cannot be deleted');
+    const w = this.byId.get(id);
+    if (!w) throw new WorkspaceRefusedError(`No workspace ${id}`);
+    w.engine.stop();
+    this.byId.delete(id);
+    await this.default.store.updateWorkspaces((all) => all.filter((x) => x.id !== id));
+    const archivedTo = join('workspaces-deleted', `${id}-${at.replace(/[-:.]/g, '')}`);
+    await mkdir(join(this.dataDir, 'workspaces-deleted'), { recursive: true });
+    await rename(join(this.dataDir, 'workspaces', id), join(this.dataDir, archivedTo));
+    return { archivedTo };
   }
 
   private async open(info: WorkspaceInfo): Promise<Workspace> {
