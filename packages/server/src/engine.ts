@@ -18,6 +18,7 @@ import {
   type ContextGraph,
   type ProjectContext,
   type SemanticOutput,
+  type TestCase,
 } from '@ci/core';
 import type { AtlassianConnection } from './connections.js';
 import type { Principal } from './http.js';
@@ -55,6 +56,8 @@ export class Engine extends EventEmitter {
     private store: Store,
     private atlassian?: AtlassianConnection,
     private repo?: RepoSource,
+    /** Test results of `analyze --tests` (G4), attached to the context of every run. */
+    private tests?: TestCase[],
   ) {
     super();
   }
@@ -62,7 +65,7 @@ export class Engine extends EventEmitter {
   async loadContext(settings: Settings): Promise<ProjectContext> {
     const loaded = this.repo ? await this.loadRepo(settings, this.repo) : settings.mode === 'demo' ? ((await this.store.demoContext()) ?? demoProject()) : await this.loadSources(settings);
     // The claim vocabulary is the project's setting in every mode, the demo workspace included.
-    const ctx: ProjectContext = { ...loaded, project: { ...loaded.project, claimPack: settings.project.claimPack ?? 'general' } };
+    const ctx: ProjectContext = { ...loaded, project: { ...loaded.project, claimPack: settings.project.claimPack ?? 'general' }, ...(this.tests && { tests: this.tests }) };
     // tf's reconstruction from code is the current state of the code, next to the specification in either mode.
     const { code } = settings.integrations;
     if (!code.enabled) return ctx;

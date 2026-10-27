@@ -408,7 +408,7 @@ function diffSnapshots(prev: Snapshot, cur: Snapshot, items: Map<string, ItemAna
 
 const rank = (r: string) => ({ ready: 0, needs_attention: 1, not_ready: 2 })[r] ?? 0;
 const label = (r: string) => r.replace('_', ' ').toUpperCase();
-const sourceLabel = (s?: SourceSystem) => ({ jira: 'Jira', confluence: 'Confluence', figma: 'Figma', decision: 'Decision', code: 'Code' })[s ?? 'jira'];
+const sourceLabel = (s?: SourceSystem) => ({ jira: 'Jira', confluence: 'Confluence', figma: 'Figma', decision: 'Decision', code: 'Code', test: 'Tests' })[s ?? 'jira'];
 
 function counts(list: ItemAnalysis[]): AnalysisResult['counts'] {
   const work = list.filter((a) => a.type === 'story' || a.type === 'bug');

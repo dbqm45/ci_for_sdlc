@@ -40,6 +40,10 @@ npm run analyze -- --repo ../my-service --repo-url https://github.com/acme/my-se
 ready or needs attention) or a file could not be read, 2 the analysis could not run (for example no
 `docs/project/changes` folder).
 
+`--tests <file or directory>` (repeatable) adds JUnit XML test results: a test naming `TSK-57/AC-1` (or a requirement
+id of the slice's row, `US-02/AC-1`) is that criterion's test, and TEST-001…003 report a criterion without a test, a
+failing one, and one the item does not have (docs/PDI-G4-PLAN.md). A report that cannot be read fails the gate.
+
 In GitHub Actions (`GITHUB_ACTIONS=true`) each file problem and each finding that fails the gate is also an `::error`
 annotation on its file: the file and line the finding points at (`release.yaml` for REL-007, the slice's row in
 `plan.md` for REL-008), else the item's (`intent.md` for a change, its row in `plan.md` for a slice). Other open

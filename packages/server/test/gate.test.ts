@@ -108,6 +108,30 @@ describe('analyze --repo', () => {
   });
 });
 
+describe('analyze --tests (G4, docs/PDI-G4-PLAN.md)', () => {
+  const junit = (cases: string) => `<?xml version="1.0"?><testsuite name="web/history.test.ts">${cases}</testsuite>`;
+  const files = () => ({ [`${C}/CHG-12/intent.md`]: intent('CHG-12'), [`${C}/CHG-12/plan.md`]: plan('CHG-12', 'the list shows the 20 newest orders, newest first') });
+
+  it('GATE-08: the criteria of the items get their tests; a failing one is reported, warnings fail only --fail-on warning', async () => {
+    const root = checkout({ ...files(), 'reports/junit.xml': junit('<testcase classname="web/history.test.ts" name="TSK-57/AC-1 shows the newest orders"><failure message="expected 20 rows, got 0"/></testcase>') });
+    const r = await gate(['--repo', root, '--tests', join(root, 'reports'), '--fail-on', 'critical']);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/Tests: 1 read, 1 failed, 1 naming a criterion/);
+    const warn = await gate(['--repo', root, '--tests', join(root, 'reports/junit.xml'), '--fail-on', 'warning'], { GITHUB_ACTIONS: 'true' });
+    expect(warn.code).toBe(1);
+    expect(warn.out).toMatch(/::error file=web\/history\.test\.ts,title=TSK-57 not ready::Test of AC-1 fails/);
+  });
+
+  it('GATE-09: a test report that cannot be read fails the gate whatever the threshold', async () => {
+    const root = checkout({ ...files(), 'reports/bad.xml': 'not xml' });
+    const r = await gate(['--repo', root, '--tests', join(root, 'reports'), '--tests', join(root, 'missing')], { GITHUB_ACTIONS: 'true' });
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/Test reports that could not be read/);
+    expect(r.out).toMatch(/::error file=.*bad\.xml,title=Test report::Not a JUnit XML report/);
+    expect(r.err).toMatch(/2 test report\(s\) could not be read/);
+  });
+});
+
 describe('the workflow template for repositories (docs/templates/change-check.yml)', () => {
   it('GATE-07: a pull request that changes only release.yaml or plan.md runs the check on the repository', () => {
     const yml = readFileSync(fileURLToPath(new URL('../../../docs/templates/change-check.yml', import.meta.url)), 'utf8');

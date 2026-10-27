@@ -222,6 +222,18 @@ kryterium wyjścia (`exit`), bez właściciela albo bez daty usunięcia (`remove
 samokontrola planu z tf: fundament bez „Odblokowuje” (albo odblokowujący zadanie, którego w zmianie nie ma) i cięcie
 bez wymagania (bez weryfikacji i bez ID typu `US-02`). W Jirze obie milczą.
 
+**Skąd wiadomo, czy kryterium akceptacji ma test i czy ten test przechodzi?**
+
+Z wyników testów w formacie JUnit XML, który zapisuje prawie każdy runner (Vitest, Jest, pytest, JUnit, Playwright):
+`npm run analyze -- --tests reports/junit` (plik albo katalog, można podać kilka; [`docs/PDI-G4-PLAN.md`](docs/PDI-G4-PLAN.md)).
+Test wskazuje kryterium nazwą albo klasą `KLUCZ/AC-n`, np. `PAY-124/AC-2 the card disappears` (także `PAY-124 AC-2`
+i `describe('PAY-124 › …')` wokół `it('AC-2 …')`), tak jak każe tf w `qa-spec-first-testing`. Identyfikator wymagania
+z kolumny „Wymagania” planu (`US-02`) wskazuje cięcie z repo, które go wymienia. Trzy reguły, wszystkie ostrzeżenia:
+`TEST-001` — testy z kluczem elementu już są, ale któreś kryterium nie ma żadnego (bez żadnego testu reguła milczy,
+bo przed implementacją to normalne); `TEST-002` — test kryterium nie przeszedł; `TEST-003` — test wskazuje kryterium,
+którego element już nie ma (przenumerowane albo usunięte). Bez `--tests` wszystkie milczą. Plik wyników, którego nie
+da się odczytać, zatrzymuje bramkę z powodem, nigdy nie znaczy „zero testów”.
+
 **Kiedy działa AI i co do niego wysyłamy?**
 
 - Dostawcy: Anthropic, Amazon Bedrock, OpenAI, Azure OpenAI albo własny endpoint zgodny z OpenAI.
