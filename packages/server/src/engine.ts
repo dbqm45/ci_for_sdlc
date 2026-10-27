@@ -25,7 +25,7 @@ import {
   type SemanticOutput,
   type TestCase,
 } from '@ci/core';
-import { proposalEvent, recordAutoClose } from './auto-close.js';
+import { proposalEvent, recordAutoClose, type AutoCloseSink } from './auto-close.js';
 import type { AtlassianConnection } from './connections.js';
 import type { Principal } from './http.js';
 import type { Settings, Store } from './store.js';
@@ -56,6 +56,8 @@ export class Engine extends EventEmitter {
   private queue: Promise<unknown> = Promise.resolve();
   private timer?: NodeJS.Timeout;
   private aiCache?: Map<string, SemanticOutput>;
+  /** A2b: where the automat's decisions go besides the log (pdi's registry); set by buildApp. */
+  autoCloseSink?: AutoCloseSink;
 
   /** `atlassian`: set in CI_CONNECT_MODE=oauth; Jira and Confluence then use its token instead of JIRA_API_TOKEN. */
   constructor(
@@ -190,7 +192,7 @@ export class Engine extends EventEmitter {
           }
           return next;
         });
-        await recordAutoClose(this.store, applied.map(({ f, id }) => ({ event: proposalEvent(f, 'applied', at, { by: AUTO_CLOSE_ACTOR, decisionId: id }), question: f.question!.text, actor: f.answer!.rule })));
+        await recordAutoClose(this.store, applied.map(({ f, id }) => ({ event: proposalEvent(f, 'applied', at, { by: AUTO_CLOSE_ACTOR, decisionId: id }), question: f.question!.text, actor: f.answer!.rule })), this.autoCloseSink);
         ({ result, snapshot, graph } = await runAnalysis(await this.store.decisions().then(activeDecisions)));
       }
       await Promise.all(audits);

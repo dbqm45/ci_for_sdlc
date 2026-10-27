@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Decision } from '@ci/core';
-import { autoClosedDecisions, sharePercent } from '../src/lib/autoClose';
+import { autoClosedDecisions, pdiDecisionLabel, sharePercent } from '../src/lib/autoClose';
 
 // A2a: the "Auto-closed" list on the Decisions page (docs/AUTO-CLOSE-A2A-PLAN.md).
 
@@ -22,5 +22,12 @@ describe('auto-closed decisions', () => {
     expect(sharePercent(null)).toBe('—');
     expect(sharePercent(29 / 30)).toBe('96.7%');
     expect(sharePercent(0.5)).toBe('50%');
+  });
+});
+
+describe('the decision in pdi (A2b)', () => {
+  it('AUC-PDI: the DEC pdi gave, else "not in pdi"', () => {
+    expect(pdiDecisionLabel(d({ pdiDecision: 'DEC-41' }))).toBe('DEC-41');
+    expect(pdiDecisionLabel(d({}))).toBe('not in pdi');
   });
 });

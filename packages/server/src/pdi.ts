@@ -1,10 +1,12 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { changeReadiness, errorMessage, readinessEvents, type AnalysisResult, type RequirementItem } from '@ci/core';
+import { changeReadiness, decisionRecordedEvent, errorMessage, readinessEvents, type AnalysisResult, type DecisionRecordedInput, type RequirementItem } from '@ci/core';
+import type { AutoCloseStep } from './auto-close.js';
 import type { PdiOutboxEntry, Store } from './store.js';
 
 /**
  * Link with pdi (F4, docs/PDI-F4-PLAN.md). Out: `readiness.changed` per change to `PDI_EVENTS_URL/events/ci_for_sdlc`
- * (pdi-receiver). In: `gate.decided` on `POST /api/webhooks/pdi`. Both ways the same signature, as pdi-receiver
+ * (pdi-receiver), and `decision.recorded` for every A2a step with a `finding.auto_close` decision (A2b: pdi answers
+ * with its DEC number, kept on the local decision). In: `gate.decided` on `POST /api/webhooks/pdi`. Both ways the same signature, as pdi-receiver
  * checks it: `X-PDI-Signature: v1=<hex HMAC-SHA256(PDI_SIGNING_SECRET, "<X-PDI-Timestamp>.<raw body>")>`.
  */
 
@@ -15,6 +17,8 @@ export interface PdiOptions {
   secret?: string;
   fetch?: typeof fetch;
   clock?: () => Date;
+  /** CI_PUBLIC_URL, for links to findings in decision.recorded. */
+  publicUrl?: string;
 }
 
 export const SIGNATURE_TOLERANCE_SECONDS = 300;
@@ -50,6 +54,7 @@ export class PdiLink {
   readonly secret?: string;
   private readonly fetch: typeof fetch;
   private readonly clock: () => Date;
+  private readonly publicUrl?: string;
   private delivering?: Promise<void>;
   /** Queueing scheduled after analyses, in order; delivery waits for it. */
   private pending: Promise<unknown> = Promise.resolve();
@@ -63,6 +68,7 @@ export class PdiLink {
     this.secret = (opts.secret ?? env.PDI_SIGNING_SECRET) || undefined;
     this.fetch = opts.fetch ?? fetch;
     this.clock = opts.clock ?? (() => new Date());
+    this.publicUrl = opts.publicUrl;
   }
 
   /** Sending needs both the receiver's address and the secret; receiving only the secret. */
@@ -87,12 +93,56 @@ export class PdiLink {
     if (events.length) await this.store.updatePdiOutbox((all) => [...all, ...events.map((event) => ({ event, attempts: 0, nextAt: now }))]);
   }
 
+  /**
+   * A2b: one `decision.recorded` per decided A2a step (accept, edit, reject, reopen, apply). A reopen waits in the queue
+   * until the decision it reopens has its DEC; `changeOf` gives the item's CHG from its `change:` label.
+   */
+  async enqueueDecisions(steps: AutoCloseStep[], changeOf: (itemKey: string) => string | undefined) {
+    if (!this.enabled || !steps.length) return;
+    const now = this.clock().toISOString();
+    const entries = steps.map(({ event: e, question, actor, answer, why }): PdiOutboxEntry => {
+      const outcome = e.outcome as DecisionRecordedInput['outcome'];
+      const event = decisionRecordedEvent(
+        {
+          outcome,
+          proposalId: e.proposalId,
+          itemKey: e.itemKey ?? '',
+          findingId: e.findingId ?? '',
+          question,
+          quote: e.quote ?? '',
+          source: { title: e.source?.title ?? 'its source', url: e.source?.url },
+          answer,
+          decidedBy: actor,
+          rule: e.rule,
+          change: e.itemKey ? changeOf(e.itemKey) : undefined,
+          why,
+          publicUrl: this.publicUrl,
+        },
+        e.at,
+      );
+      const reopen = outcome === 'reopened';
+      return {
+        event,
+        attempts: 0,
+        nextAt: now,
+        ...(!reopen && e.decisionId && { decisionId: e.decisionId }),
+        ...(reopen && e.decisionId && { reopensDecisionId: e.decisionId }),
+        logRef: { proposalId: e.proposalId, outcome: e.outcome, at: e.at },
+      };
+    });
+    await this.store.updatePdiOutbox((all) => [...all, ...entries]);
+  }
+
   /** Runs `fn` after the queueing scheduled before it (errors are logged by the caller of deliver). */
   schedule(fn: () => Promise<unknown>) {
     this.pending = this.pending.then(fn).catch((e) => console.error(`[pdi] ${errorMessage(e)}`));
   }
 
-  /** Sends what is due; a failure stays queued with a doubling delay (1 min … 1 h) and is dropped after MAX_ATTEMPTS. */
+  /**
+   * Sends what is due; a failure stays queued with a doubling delay (1 min … 1 h). `readiness.changed` is dropped after
+   * MAX_ATTEMPTS; a decision is the audit trail and stays until pdi records it, and one pdi refused (400) stays as
+   * failed without retries.
+   */
   deliver(): Promise<void> {
     this.delivering ??= this.deliverDue().finally(() => (this.delivering = undefined));
     return this.delivering;
@@ -101,26 +151,46 @@ export class PdiLink {
   private async deliverDue() {
     await this.pending;
     if (!this.enabled) return;
-    const due = (await this.store.pdiOutbox()).filter((e) => new Date(e.nextAt) <= this.clock());
-    for (const entry of due) {
-      const error = await this.send(entry);
+    const due = (await this.store.pdiOutbox()).filter((e) => !e.failed && new Date(e.nextAt) <= this.clock());
+    for (const queued of due) {
+      let entry = queued;
+      if (entry.reopensDecisionId) {
+        // A reopen supersedes the DEC of the decision it reopens; until pdi has given that one, it waits (no attempt).
+        const dec = (await this.store.decisions()).find((d) => d.id === entry.reopensDecisionId)?.pdiDecision;
+        if (!dec) continue;
+        entry = { ...entry, event: { ...entry.event, payload: { ...entry.event.payload, supersedes: dec } } };
+      }
+      const r = await this.send(entry);
       const at = this.clock();
+      const isDecision = entry.event.type === 'decision.recorded';
+      const refused = isDecision && r.status === 400;
       await this.store.updatePdiOutbox((all) =>
         all.flatMap((e): PdiOutboxEntry[] => {
           if (e.event.id !== entry.event.id) return [e];
-          if (!error) return [];
+          if (!r.error) return [];
+          if (refused) return [{ ...entry, failed: r.error, lastError: r.error }];
           const attempts = e.attempts + 1;
-          if (attempts >= MAX_ATTEMPTS) return [];
+          if (attempts >= MAX_ATTEMPTS && !isDecision) return [];
           const wait = Math.min(60 * 2 ** (attempts - 1), MAX_BACKOFF_SECONDS);
-          return [{ ...e, attempts, nextAt: new Date(at.getTime() + wait * 1000).toISOString(), lastError: error }];
+          return [{ ...e, attempts, nextAt: new Date(at.getTime() + wait * 1000).toISOString(), lastError: r.error }];
         }),
       );
-      if (error && entry.attempts + 1 >= MAX_ATTEMPTS)
-        await this.store.audit({ at: at.toISOString(), kind: 'pdi', actor: 'system', summary: `Gave up sending ${entry.event.type} for ${String(entry.event.payload.change)} to pdi after ${MAX_ATTEMPTS} attempts: ${error}` });
+      const what = isDecision ? `decision.recorded for ${String(entry.event.payload.ref)}` : `${entry.event.type} for ${String(entry.event.payload.change)}`;
+      if (!r.error && r.decision) await this.keepDecisionNumber(entry, r.decision);
+      if (refused) await this.store.audit({ at: at.toISOString(), kind: 'pdi', actor: 'system', summary: `pdi refused ${what}: ${r.error}` });
+      else if (r.error && !isDecision && entry.attempts + 1 >= MAX_ATTEMPTS)
+        await this.store.audit({ at: at.toISOString(), kind: 'pdi', actor: 'system', summary: `Gave up sending ${what} to pdi after ${MAX_ATTEMPTS} attempts: ${r.error}` });
     }
   }
 
-  private async send(entry: PdiOutboxEntry): Promise<string | undefined> {
+  /** pdi's DEC on the local decision (accept, edit, apply) and on the step in the proposal log. */
+  private async keepDecisionNumber(entry: PdiOutboxEntry, dec: string) {
+    if (entry.decisionId) await this.store.updateDecisions((all) => all.map((d) => (d.id === entry.decisionId ? { ...d, pdiDecision: dec } : d)));
+    const ref = entry.logRef;
+    if (ref) await this.store.updateAutoCloseLog((all) => all.map((e) => (e.proposalId === ref.proposalId && e.outcome === ref.outcome && e.at === ref.at ? { ...e, pdiDecision: dec } : e)));
+  }
+
+  private async send(entry: PdiOutboxEntry): Promise<{ error?: string; status?: number; decision?: string }> {
     const body = JSON.stringify(entry.event);
     const ts = String(Math.floor(this.clock().getTime() / 1000));
     try {
@@ -130,9 +200,16 @@ export class PdiLink {
         body,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
-      return res.ok ? undefined : `pdi answered ${res.status}`;
+      const answer: unknown = await res.json().catch(() => undefined);
+      const field = (k: string) => (answer && typeof answer === 'object' && typeof (answer as Record<string, unknown>)[k] === 'string' ? ((answer as Record<string, unknown>)[k] as string) : undefined);
+      if (res.ok) {
+        const decision = field('decision');
+        return { status: res.status, ...(decision && /^[A-Z][A-Z0-9]+-[0-9]+$/.test(decision) && { decision }) };
+      }
+      const why = field('error');
+      return { status: res.status, error: `pdi answered ${res.status}${why ? `: ${why.slice(0, 500)}` : ''}` };
     } catch (e) {
-      return `pdi unreachable: ${errorMessage(e)}`.slice(0, 300);
+      return { error: `pdi unreachable: ${errorMessage(e)}`.slice(0, 300) };
     }
   }
 

@@ -454,6 +454,8 @@ interface DecisionBase {
   readonly evidence?: readonly Evidence[];
   /** The answer proposal this decision accepted. */
   readonly proposalId?: string;
+  /** A2b: the number pdi's registry gave this decision (e.g. DEC-41); absent until pdi recorded it. */
+  readonly pdiDecision?: string;
 }
 
 export interface ActiveDecision extends DecisionBase {

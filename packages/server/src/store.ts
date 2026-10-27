@@ -42,6 +42,14 @@ export interface PdiOutboxEntry {
   attempts: number;
   nextAt: string;
   lastError?: string;
+  /** A2b: pdi refused the event (400) for this reason; it stays here and is not retried. */
+  failed?: string;
+  /** A2b: the local decision that gets the DEC pdi answers. */
+  decisionId?: string;
+  /** A2b: a reopen waits until this decision has its DEC, then supersedes it. */
+  reopensDecisionId?: string;
+  /** A2b: the step in the proposal log that gets the DEC. */
+  logRef?: { proposalId: string; outcome: string; at: string };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -300,6 +308,9 @@ export class Store {
   }
   appendAutoClose(events: AutoCloseEvent[]) {
     return this.update('auto-close.json', [], listOf<AutoCloseEvent>(), (all) => [...all, ...events].slice(-5000), false);
+  }
+  updateAutoCloseLog(fn: (all: AutoCloseEvent[]) => AutoCloseEvent[] | void) {
+    return this.update('auto-close.json', [], listOf<AutoCloseEvent>(), fn, false);
   }
   /** Events waiting for delivery to pdi, with their retry state. */
   pdiOutbox() {

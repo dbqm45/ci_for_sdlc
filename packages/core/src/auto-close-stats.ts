@@ -24,6 +24,8 @@ export interface AutoCloseEvent {
   quote?: string;
   decisionId?: string;
   by?: string;
+  /** A2b: the DEC pdi gave this step (a rejection has no local decision to keep it on). */
+  pdiDecision?: string;
 }
 
 export const ACCEPTANCE_THRESHOLDS = { lastDecisions: 30, minUneditedShare: 0.95, maxEditedShare: 0.1 } as const;

@@ -53,3 +53,52 @@ duplikat, inna bramka bez zmian).
   (core 453, server 127, web 26, sandbox 64) i `npm run typecheck` zielone; kontrakt OpenAPI zaktualizowany
   (`test:contract:update`: pole `changeLabelPrefix`, trasa `GET /api/pdi`).
 - Po stronie pdi zostaje wysyłka `gate.decided` do ci_for_sdlc (osobny PR w pdi).
+
+## A2b — decyzje `finding.auto_close` w rejestrze pdi (2026-10-27)
+
+Krok A2b planu automatyzacji (pdi `docs/polecenia-startowe-a2.md`, „A2b — polecenie”; decyzja D-A2): decyzje z A2a
+trafiają do rejestru pdi, żeby licznik akceptacji z A3 je liczył. Człowiek decyduje w ci_for_sdlc, pdi tylko zapisuje;
+drogi zwrotnej nie ma poza numerem `DEC` w odpowiedzi. Kontrakt pdi 0.7.0: zdarzenie `decision.recorded`
+(`$defs.decision_recorded`), odbiornik w pdi zrobiony (`docs/plan-a2b-pdi.md`).
+
+### Zdarzenie
+Każdy krok A2a z decyzją typu `finding.auto_close` kolejkuje jedno `decision.recorded` w istniejącej kolejce
+(`PdiLink`: ten sam adres, podpis i ponowienia), `contract_version` 0.7.0, `source: ci_for_sdlc`:
+
+| Krok | `decided_by` | `draft_edited` | `automation` | inne |
+|---|---|---|---|---|
+| Accept | osoba | `false` | — | |
+| Edit | osoba | `true` | — | odpowiedź osoby w `statement` |
+| Reject | osoba | `true` | — | bez decyzji lokalnej |
+| Reopen | osoba | `true` | — | `supersedes`: `DEC` zamykanej decyzji |
+| `apply` | `ci_for_sdlc` | — | `{ level: 1, rule }` | |
+
+Wspólne: `decision_type: finding.auto_close`, `drafted_by: ai`, `ref` = `<klucz elementu>/<id ustalenia>`,
+`url` = strona elementu z kotwicą ustalenia (`<CI_PUBLIC_URL>/#/item/<klucz>/<id ustalenia>`), `evidence` = dosłowny
+cytat i adres źródła, `change` = klucz z etykiety `change:CHG-n`, gdy element ją ma. Budowa treści jest czysta
+(`decisionRecordedEvent()` w `packages/core/src/pdi.ts`) i sprawdzana schematem z kopii kontraktu.
+
+### Numer DEC i kolejka
+- Odpowiedź pdi `{"status": "recorded" | "duplicate", "decision": "DEC-n"}`: numer zapisany przy decyzji lokalnej
+  (`Decision.pdiDecision`) i przy zdarzeniu w dzienniku A2a; UI pokazuje go obok decyzji, a decyzja bez numeru jest
+  oznaczona „not in pdi”, gdy połączenie z pdi jest włączone.
+- Reopen czeka w kolejce, aż zamykana decyzja dostanie numer (nie zużywa prób); potem wysyła się z `supersedes`.
+- Zdarzenia decyzji nie są usuwane po `MAX_ATTEMPTS` (to ślad audytu): zostają w kolejce z odstępem do godziny,
+  widoczne w `GET /api/pdi`. `readiness.changed` zachowuje się jak dotąd.
+- 400 z powodem (typ spoza listy nadawcy, typ chroniony z `automation`, `supersedes` innego `ref`): zdarzenie zostaje
+  w kolejce jako `failed` z powodem z odpowiedzi (`error`), bez ponowień; wpis w audycie.
+
+### Pliki
+`packages/core/src/pdi.ts` (`PDI_DECISION_CONTRACT_VERSION`, `decisionRecordedEvent`), `packages/core/src/model.ts`
+(`pdiDecision`), `packages/server/src/pdi.ts` (kolejkowanie, wysyłka, numer DEC, oczekiwanie, 400), `auto-close.ts`,
+`engine.ts`, `app.ts` (podłączenie kroków A2a), `store.ts` (pola wpisu kolejki), `packages/web` (DEC / „not in pdi”,
+kotwica ustalenia), kopia schematu `packages/core/test/fixtures/pdi-contract/0.7.0/event.schema.json`.
+
+### Testy (najpierw czerwone)
+- `packages/core/test/pdi.test.ts`: treść dla Accept, Edit, Reject, Reopen i `apply` zgodna ze schematem 0.7.0
+  (Ajv 2020); `automation` bez `draft_edited`; `change` tylko z etykiety.
+- `packages/server/test/pdi.test.ts`: kroki A2a kolejkują zdarzenia; numer DEC zapisany z odpowiedzi (także
+  `duplicate`); Reopen czeka na numer oryginału; 400 bez ponowień, z powodem; zdarzenia decyzji nie znikają po
+  `MAX_ATTEMPTS`; nic się nie kolejkuje bez połączenia z pdi.
+
+Poza zakresem: odczyt polityki autonomii z pdi (poziom zostaje ustawieniem administratora w ci_for_sdlc).

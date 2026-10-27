@@ -247,12 +247,12 @@ export function App() {
     [analysis, refresh, runAnalysis, toast, navigate, version],
   );
 
-  const [section, param] = path.split('/').filter(Boolean);
+  const [section, param, focus] = path.split('/').filter(Boolean);
   let page;
   if (!analysis && !error) page = <div className="empty"><Spinner /> Discovering context and analyzing…</div>;
   else if (!analysis) page = <div className="empty">Could not load analysis: {error}</div>;
   else if (section === 'backlog') page = <Backlog />;
-  else if (section === 'item' && param) page = <ItemPage key={param} itemKey={decodeURIComponent(param)} />;
+  else if (section === 'item' && param) page = <ItemPage key={param} itemKey={decodeURIComponent(param)} focusFinding={focus && decodeURIComponent(focus)} />;
   else if (section === 'decisions') page = <Decisions />;
   else if (section === 'drift') page = <Drift />;
   else if (section === 'impact') page = <Impact />;

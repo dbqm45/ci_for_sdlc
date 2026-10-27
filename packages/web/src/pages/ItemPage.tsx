@@ -11,7 +11,8 @@ import { acTestRows, acTestsSummary } from '../lib/acTests';
 
 type Tab = 'findings' | 'challenge' | 'states' | 'context' | 'claims' | 'history';
 
-export function ItemPage({ itemKey }: { itemKey: string }) {
+/** `focusFinding`: a finding to scroll to (`#/item/KEY/FINDING`, the link pdi keeps for a decision, A2b). */
+export function ItemPage({ itemKey, focusFinding }: { itemKey: string; focusFinding?: string }) {
   const { navigate, toast, refresh, version, analysis } = useApp();
   const [d, setD] = useState<ItemDetail>();
   const [err, setErr] = useState<string>();
@@ -32,6 +33,12 @@ export function ItemPage({ itemKey }: { itemKey: string }) {
     }
   }, [itemKey]);
   useEffect(() => void load(), [load, version]);
+  const focusClosed = !!focusFinding && !!d?.item.findings.some((f) => f.id === focusFinding && f.status !== 'open');
+  useEffect(() => {
+    if (!focusFinding || !d) return;
+    if (focusClosed) setShowClosed(true);
+    requestAnimationFrame(() => document.getElementById(`finding-${focusFinding}`)?.scrollIntoView({ block: 'center' }));
+  }, [focusFinding, focusClosed, d]);
 
   const changed = useCallback(async () => {
     await load();

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
+import { Ajv2020 } from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
-import { CHANGE_LABEL_PREFIX, changeKeyOf, changeReadiness, parseGateDecided, readinessEvents, type ItemAnalysis, type RequirementItem } from '../src/index.js';
+import { CHANGE_LABEL_PREFIX, changeKeyOf, changeReadiness, decisionRecordedEvent, parseGateDecided, readinessEvents, type DecisionRecordedInput, type ItemAnalysis, type RequirementItem } from '../src/index.js';
 
 // F4 (pdi docs/plan-jeden-flow-sdlc.md §6): readiness of a pdi change (CHG-n) from the stories labelled `change:CHG-n`,
 // sent to pdi as readiness.changed; gate.decided from pdi approves the stories. Envelopes: pdi contract 0.4.0.
@@ -95,5 +96,85 @@ describe('parseGateDecided', () => {
     ['missing id', { ...example('event-gate.decided.json'), id: '' }],
   ])('refuses %s', (_why, value) => {
     expect(typeof parseGateDecided(value)).toBe('string');
+  });
+});
+
+// A2b (docs/PDI-F4-PLAN.md, "A2b"): every step of A2a with a finding.auto_close decision goes to pdi's registry as
+// decision.recorded (pdi contract 0.7.0), checked against a copy of pdi's event schema.
+describe('decision.recorded (A2b)', () => {
+  const schema = JSON.parse(readFileSync(new URL('./fixtures/pdi-contract/0.7.0/event.schema.json', import.meta.url), 'utf8'));
+  const validate = new Ajv2020({ allErrors: true, strict: false }).compile(schema);
+  const valid = (e: unknown) => {
+    const ok = validate(e);
+    return ok ? [] : validate.errors!.map((x) => `${x.instancePath} ${x.message}`);
+  };
+  const base: DecisionRecordedInput = {
+    outcome: 'accepted',
+    proposalId: 'ans:1a2b3c4d',
+    itemKey: 'CHK-202',
+    findingId: 'ERR-003:CHK-202',
+    question: 'What should happen if the payment API does not respond within 30 seconds?',
+    quote: 'If the payment provider does not respond within 30 seconds, the app shows a timeout message.',
+    source: { title: 'Payment Failure Handling', url: 'https://wiki.example.com/pages/1004' },
+    answer: 'If the payment provider does not respond within 30 seconds, the app shows a timeout message.',
+    decidedBy: 'Ann',
+    change: 'CHG-12',
+    publicUrl: 'https://ci.example.com/',
+  };
+  const AT = '2026-10-27T12:00:00.123Z';
+
+  it('PDI-A2B-01: the pdi example passes the copied schema', () => {
+    expect(valid(JSON.parse(readFileSync(new URL('./fixtures/pdi-contract/0.7.0/event-decision.recorded.json', import.meta.url), 'utf8')))).toEqual([]);
+  });
+
+  it('PDI-A2B-02: Accept — the person, the AI draft unedited, the quote and its source, the change', () => {
+    const e = decisionRecordedEvent(base, AT);
+    expect(valid(e)).toEqual([]);
+    expect(e).toEqual({
+      id: 'ci-ac-1a2b3c4d-accepted-20261027T120000Z',
+      type: 'decision.recorded',
+      occurred_at: '2026-10-27T12:00:00Z',
+      source: 'ci_for_sdlc',
+      contract_version: '0.7.0',
+      payload: {
+        decision_type: 'finding.auto_close',
+        ref: 'CHK-202/ERR-003:CHK-202',
+        url: 'https://ci.example.com/#/item/CHK-202/ERR-003%3ACHK-202',
+        statement: `Closed "${base.question}" with the answer from Payment Failure Handling: ${base.answer}`,
+        decided_by: 'Ann',
+        drafted_by: 'ai',
+        draft_edited: false,
+        evidence: [{ text: base.quote, source_url: 'https://wiki.example.com/pages/1004' }],
+        change: 'CHG-12',
+      },
+    });
+  });
+
+  it.each([
+    ['edited', { answer: 'A timeout message after 30 s.' }, { draft_edited: true, statement: `Closed "${base.question}" with the answer from Payment Failure Handling: A timeout message after 30 s.` }],
+    ['rejected', { answer: undefined }, { draft_edited: true, statement: `Rejected the answer from Payment Failure Handling to "${base.question}": «${base.quote}»` }],
+    ['reopened', { answer: undefined, supersedes: 'DEC-41', why: 'Wrong flow' }, { draft_edited: true, supersedes: 'DEC-41', why: 'Wrong flow', statement: `Reopened "${base.question}": the answer from Payment Failure Handling did not answer it` }],
+  ] as const)('PDI-A2B-03: %s — the person, the draft counted as changed', (outcome, over, expected) => {
+    const e = decisionRecordedEvent({ ...base, outcome, ...over }, AT);
+    expect(valid(e)).toEqual([]);
+    expect(e.payload).toMatchObject({ decided_by: 'Ann', drafted_by: 'ai', ...expected });
+    expect(e.id).toBe(`ci-ac-1a2b3c4d-${outcome}-20261027T120000Z`);
+  });
+
+  it('PDI-A2B-04: apply — decided by ci_for_sdlc as an automat with its rule, never with draft_edited', () => {
+    const e = decisionRecordedEvent({ ...base, outcome: 'applied', decidedBy: 'auto-close', rule: 'auto-close:ERR-003' }, AT);
+    expect(valid(e)).toEqual([]);
+    expect(e.payload).toMatchObject({ decided_by: 'ci_for_sdlc', drafted_by: 'ai', automation: { level: 1, rule: 'auto-close:ERR-003' } });
+    expect(e.payload).not.toHaveProperty('draft_edited');
+    expect(e.payload.statement).toBe(`Closed "${base.question}" automatically (auto-close:ERR-003) with the answer from Payment Failure Handling: ${base.answer}`);
+  });
+
+  it('PDI-A2B-05: without a change, a source URL or a public URL, those fields are left out; a long ref is cut to 200', () => {
+    const e = decisionRecordedEvent({ ...base, change: undefined, source: { title: 'Decision by Ann (2026-10-23)' }, publicUrl: undefined, findingId: `${'X'.repeat(250)}` }, AT);
+    expect(valid(e)).toEqual([]);
+    expect(e.payload).not.toHaveProperty('change');
+    expect(e.payload).not.toHaveProperty('url');
+    expect(e.payload.evidence).toEqual([{ text: base.quote }]);
+    expect((e.payload.ref as string).length).toBe(200);
   });
 });

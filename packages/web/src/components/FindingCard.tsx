@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Decision, Finding, Question } from '@ci/core';
 import { api, currentUser, errMsg } from '../api';
-import { AUTO_CLOSE } from '../lib/autoClose';
+import { AUTO_CLOSE, pdiDecisionLabel } from '../lib/autoClose';
 import { CATEGORY_LABELS, Chevron, DIMENSION_LABELS, QuestionMark, SeverityBadge, Source, StatusIcon } from './ui';
 
 /** Finding → Explanation → Evidence → Question → Decision */
@@ -9,7 +9,7 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
   const [why, setWhy] = useState(finding.severity === 'critical');
   const closed = finding.status !== 'open';
   return (
-    <div className={`finding ${finding.severity} ${closed ? 'closed' : ''}`}>
+    <div id={`finding-${finding.id}`} className={`finding ${finding.severity} ${closed ? 'closed' : ''}`}>
       <div className="row wrap">
         <SeverityBadge severity={finding.severity} />
         <span className="badge">{CATEGORY_LABELS[finding.category]}</span>
@@ -53,6 +53,11 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
           {decision?.decisionType === AUTO_CLOSE && (
             <span className="badge accent" title={decision.automation ? `Closed automatically by ${decision.automation.rule}` : 'Closed with an answer found in a source'}>
               Auto-closed
+            </span>
+          )}
+          {decision?.decisionType === AUTO_CLOSE && (
+            <span className="badge" title={decision.pdiDecision ? 'Recorded in pdi’s decision register' : 'pdi has not recorded this decision yet'}>
+              {pdiDecisionLabel(decision)}
             </span>
           )}
           {finding.status === 'accepted_risk' ? 'Risk accepted' : finding.status === 'dismissed' ? 'Dismissed' : 'Decided'}: {finding.resolution.summary}

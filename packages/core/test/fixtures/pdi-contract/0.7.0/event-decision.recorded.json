@@ -1,0 +1,23 @@
+{
+  "id": "evt-decision.recorded",
+  "type": "decision.recorded",
+  "occurred_at": "2026-10-27T12:00:00Z",
+  "source": "ci_for_sdlc",
+  "contract_version": "0.7.0",
+  "payload": {
+    "decision_type": "finding.auto_close",
+    "ref": "PAY-12/COV-001",
+    "url": "https://ci.example.com/items/PAY-12#COV-001",
+    "statement": "Pytanie o format daty zamknięte odpowiedzią z Confluence.",
+    "decided_by": "anna.po",
+    "drafted_by": "ai",
+    "draft_edited": false,
+    "evidence": [
+      {
+        "text": "Daty w API zapisujemy w ISO 8601 (UTC).",
+        "source_url": "https://wiki.example.com/x/API"
+      }
+    ],
+    "change": "CHG-12"
+  }
+}

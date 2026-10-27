@@ -120,3 +120,71 @@ export function parseGateDecided(v: unknown): GateDecided | string {
   if (typeof p.decision !== 'string' || !KEY.test(p.decision)) return 'payload.decision must be a key like DEC-41';
   return { id: v.id, change: p.change, gate: p.gate, outcome: p.outcome as GateOutcome, decision: p.decision };
 }
+
+// ---------------------------------------------------------------------------- A2b: decisions to pdi's registry
+
+/** `decision.recorded` came with pdi contract 0.7.0; `readiness.changed` keeps the version it was written for. */
+export const PDI_DECISION_CONTRACT_VERSION = '0.7.0';
+/** What pdi records when the `apply` policy decided: the sender, not a person. */
+export const PDI_AUTOMAT = 'ci_for_sdlc';
+const MAX_REF = 200;
+
+/** One step of A2a (docs/AUTO-CLOSE-A2A-PLAN.md) with what pdi needs to record it (docs/PDI-F4-PLAN.md, "A2b"). */
+export interface DecisionRecordedInput {
+  outcome: 'accepted' | 'edited' | 'rejected' | 'reopened' | 'applied';
+  proposalId: string;
+  itemKey: string;
+  findingId: string;
+  question: string;
+  /** The verbatim quote of the source. */
+  quote: string;
+  source: { title: string; url?: string };
+  /** The answer recorded (accepted, edited, applied). */
+  answer?: string;
+  /** The person; for `applied` the automat. */
+  decidedBy: string;
+  /** The rule that fired, for `applied`. */
+  rule?: string;
+  /** The CHG of the item's `change:` label. */
+  change?: string;
+  /** For `reopened`: the DEC pdi gave the decision it reopens. */
+  supersedes?: string;
+  why?: string;
+  /** CI_PUBLIC_URL, for a link to the finding. */
+  publicUrl?: string;
+}
+
+/** The `decision.recorded` event of one A2a step: a person's decision on an AI draft, or the automat's (`applied`). */
+export function decisionRecordedEvent(i: DecisionRecordedInput, at: string): PdiEvent {
+  const from = `the answer from ${i.source.title}`;
+  const statement = {
+    accepted: `Closed "${i.question}" with ${from}: ${i.answer ?? i.quote}`,
+    edited: `Closed "${i.question}" with ${from}: ${i.answer ?? i.quote}`,
+    applied: `Closed "${i.question}" automatically (${i.rule ?? 'auto-close'}) with ${from}: ${i.answer ?? i.quote}`,
+    rejected: `Rejected ${from} to "${i.question}": «${i.quote}»`,
+    reopened: `Reopened "${i.question}": ${from} did not answer it`,
+  }[i.outcome];
+  const automatic = i.outcome === 'applied';
+  const base = i.publicUrl?.replace(/\/+$/, '');
+  return {
+    id: `ci-ac-${i.proposalId.replace(/^ans:/, '').replace(/[^A-Za-z0-9._-]/g, '-')}-${i.outcome}-${isoSeconds(at).replace(/[-:]/g, '')}`,
+    type: 'decision.recorded',
+    occurred_at: isoSeconds(at),
+    source: 'ci_for_sdlc',
+    contract_version: PDI_DECISION_CONTRACT_VERSION,
+    payload: {
+      decision_type: 'finding.auto_close',
+      ref: `${i.itemKey}/${i.findingId}`.slice(0, MAX_REF),
+      ...(base && { url: `${base}/#/item/${encodeURIComponent(i.itemKey)}/${encodeURIComponent(i.findingId)}` }),
+      statement,
+      ...(i.why?.trim() && { why: i.why.trim() }),
+      decided_by: automatic ? PDI_AUTOMAT : i.decidedBy,
+      drafted_by: 'ai',
+      // A person who edits, rejects or reopens changed the AI draft; the automat's decision has no human edit at all.
+      ...(automatic ? { automation: { level: 1, ...(i.rule && { rule: i.rule }) } } : { draft_edited: i.outcome !== 'accepted' }),
+      evidence: [{ text: i.quote, ...(i.source.url && { source_url: i.source.url }) }],
+      ...(i.supersedes && { supersedes: i.supersedes }),
+      ...(i.change && { change: i.change }),
+    },
+  };
+}
