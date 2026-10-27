@@ -147,6 +147,15 @@ Workspace „Checkout” odtwarza przykłady z koncepcji produktu:
 - **CLI / quality gate** — `npm run analyze -- --fail-on critical` zwraca kod 1, gdy coś jest NOT READY (do pipeline'ów CI).
   Z `--repo <checkout>` sprawdza zmiany z `docs/project/changes/` repozytorium (intent, plan, `release.yaml`) — bramka na PR:
   [`docs/REPO-CHANGES.md`](docs/REPO-CHANGES.md), szablon workflow w `docs/templates/change-check.yml`.
+- **Ślad kryterium akceptacji do testu i wyniku** — wyniki testów w formacie JUnit XML (Vitest, Jest, pytest, JUnit,
+  Playwright) łączą się z kryteriami po nazwie testu `KLUCZ/AC-n` (np. `PAY-124/AC-2 the card disappears`; także
+  `US-02/AC-1` dla identyfikatora wymagania z `plan.md` cięcia). Każde kryterium dostaje stan *passed / failed /
+  untested*, a reguły `TEST-001` (kryterium bez testu, gdy element ma już testy), `TEST-002` (test kryterium nie
+  przechodzi) i `TEST-003` (test wskazuje kryterium, którego już nie ma) dają ostrzeżenia. Źródła wyników:
+  `npm run analyze -- --tests <plik albo katalog>` w CLI i bramce PR, zmienna `TEST_REPORTS` w szablonie
+  `change-check.yml` albo *Settings → Integrations → Tests (JUnit XML)* w aplikacji — wtedy strona historyjki pokazuje
+  kartę *Acceptance criteria ↔ tests*. Raport, którego nie da się odczytać, zatrzymuje bramkę albo analizę z powodem,
+  nigdy nie znaczy „zero testów”. Szczegóły: [`docs/PDI-G4-PLAN.md`](docs/PDI-G4-PLAN.md), FAQ.
 
 ---
 
@@ -233,5 +242,24 @@ Szczegóły: [`docs/RELEASING.md`](docs/RELEASING.md).
 ## Roadmap
 
 MVP celowo obejmuje tylko **Level 1 — Definition Intelligence** (Jira + Confluence + Figma). Kolejne poziomy (Product Context Intelligence z OpenAPI, GitHub i Product Analytics oraz Organizational Intelligence ze Slack/Teams, incydentami, supportem i testami), kolejność integracji i przykłady findings opisuje [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+### Co dalej (stan 27.10.2026)
+
+Lista kontrolna tych kroków jest na górze [`TODO.md`](TODO.md).
+
+1. **Do zrobienia ręcznie:** odświeżyć wzorzec wizualny `e2e/__screenshots__/settings.png` — w *Integrations* doszedł
+   blok *Tests (JUnit XML)*, więc nocny test wizualny strony *Settings* jest czerwony do czasu nowego wzorca.
+   *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt `visual-baselines`
+   i scommitować (procedura: [`docs/TESTING-REGRESSION.md`](docs/TESTING-REGRESSION.md)).
+2. **Następne luki ekosystemu SDLC** (mapa ekosystemu, luki G1–G8), od najmniejszej zależności:
+   - **G3 — kalibracja estymat:** czas cyklu elementu z ShipScope (pierwszy commit → wydane) obok estymaty
+     w sprintdecku. Część po stronie ShipScope jest mała; ma sens, gdy sprintdeck dostanie pokoje i import z Jiry.
+   - **G5 — dane o użyciu:** konektor analityki produktu (Amplitude, Mixpanel, GA, Segment) jako źródło metryki
+     sukcesu MVP dla oceny skutku w pdi. Wymaga wyboru narzędzia.
+   - **G8 — incydenty:** incydent (PagerDuty, Opsgenie, …) jako nowe zgłoszenie PRB w pdi. Wymaga wyboru narzędzia.
+   - Przekrojowe **G6** (jedno wejście dla ludzi), **G7** (miary przepływu) oraz platformowe **P1** (wspólna
+     platforma) i **P2** (Jira czy repo) to decyzje architektoniczne, nie pojedyncze PR-y.
+3. **W tym repo:** OpenAPI jako źródło (Faza 2 w [`docs/ROADMAP.md`](docs/ROADMAP.md)) i wiele repozytoriów /
+   projektów w jednej przestrzeni roboczej (F5 planu jednego flow).
 
 Docelowy model dystrybucji to **SaaS z abonamentem**: OAuth zamiast tokenów, AI wliczone w usługę, szyfrowanie per organizacja, multi-tenancy, billing. Obecny tryb self-hosted (tokeny w zmiennych środowiskowych) zostaje do testów i instalacji u klienta. Szczegóły: [`docs/SAAS.md`](docs/SAAS.md).

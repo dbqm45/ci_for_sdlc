@@ -1,5 +1,22 @@
 # TODO
 
+## Następne kroki (stan 27.10.2026, po G4)
+
+- [ ] **Wzorzec wizualny `e2e/__screenshots__/settings.png` (ręcznie, właściciel repo).** W *Settings → Integrations*
+      doszedł blok *Tests (JUnit XML)* (#77), więc nocny test wizualny strony *Settings* jest czerwony do czasu nowego
+      wzorca. *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt
+      `visual-baselines`, scommitować (procedura: `docs/TESTING-REGRESSION.md`).
+- [ ] **G5 — dane o użyciu.** Konektor analityki produktu jako źródło metryki sukcesu MVP dla oceny skutku w pdi.
+      Najpierw decyzja: które narzędzie (Amplitude, Mixpanel, GA, Segment).
+- [ ] **G8 — incydenty.** Incydent jako nowe zgłoszenie PRB w pdi. Najpierw decyzja: które narzędzie (PagerDuty,
+      Opsgenie, …).
+- [ ] **G3 — kalibracja estymat.** Czas cyklu elementu z ShipScope (pierwszy commit → wydane) obok estymaty
+      w sprintdecku. Część ShipScope jest mała; ma sens, gdy sprintdeck dostanie pokoje i import z Jiry.
+- [ ] **G6, G7, P1, P2** (jedno wejście dla ludzi, miary przepływu, wspólna platforma, Jira czy repo) — decyzje
+      architektoniczne do podjęcia, nie pojedyncze PR-y.
+- [ ] **W tym repo:** OpenAPI jako źródło (Faza 2, `docs/ROADMAP.md`) i wiele repozytoriów / projektów w jednej
+      przestrzeni roboczej (F5 planu jednego flow, `docs/SAAS.md`).
+
 ## Plan: przyciski „Connect” dla Figma/Jira/Confluence (OAuth zamiast/obok env-secret)
 
 > Status: plan do dyskusji, nic jeszcze nie wdrożone.
