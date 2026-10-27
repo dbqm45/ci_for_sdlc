@@ -1,6 +1,6 @@
 {
   "name": "@ci/mcp",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "private": true,
   "description": "MCP server (stdio) for Claude over ci_for_sdlc's read-only REST API",
   "type": "module",
