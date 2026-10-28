@@ -1,4 +1,5 @@
 import type { SemanticAnalyzer, SemanticInput, SemanticOutput } from './ai/types.js';
+import { aiCallCost, priceOf, type AiPrices, type AiUsage } from './ai/usage.js';
 import { analyzeItem, applyDecisions, blendEpicScores, crossItemPass, findingFromDraft, scoreItem } from './analysis/analyze.js';
 import { answerProposalId, decisionText, isVerbatimQuote, proposeAnswers, type AiAnswer } from './analysis/auto-close.js';
 import { formatClaimValue } from './analysis/claims.js';
@@ -42,6 +43,11 @@ export interface AiAuditRecord {
   discarded: number;
   challenges: number;
   error?: string;
+  /** Telemetry of a call that reached the model (absent for a cache hit). */
+  latencyMs?: number;
+  usage?: AiUsage;
+  /** USD; absent when the provider and model have no known price. */
+  costUsd?: number;
 }
 
 export interface AiRunOptions {
@@ -60,6 +66,8 @@ export interface AiRunOptions {
    */
   cacheOnly?: boolean;
   onlyKeys?: Set<string>;
+  /** Organization rates by `provider/model` (ai/usage.ts has the defaults). */
+  prices?: AiPrices;
   onAudit?: (rec: AiAuditRecord) => void;
 }
 
@@ -272,13 +280,25 @@ async function semanticPass(a: ItemAnalysis, c: ItemCtx, decided: Map<string, De
   const cached = ai.cache.get(inputHash);
   if (!cached && ai.cacheOnly && !ai.onlyKeys?.has(r.key)) return [];
   let out: SemanticOutput;
+  const started = performance.now();
   try {
     out = cached ?? (await ai.analyzer.analyze(input));
   } catch (e) {
-    ai.onAudit?.({ at: now, itemKey: r.key, provider: ai.analyzer.provider, model: ai.analyzer.model, sources: sources.map((s) => ({ ref: s.ref, entityId: s.entityId, title: s.title, chars: s.content.length })), inputHash, cached: false, findings: 0, discarded: 0, challenges: 0, error: errorMessage(e) });
+    ai.onAudit?.({ at: now, itemKey: r.key, provider: ai.analyzer.provider, model: ai.analyzer.model, sources: sources.map((s) => ({ ref: s.ref, entityId: s.entityId, title: s.title, chars: s.content.length })), inputHash, cached: false, findings: 0, discarded: 0, challenges: 0, error: errorMessage(e), latencyMs: Math.round(performance.now() - started) });
     throw e;
   }
-  if (!cached) ai.cache.set(inputHash, out);
+  const telemetry: Pick<AiAuditRecord, 'latencyMs' | 'usage' | 'costUsd'> = {};
+  if (!cached) {
+    telemetry.latencyMs = Math.round(performance.now() - started);
+    const { usage, ...result } = out;
+    if (usage) {
+      telemetry.usage = usage;
+      const cost = aiCallCost(usage, priceOf(ai.analyzer.provider, ai.analyzer.model, ai.prices));
+      if (cost !== undefined) telemetry.costUsd = cost;
+    }
+    out = result;
+    ai.cache.set(inputHash, out);
+  }
 
   const byRef = new Map(sources.map((s) => [s.ref, s]));
   let discarded = 0;
@@ -339,6 +359,7 @@ async function semanticPass(a: ItemAnalysis, c: ItemCtx, decided: Map<string, De
     findings: out.findings.length - discarded,
     discarded,
     challenges: out.challenges.length,
+    ...telemetry,
   });
 
   // A2a: only answers to the questions asked, from a source other than the item itself (Jira, code), quoted verbatim.

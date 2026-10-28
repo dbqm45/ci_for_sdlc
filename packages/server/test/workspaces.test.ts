@@ -147,6 +147,7 @@ describe('workspaces', () => {
       ['GET', '/api/w/mobile/impact?q=refund'],
       ['GET', '/api/w/mobile/drift'],
       ['GET', '/api/w/mobile/history'],
+      ['GET', '/api/w/mobile/ai/usage'],
       ['POST', '/api/w/mobile/settings/test-connections'],
       ['GET', '/api/w/mobile/connections'],
       ['POST', '/api/w/mobile/connections/atlassian/start'],

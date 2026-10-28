@@ -285,6 +285,10 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
     const { store } = of(req);
     return store.auditLog();
   });
+  app.get('/ai/usage', async (req) => {
+    const { store } = of(req);
+    return store.aiUsage();
+  });
 
   // ------------------------------------------------------------------ settings
   app.get('/settings', async (req, reply) => {

@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { DEFAULT_POLICY, errorMessage, normalizeDecision, type Approval, type AutoCloseEvent, type Decision, type StoredDecision, type DriftEvent, type IssueType, type PdiEvent, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, errorMessage, normalizeDecision, summarizeAiCalls, type AiCallRecord, type AiUsageRow, type Approval, type AutoCloseEvent, type Decision, type StoredDecision, type DriftEvent, type IssueType, type PdiEvent, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
 import { FileBackend, type Backend } from './backend.js';
 import type { Principal } from './http.js';
 import { pruneToSchema, settingsBody } from './schemas.js';
@@ -333,6 +333,19 @@ export class Store {
   async auditLog(limit = 300): Promise<AuditEntry[]> {
     const entries = await this.backend.tail('audit', limit);
     return entries.reverse().flatMap((entry) => (isRecord(entry) && typeof entry.at === 'string' && typeof entry.kind === 'string' ? [entry as unknown as AuditEntry] : []));
+  }
+  /**
+   * Tokens, cost and time of the audited AI calls among the last `limit` audit entries, per provider and model
+   * (`actor` is `provider/model`). Calls are audited only with `security.auditAiDecisions` on.
+   */
+  async aiUsage(limit = 5000): Promise<AiUsageRow[]> {
+    const calls = (await this.auditLog(limit)).flatMap((e): AiCallRecord[] => {
+      if (e.kind !== 'ai_call') return [];
+      const d = isRecord(e.details) ? e.details : {};
+      const [provider = '', ...model] = e.actor.split('/');
+      return [{ provider, model: model.join('/'), cached: false, error: typeof d.error === 'string' ? d.error : e.summary.includes(' failed: ') ? e.summary : undefined, latencyMs: typeof d.latencyMs === 'number' ? d.latencyMs : undefined, usage: isRecord(d.usage) ? (d.usage as unknown as AiCallRecord['usage']) : undefined, costUsd: typeof d.costUsd === 'number' ? d.costUsd : undefined }];
+    });
+    return summarizeAiCalls(calls);
   }
 }
 
