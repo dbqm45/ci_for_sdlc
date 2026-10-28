@@ -96,7 +96,8 @@ porównujący modele lub prompty razem z kosztem i czasem.
    (core `test/ai-usage.test.ts` TEL-01…10, serwer EN-06, EN-07, EN-17, API-07; kontrakt OpenAPI: `/ai/usage`)
 3. Ewaluacja: testy oceny i zestawu (czerwone) → `eval.ts`, przypadki, `run.ts` → zielone. ✓
    (core `test/ai-eval.test.ts` EVAL-01…16; 14 przypadków; przebieg bez `--paid` i `--replay` sprawdzone ręcznie)
-4. PR; pierwszy płatny przebieg ewaluacji po zgodzie właściciela, wynik do `docs/evals/`.
+4. PR ✓ (#91). Pierwszy płatny przebieg: zgoda właściciela jest (2026-10-28), wstrzymany do czasu klucza
+   `ANTHROPIC_API_KEY` w środowisku (pozycja w `TODO.md`).
 
 ## Jak używać
 - Zestawienie kosztu i czasu wywołań AI w działającym serwerze: `GET /api/ai/usage` (albo `/api/w/<ws>/ai/usage`).
