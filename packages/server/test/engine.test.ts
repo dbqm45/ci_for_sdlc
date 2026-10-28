@@ -117,6 +117,7 @@ describe('Engine.analyze', () => {
 
   const aiReply = {
     choices: [{ message: { content: JSON.stringify({ findings: [], challenges: [{ question: 'What if the bank times out?', rationale: 'r', options: ['Retry'], topic: 'timeouts' }] }) } }],
+    usage: { prompt_tokens: 1200, completion_tokens: 80 },
   };
   const withAi = (recordEvidenceSources: boolean) =>
     settings((s) => {
@@ -126,7 +127,8 @@ describe('Engine.analyze', () => {
 
   it.each([
     { id: 'EN-06', recordEvidenceSources: true, detailKeys: expect.arrayContaining(['itemKey', 'inputHash', 'provider']) },
-    { id: 'EN-07', recordEvidenceSources: false, detailKeys: ['inputHash'] },
+    // Telemetry is numbers, not source content: it stays when evidence sources are not recorded.
+    { id: 'EN-07', recordEvidenceSources: false, detailKeys: ['inputHash', 'latencyMs', 'usage'] },
   ])('$id: on-demand AI reviews only the requested item, audits it and saves the cache (evidence sources: $recordEvidenceSources)', async ({ recordEvidenceSources, detailKeys }) => {
     process.env.CUSTOM_AI_API_KEY = 'llm-key';
     await store.saveSettings(withAi(recordEvidenceSources));
@@ -139,7 +141,7 @@ describe('Engine.analyze', () => {
     expect(result.items.find((i) => i.key === 'PAY-125')?.challenges.some((c) => c.origin === 'ai')).toBe(true);
     const aiAudits = (await store.auditLog()).filter((a) => a.kind === 'ai_call');
     expect(aiAudits).toHaveLength(1);
-    expect(aiAudits[0]).toMatchObject({ actor: 'custom/local', summary: 'AI reviewed PAY-125: 0 findings (0 discarded without evidence), 1 questions' });
+    expect(aiAudits[0]).toMatchObject({ actor: 'custom/local', summary: 'AI reviewed PAY-125: 0 findings (0 discarded without evidence), 1 questions; 1200 input / 80 output tokens' });
     expect(Object.keys(aiAudits[0]?.details as object)).toEqual(detailKeys);
     expect((await store.aiCache()).size).toBe(1);
   });
@@ -151,6 +153,15 @@ describe('Engine.analyze', () => {
     await engine.analyze('second', { aiKeys: ['PAY-125'] });
     expect(calls).toHaveLength(1);
     expect((await store.auditLog()).filter((a) => a.kind === 'ai_call')).toHaveLength(1);
+  });
+
+  it('EN-17: the AI usage summary counts the audited calls per provider and model', async () => {
+    await store.saveSettings(withAi(false));
+    fakeFetch([['llm.local', aiReply]]);
+    await engine.analyze('manual', { aiKeys: ['PAY-125'] });
+    const [row] = await store.aiUsage();
+    expect(row).toMatchObject({ provider: 'custom', model: 'local', calls: 1, errors: 0, inputTokens: 1200, outputTokens: 80, costUsd: 0, unpricedCalls: 1 });
+    expect(row?.latencyP50Ms).toBeGreaterThanOrEqual(0);
   });
 
   it('EN-09: a failed AI call is audited as a failure and does not fail the analysis', async () => {

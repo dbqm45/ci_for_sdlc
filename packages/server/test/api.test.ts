@@ -30,6 +30,10 @@ describe('API', () => {
     expect((await json('GET', '/api/openapi.json')).body.info.version).toBe(version);
   });
 
+  it('API-07: the AI usage summary is empty when no AI call was made', async () => {
+    expect(await json('GET', '/api/ai/usage')).toEqual({ status: 200, body: [] });
+  });
+
   it('analyzes the demo workspace', async () => {
     const { status, body } = await json('GET', '/api/analysis');
     expect(status).toBe(200);

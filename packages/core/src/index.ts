@@ -18,6 +18,8 @@ export { AUTO_CLOSE_ACTOR, answerProposalId, autoCloseDecision, isVerbatimQuote 
 export * from './auto-close-stats.js';
 export * from './ai/types.js';
 export * from './ai/providers.js';
+export * from './ai/usage.js';
+export * from './ai/eval.js';
 export { demoProject, DEMO_SCENARIOS } from './connectors/demo.js';
 export * from './hierarchy.js';
 export * from './settings.js';

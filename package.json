@@ -25,6 +25,7 @@
     "test:contract": "npm run test:contract -w @ci/server",
     "test:contract:update": "npm run test:contract:update -w @ci/server",
     "test:parity": "npm run test:parity -w @ci/core",
+    "eval:ai": "npm run eval:ai --silent -w @ci/core --",
     "test:mutation": "npm run test:mutation -w @ci/core",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "contract:sync": "node scripts/pdi-contract.mjs sync",

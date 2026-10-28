@@ -1,4 +1,5 @@
 import type { Dimension, FindingCategory, Severity } from '../model.js';
+import type { AiUsage } from './usage.js';
 
 /** One source the AI may cite. Ids are short handles (S1, S2…) mapped to entities. */
 export interface SemanticSource {
@@ -52,6 +53,8 @@ export interface SemanticOutput {
   challenges: SemanticChallenge[];
   /** Absent in outputs cached before A2a. */
   answers?: SemanticAnswer[];
+  /** Tokens of the call that produced this output; never stored in the result cache. */
+  usage?: AiUsage;
 }
 
 export interface SemanticAnalyzer {

@@ -92,7 +92,8 @@ class ClaudeAnalyzer implements SemanticAnalyzer {
     if (response.stop_reason === 'refusal') throw new Error('The model declined to analyze this item (refusal).');
     if (response.stop_reason === 'max_tokens') throw new Error('The model response was cut off (max_tokens).');
     const text = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
-    return parseOutput(text);
+    const u = response.usage;
+    return { ...parseOutput(text), usage: { inputTokens: u.input_tokens, outputTokens: u.output_tokens, cacheReadTokens: u.cache_read_input_tokens ?? 0, cacheWriteTokens: u.cache_creation_input_tokens ?? 0 } };
   }
 }
 
@@ -122,8 +123,10 @@ class OpenAICompatibleAnalyzer implements SemanticAnalyzer {
       }),
     });
     if (!res.ok) throw new Error(`${this.provider} request failed: HTTP ${res.status} ${(await res.text()).slice(0, 300)}`);
-    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    return parseOutput(json.choices?.[0]?.message?.content ?? '');
+    const json = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+    const out = parseOutput(json.choices?.[0]?.message?.content ?? '');
+    const u = json.usage;
+    return u ? { ...out, usage: { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0, cacheReadTokens: 0, cacheWriteTokens: 0 } } : out;
   }
 }
 

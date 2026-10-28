@@ -21,6 +21,7 @@ import {
   type AnalysisResult,
   type Approval,
   type ContextGraph,
+  type AiAuditRecord,
   type ProjectContext,
   type SemanticOutput,
   type TestCase,
@@ -165,8 +166,11 @@ export class Engine extends EventEmitter {
                       at: rec.at,
                       kind: 'ai_call',
                       actor: `${rec.provider}/${rec.model}`,
-                      summary: rec.error ? `AI review of ${rec.itemKey} failed: ${rec.error}` : `AI reviewed ${rec.itemKey}: ${rec.findings} findings (${rec.discarded} discarded without evidence), ${rec.challenges} questions`,
-                      details: settings.security.recordEvidenceSources ? rec : { inputHash: rec.inputHash },
+                      summary: rec.error
+                        ? `AI review of ${rec.itemKey} failed: ${rec.error}`
+                        : `AI reviewed ${rec.itemKey}: ${rec.findings} findings (${rec.discarded} discarded without evidence), ${rec.challenges} questions${usageNote(rec)}`,
+                      // Telemetry is numbers, not source content, so it is kept when evidence sources are not recorded.
+                      details: settings.security.recordEvidenceSources ? rec : pick(rec, ['inputHash', 'latencyMs', 'usage', 'costUsd']),
                     }),
                   );
                 }
@@ -270,3 +274,8 @@ export class Engine extends EventEmitter {
     if (this.timer) clearInterval(this.timer);
   }
 }
+
+const usageNote = (rec: AiAuditRecord) =>
+  rec.usage ? `; ${rec.usage.inputTokens} input / ${rec.usage.outputTokens} output tokens${rec.costUsd === undefined ? '' : `, $${rec.costUsd.toFixed(4)}`}` : '';
+
+const pick = <T extends object, K extends keyof T>(o: T, keys: K[]): Partial<Pick<T, K>> => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]])) as Partial<Pick<T, K>>;
