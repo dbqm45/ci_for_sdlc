@@ -845,7 +845,8 @@ function ContextTab({ a }: { a: ItemAnalysis }) {
       {graph && <GraphView data={graph} />}
       <div className="grid">
         {group('jira', 'Jira', a.context.requirements)}
-        {group('confluence', 'Confluence', a.context.documents.filter((d) => d.source !== 'code'))}
+        {group('confluence', 'Confluence', a.context.documents.filter((d) => d.source !== 'code' && d.source !== 'api'))}
+        {a.context.documents.some((d) => d.source === 'api') && group('api', 'API (OpenAPI)', a.context.documents.filter((d) => d.source === 'api'))}
         {a.context.documents.some((d) => d.source === 'code') && group('code', 'Code (tf)', a.context.documents.filter((d) => d.source === 'code'))}
         {group('figma', 'Figma', a.context.frames)}
       </div>

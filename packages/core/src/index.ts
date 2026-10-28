@@ -29,5 +29,6 @@ export { MAX_RECONSTRUCTION_BYTES, RECONSTRUCTION_FORMAT, ReconstructionError, i
 export { ATLASSIAN_API, RELEASE_LINE_SOURCES, type ReleaseLineSource, fetchJira, fetchConfluence, jiraIssueToRequirement, adfToText, splitSections, type AtlassianOAuthAccess, type JiraConfig, type ConfluenceConfig } from './connectors/atlassian.js';
 export { clearFigmaCache, fetchFigma, figmaApiBase, framesFromDocument, FigmaRateLimitError, type FigmaConfig } from './connectors/figma.js';
 export { MAX_TEST_CASES, MAX_TEST_FILE_BYTES, TestResultsError, parseJUnit, readTestResults, testRefs, type TestResultsProblem } from './connectors/tests.js';
+export { MAX_API_OPERATIONS, MAX_OPENAPI_FILE_BYTES, OpenApiError, parseOpenApi, readOpenApi, type OpenApiProblem } from './connectors/openapi.js';
 export { DESIGN_STATES, DesignFormatError, parseDesignMd, type DesignFrameLink, type DesignRow } from './connectors/design.js';
 export { CHANGES_DIR, MAX_CHANGES, MAX_CHANGE_FILE_BYTES, RepoFileError, parseChange, readRepoChanges, type RepoChanges, type RepoProblem } from './connectors/repo.js';

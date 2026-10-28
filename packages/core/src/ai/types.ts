@@ -5,7 +5,7 @@ import type { AiUsage } from './usage.js';
 export interface SemanticSource {
   ref: string;
   entityId: string;
-  source: 'jira' | 'confluence' | 'figma' | 'decision' | 'code';
+  source: 'jira' | 'confluence' | 'figma' | 'decision' | 'code' | 'api';
   title: string;
   content: string;
 }

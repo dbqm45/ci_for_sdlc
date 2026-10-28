@@ -67,6 +67,7 @@ export const DEFAULT_SETTINGS: Settings = {
     figma: { enabled: false, fileKeys: [] },
     code: { enabled: false, reconstructionPath: '' },
     tests: { enabled: false, reportsPath: '' },
+    openapi: { enabled: false, specPath: '' },
   },
   ai: { provider: 'none', model: '', effort: 'high', temperature: 0.2, runOn: 'on_demand' },
   security: {

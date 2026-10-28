@@ -89,6 +89,8 @@ export interface ItemCtx {
   docs: DocumentItem[];
   /** Items of tf's reconstruction from code in the item's context (current state of the code). */
   code: DocumentItem[];
+  /** Operations of an OpenAPI contract in the item's context (also in `docs`, whose claims they feed). */
+  api: DocumentItem[];
   frames: DesignFrame[];
   decisions: Decision[];
   /**
@@ -141,6 +143,7 @@ export function itemContext(env: AnalysisEnv, r: RequirementItem): ItemCtx {
     bundle,
     docs,
     code,
+    api: docs.filter((d) => d.source === 'api'),
     frames,
     decisions,
     specText,
@@ -172,6 +175,7 @@ export function evDoc(d: DocumentItem, re?: RegExp): Evidence {
     const at = e ? `${e.path}:${e.line}${e.lineEnd > e.line ? `-${e.lineEnd}` : ''}` : d.title;
     return { source: 'code', entityId: docId(d), title: `Code ${at}`, url: d.url, excerpt: d.code.quote ?? (re ? excerpt(d.body, re) : undefined) };
   }
+  if (d.api) return { source: 'api', entityId: docId(d), title: `API ${d.api.method} ${d.api.path}`, url: d.url, excerpt: re ? excerpt(d.body, re) : undefined };
   return { source: 'confluence', entityId: docId(d), title: d.title, url: d.url, excerpt: re ? excerpt(d.body, re) : undefined };
 }
 export function evFrame(f: DesignFrame): Evidence {

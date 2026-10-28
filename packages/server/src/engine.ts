@@ -16,12 +16,14 @@ import {
   fetchJira,
   readReconstruction,
   readRepoChanges,
+  readOpenApi,
   readTestResults,
   type RepoProblem,
   type AnalysisResult,
   type Approval,
   type ContextGraph,
   type AiAuditRecord,
+  type DocumentItem,
   type ProjectContext,
   type SemanticOutput,
   type TestCase,
@@ -67,6 +69,8 @@ export class Engine extends EventEmitter {
     private repo?: RepoSource,
     /** Test results of `analyze --tests` (G4), attached to the context of every run. */
     private tests?: TestCase[],
+    /** API operations of `analyze --openapi` (docs/OPENAPI-PLAN.md), attached to the context of every run. */
+    private api?: DocumentItem[],
   ) {
     super();
   }
@@ -77,10 +81,20 @@ export class Engine extends EventEmitter {
     // Test results (G4): `analyze --tests` wins over the setting; a report that cannot be read stops the analysis.
     const tests = this.tests ?? (await this.loadTests(settings));
     const ctx: ProjectContext = { ...loaded, project: { ...loaded.project, claimPack: settings.project.claimPack ?? 'general' }, ...(tests && { tests }) };
+    // The API contract (OpenAPI): `analyze --openapi` wins over the setting; a file that cannot be read stops the analysis.
+    const api = this.api ?? (await this.loadApi(settings)) ?? [];
     // tf's reconstruction from code is the current state of the code, next to the specification in either mode.
     const { code } = settings.integrations;
-    if (!code.enabled) return ctx;
-    return { ...ctx, documents: [...ctx.documents, ...(await readReconstruction(code.reconstructionPath, { repoUrl: code.repoUrl }))] };
+    const reconstructed = code.enabled ? await readReconstruction(code.reconstructionPath, { repoUrl: code.repoUrl }) : [];
+    return api.length || reconstructed.length ? { ...ctx, documents: [...ctx.documents, ...reconstructed, ...api] } : ctx;
+  }
+
+  private async loadApi(settings: Settings): Promise<DocumentItem[] | undefined> {
+    const o = settings.integrations.openapi;
+    if (!o?.enabled) return undefined;
+    const { documents, problems } = await readOpenApi([o.specPath]);
+    if (problems.length) throw new Error(`API contract: ${problems.map((p) => `${p.path}: ${p.message}`).join('; ')}`);
+    return documents;
   }
 
   private async loadTests(settings: Settings): Promise<TestCase[] | undefined> {

@@ -50,7 +50,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   DRIFT: 'Drift',
 };
 
-export const SOURCE_LABELS: Record<string, string> = { jira: 'Jira', confluence: 'Confluence', figma: 'Figma', decision: 'Decision', code: 'Code (tf)', test: 'Tests' };
+export const SOURCE_LABELS: Record<string, string> = { jira: 'Jira', confluence: 'Confluence', figma: 'Figma', decision: 'Decision', code: 'Code (tf)', test: 'Tests', api: 'API (OpenAPI)' };
 
 export function healthTone(status: string): 'ok' | 'warn' | 'bad' {
   return status === 'healthy' || status === 'ready' || status === 'ok' ? 'ok' : status === 'critical' || status === 'not_ready' || status === 'fail' ? 'bad' : 'warn';
@@ -158,6 +158,14 @@ export function SourceLogo({ source, size = 17 }: { source: string; size?: numbe
         <path fill="var(--figma-4)" d="M19 0v19h9.5a9.5 9.5 0 1 0 0-19H19z" />
         <path fill="var(--figma-3)" d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5z" />
         <path fill="var(--figma-2)" d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5z" />
+      </svg>
+    );
+  }
+  if (source === 'api') {
+    // An OpenAPI contract — no brand, a neutral { } mark
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M8 4c-2 0-2 2-2 4s-1 4-3 4c2 0 3 2 3 4s0 4 2 4M16 4c2 0 2 2 2 4s1 4 3 4c-2 0-3 2-3 4s0 4-2 4" fill="none" stroke="var(--src-decision)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     );
   }
