@@ -7,7 +7,7 @@
  * building?", not "is the code correct?".
  */
 
-export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision' | 'code' | 'test';
+export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision' | 'code' | 'test' | 'api';
 
 // ---------------------------------------------------------------------------
 // Normalized source contexts (output of connectors + normalizer)
@@ -137,9 +137,32 @@ export interface DocumentItem {
   updatedAt: string;
   url?: string;
   /** Where the item comes from; absent means Confluence. */
-  source?: 'confluence' | 'code';
+  source?: 'confluence' | 'code' | 'api';
   /** Set for `source: 'code'`: what tf's reconstruction says about the item (connectors/reconstruction.ts). */
   code?: CodeFacts;
+  /** Set for `source: 'api'`: one operation of an OpenAPI contract (connectors/openapi.ts). */
+  api?: ApiOperationFacts;
+}
+
+/** One operation of an OpenAPI 3.x contract (docs/OPENAPI-PLAN.md). */
+export interface ApiOperationFacts {
+  /** The specification file it was read from. */
+  file: string;
+  /** `info.title` and `info.version`. */
+  spec: string;
+  method: string;
+  path: string;
+  operationId?: string;
+  /** 2xx response codes as written (`200`, `202`, `2XX`). */
+  successCodes: string[];
+  /** 4xx and 5xx responses with their description. */
+  errorCodes: { code: string; description: string }[];
+  /** The operation takes an `Idempotency-Key` header. */
+  idempotencyKey: boolean;
+  /** `maxItems` of an array in the request body. */
+  maxItems?: number;
+  /** Item keys of `x-requirements` / `x-jira`. */
+  requirements: string[];
 }
 
 /** One rule, requirement or domain term reconstructed from code by tf, with its evidence `path:line`. */

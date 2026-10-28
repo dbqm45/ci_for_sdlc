@@ -159,6 +159,23 @@ describe('API', () => {
     expect((await json('GET', '/api/items/PAY-124')).body.item.acTests).toBeUndefined();
   });
 
+  it('API-08: an OpenAPI contract joins the analysis: an API error of PAY-124 without a screen state is reported', async () => {
+    const specPath = fileURLToPath(new URL('../../core/test/fixtures/openapi/cards.yaml', import.meta.url));
+    expect((await putSettings(ctx.app, { integrations: { openapi: { enabled: true, specPath } } })).statusCode).toBe(200);
+    const status = (await json('POST', '/api/settings/test-connections')).body;
+    expect(status.openapi).toBe('OK — 1 API operation');
+    expect(status.confluence).toBeUndefined();
+    await json('POST', '/api/analyze');
+    const item = (await json('GET', '/api/items/PAY-124')).body.item;
+    expect(item.findings.find((f: any) => f.ruleId === 'API-001')?.title).toBe('API error 403 has no state in the story or design');
+
+    await putSettings(ctx.app, { integrations: { openapi: { specPath: '/nonexistent/openapi.yaml' } } });
+    expect((await json('POST', '/api/settings/test-connections')).body.error).toBe('API contract: /nonexistent/openapi.yaml: File not found or not readable');
+    await putSettings(ctx.app, { integrations: { openapi: { enabled: false, specPath: '' } } });
+    await json('POST', '/api/analyze');
+    expect((await json('GET', '/api/items/PAY-124')).body.item.findings.some((f: any) => f.ruleId === 'API-001')).toBe(false);
+  });
+
   it('API-01: lists the rules and the demo scenarios', async () => {
     const rules = await json('GET', '/api/rules');
     expect(rules.body.map((r: any) => r.id)).toEqual(RULES.map((r) => r.id));

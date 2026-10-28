@@ -1,0 +1,14 @@
+# OpenAPI fixture for the rule coverage guard (API-001) and the API contract tests; docs/OPENAPI-PLAN.md.
+openapi: 3.0.3
+info: { title: Cards API, version: 1.4.0 }
+paths:
+  /cards/{id}:
+    delete:
+      operationId: deleteCard
+      summary: Delete a saved card
+      tags: [payments]
+      x-requirements: [PAY-124]
+      responses:
+        '204': { description: Deleted }
+        '403': { description: The card belongs to another customer }
+        '409': { description: The card pays an active subscription }

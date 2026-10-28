@@ -19,7 +19,7 @@ Nie dodajemy integracji tylko dlatego, że istnieje. Każde nowe źródło musi 
 | Jira | wymagania, Epics, Stories, Bugs, Tasks, zależności | **Must — MVP (zrobione)** |
 | Confluence | business rules, decyzje, dokumentacja, kontekst | **Must — MVP (zrobione)** |
 | Figma | UX, flows, states, design coverage | **Must — MVP (zrobione)** |
-| API specs (OpenAPI / Swagger) | kontrakty API i ich spójność z wymaganiami i designem | Faza 2 |
+| API specs (OpenAPI / Swagger) | kontrakty API i ich spójność z wymaganiami i designem | Faza 2 — **OpenAPI 3 zrobione** ([plan](OPENAPI-PLAN.md)) |
 | GitHub / GitLab / Bitbucket | istniejący system: domeny, komponenty, API, zależności, historia zmian | Faza 2 |
 | Product Analytics (Amplitude, Mixpanel, GA, Segment) | rzeczywiste user journeys i zachowania użytkowników | Faza 2/3 |
 | Slack / Teams | decyzje i wiedza, które nigdy nie trafiły do Jira/Confluence | Faza 2/3 |
@@ -94,6 +94,9 @@ Każda integracja wpina się w istniejący model w ten sam sposób (zob. [ARCHIT
 MCP może być warstwą transportu do systemów zewnętrznych, ale produkt zawsze normalizuje dane do własnego modelu kontekstu.
 
 ### 2. OpenAPI / API contracts
+
+> Stan 28.10.2026: pierwsza wersja zrobiona — konektor OpenAPI 3, twierdzenia z kontraktu dla ARCH-001…003 i CON-001,
+> reguła API-001 (błąd API bez stanu ekranu). Zakres i to, co świadomie pominięte: [`OPENAPI-PLAN.md`](OPENAPI-PLAN.md).
 
 - **ApiContext:** endpointy, metody, kody odpowiedzi (`200` vs `202 Accepted`), schematy błędów, nagłówki (np. `Idempotency-Key`), limity, timeouty, wersje.
 - **Nowe claims:** `processing_mode` z kodu odpowiedzi (`202` oznacza async), `idempotent` z nagłówków, `timeout`, `max_items`, kody błędów. Są w pełni deterministyczne, więc mają wysoką pewność.

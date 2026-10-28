@@ -1,14 +1,15 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DEMO_SCENARIOS, RULES, analyzeProject, demoProject, parseJUnit, readRepoChanges, type ProjectContext } from '../src/index.js';
+import { DEMO_SCENARIOS, RULES, analyzeProject, demoProject, parseJUnit, parseOpenApi, readRepoChanges, type ProjectContext } from '../src/index.js';
 
 /**
  * Coverage guard for the test data world: every rule must have demo data where it fires
  * and an applicable item where it stays silent. A new rule without such data fails here,
  * so the demo world (and later the sandbox seeder built on it) grows with the rules. Rules of repository mode only
  * (REL-007, REL-008) are covered by the changes in fixtures/repo-changes, read as `analyze --repo` reads a checkout;
- * the test-result rules (TEST-001…003) by the demo project with fixtures/junit/results.xml, as `analyze --tests` reads it.
+ * the test-result rules (TEST-001…003) by the demo project with fixtures/junit/results.xml, as `analyze --tests` reads it;
+ * the API contract rules (API-001) by the demo project with fixtures/openapi/cards.yaml, as `analyze --openapi` reads it.
  */
 
 const NOW = new Date('2026-10-05T10:00:00Z');
@@ -24,6 +25,7 @@ async function observe() {
   const fires = new Set<string>();
   const silent = new Set<string>();
   const worlds = [{ id: 'baseline', apply: () => {} }, ...DEMO_SCENARIOS];
+  const openapi = await readFile(new URL('fixtures/openapi/cards.yaml', import.meta.url), 'utf8');
   const repo = await readRepoChanges(fileURLToPath(new URL('fixtures/repo-changes', import.meta.url)));
   expect(repo.problems).toEqual([]);
   const repoCtx: ProjectContext = { project: { key: 'PAY', name: 'Payments' }, requirements: repo.requirements, documents: [], frames: [], fetchedAt: NOW.toISOString() };
@@ -35,6 +37,10 @@ async function observe() {
     }),
     repoCtx,
     { ...demoProject(), tests: parseJUnit(await readFile(new URL('fixtures/junit/results.xml', import.meta.url), 'utf8'), 'results.xml') },
+    (() => {
+      const ctx = demoProject();
+      return { ...ctx, documents: [...ctx.documents, ...parseOpenApi(openapi, 'cards.yaml', { updatedAt: NOW.toISOString() })] };
+    })(),
   ];
   for (const ctx of contexts) {
     const run = await analyzeProject(ctx, { now: NOW });

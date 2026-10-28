@@ -8,8 +8,8 @@
       anthropic:claude-opus-5-5:high` (szacunek 0,1–0,2 USD), raport i surowe wyniki do `docs/evals/`. Z wyniku:
       wybór modelu i `effort` dla recenzenta oraz decyzja o embeddingach (czy TF-IDF gubi ustalenia).
 - [ ] **Wzorzec wizualny `e2e/__screenshots__/settings.png` (ręcznie, właściciel repo).** W *Settings → Integrations*
-      doszedł blok *Tests (JUnit XML)* (#77), więc nocny test wizualny strony *Settings* jest czerwony do czasu nowego
-      wzorca. *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt
+      doszły bloki *Tests (JUnit XML)* (#77) i *API contract (OpenAPI)*, więc nocny test wizualny strony *Settings* jest
+      czerwony do czasu nowego wzorca. *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt
       `visual-baselines`, scommitować (procedura: `docs/TESTING-REGRESSION.md`).
 - [ ] **G5 — dane o użyciu.** Konektor analityki produktu jako źródło metryki sukcesu MVP dla oceny skutku w pdi.
       Najpierw decyzja: które narzędzie (Amplitude, Mixpanel, GA, Segment).
@@ -22,11 +22,12 @@
       - [ ] sprintdeck, po jego MVP (konta, import z Jiry): prognoza przy zadaniu w pokoju.
 - [ ] **G6, G7, P1, P2** (jedno wejście dla ludzi, miary przepływu, wspólna platforma, Jira czy repo) — decyzje
       architektoniczne do podjęcia, nie pojedyncze PR-y.
-- [ ] **W tym repo:** OpenAPI jako źródło (Faza 2, `docs/ROADMAP.md`); konta i role w przestrzeniach roboczych
-      (krok 3 `docs/SAAS.md`).
+- [ ] **W tym repo:** konta i role w przestrzeniach roboczych (krok 3 `docs/SAAS.md`); OpenAPI — dalsze kroki z
+      „Poza zakresem” w `docs/OPENAPI-PLAN.md` (pozytywny sygnał spójności, pola formularza vs schemat, Swagger 2.0).
   - [x] Wiele przestrzeni roboczych w jednej instalacji (#86, #88), w Postgresie z `CI_DATABASE_URL` (#89).
   - [x] Ramki Figmy z tabeli `design.md` zmiany (kontrakt pdi 0.9.0, #87).
   - [x] Telemetria wywołań AI (tokeny, koszt, czas, `GET /api/ai/usage`) i zestaw ewaluacyjny recenzenta (#91).
+  - [x] OpenAPI 3 jako źródło: konektor, twierdzenia z kontraktu, reguła API-001, `--openapi`, ustawienie w UI.
 
 ## Plan: przyciski „Connect” dla Figma/Jira/Confluence (OAuth zamiast/obok env-secret)
 

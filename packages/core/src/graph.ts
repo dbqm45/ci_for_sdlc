@@ -17,7 +17,7 @@ import { documentMeaning, frameMeaning, requirementMeaning } from './analysis/fi
 
 export const issueId = (key: string) => `jira:${key}`;
 /** Entity id of a document: `confluence:<page id>`, or `code:<reconstruction item id>` for tf's reconstruction. */
-export const docId = (d: { id: string; source?: 'confluence' | 'code' }) => `${d.source ?? 'confluence'}:${d.id}`;
+export const docId = (d: { id: string; source?: DocumentItem['source'] }) => `${d.source ?? 'confluence'}:${d.id}`;
 export const frameId = (f: { fileKey: string; id: string }) => `figma:${f.fileKey}:${f.id}`;
 export const domainId = (name: string) => `domain:${name}`;
 
@@ -178,7 +178,7 @@ export function buildContextGraph(ctx: ProjectContext, decisions: Decision[] = [
   const keyRegex = new RegExp(`\\b(${[...reqByKey.keys()].map(escapeRe).join('|') || '$^'})\\b`, 'g');
   for (const d of ctx.documents) {
     for (const m of new Set(d.body.match(keyRegex) ?? [])) {
-      g.addRelation({ from: issueId(m), to: docId(d), type: 'documented_by', confidence: 0.95, via: 'explicit', reason: `Page mentions ${m}` });
+      g.addRelation({ from: issueId(m), to: docId(d), type: 'documented_by', confidence: 0.95, via: 'explicit', reason: d.source === 'api' ? `API operation names ${m}` : `Page mentions ${m}` });
     }
     for (const other of ctx.documents) {
       if (other.id !== d.id && other.title.length > 6 && d.body.toLowerCase().includes(other.title.toLowerCase())) {
@@ -313,7 +313,7 @@ function bundleFor(g: ContextGraph, r: RequirementItem, reqByKey: Map<string, Re
   const all = [...refs.values()].sort((a, b) => b.confidence - a.confidence);
   return {
     requirements: all.filter((x) => x.source === 'jira' || x.source === 'decision'),
-    documents: all.filter((x) => x.source === 'confluence' || x.source === 'code'),
+    documents: all.filter((x) => x.source === 'confluence' || x.source === 'code' || x.source === 'api'),
     frames: all.filter((x) => x.source === 'figma'),
   };
 }

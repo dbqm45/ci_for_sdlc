@@ -354,7 +354,9 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
       const ctx = await engine.loadContext({ ...s, mode: 'live' });
       if (s.integrations.jira.enabled) out.jira = `OK — ${ctx.requirements.length} issues`;
       const code = ctx.documents.filter((d) => d.source === 'code').length;
-      if (s.integrations.confluence.enabled) out.confluence = `OK — ${ctx.documents.length - code} pages`;
+      const api = ctx.documents.filter((d) => d.source === 'api').length;
+      if (s.integrations.confluence.enabled) out.confluence = `OK — ${ctx.documents.length - code - api} pages`;
+      if (s.integrations.openapi?.enabled) out.openapi = `OK — ${api} API operation${api === 1 ? '' : 's'}`;
       if (s.integrations.code.enabled) out.code = `OK — ${code} items reconstructed from code`;
       if (s.integrations.tests?.enabled && ctx.tests) {
         const t = ctx.tests;

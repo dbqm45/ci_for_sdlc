@@ -68,6 +68,7 @@ export function Settings() {
   // Settings saved before the code integration have none; the server fills in the default.
   const codeIntegration = s.integrations.code ?? { enabled: false, reconstructionPath: '' };
   const testsIntegration = s.integrations.tests ?? { enabled: false, reportsPath: '' };
+  const openapiIntegration = s.integrations.openapi ?? { enabled: false, specPath: '' };
   const setRelease = (key: string, value: unknown) => set('policy.release', { ...release, [key]: value });
   const save = async () => {
     setSaving(true);
@@ -186,6 +187,10 @@ export function Settings() {
           <Integration title="Tests (JUnit XML)" source="test" enabled={testsIntegration.enabled} onToggle={(v) => set('integrations.tests', { ...testsIntegration, enabled: v })} badges={<span className="badge">KEY/AC-n</span>}>
             <Field label="Path to a JUnit XML report, or a directory of them, on the server"><input className="input" placeholder="/repo/reports/junit" value={testsIntegration.reportsPath} onChange={(e) => set('integrations.tests', { ...testsIntegration, reportsPath: e.target.value })} /></Field>
             <p className="small muted" style={{ margin: 0 }}>A test named after its criterion (PAY-124/AC-2 …) is that criterion's test; TEST-001…003 report a criterion without a test, a failing one and one the item no longer has.</p>
+          </Integration>
+          <Integration title="API contract (OpenAPI)" source="api" enabled={openapiIntegration.enabled} onToggle={(v) => set('integrations.openapi', { ...openapiIntegration, enabled: v })} badges={<span className="badge">OpenAPI 3</span>}>
+            <Field label="Path to an OpenAPI 3 file (JSON or YAML), or a directory of them, on the server"><input className="input" placeholder="/repo/api/openapi.yaml" value={openapiIntegration.specPath} onChange={(e) => set('integrations.openapi', { ...openapiIntegration, specPath: e.target.value })} /></Field>
+            <p className="small muted" style={{ margin: 0 }}>Each operation joins the context of the items it names (x-requirements) or matches; 202 Accepted, an Idempotency-Key header and item limits become facts, and API-001 asks about API errors without a screen state.</p>
           </Integration>
           <Integration title="Figma" source="figma" enabled={s.integrations.figma.enabled} onToggle={(v) => set('integrations.figma.enabled', v)} badges={secret('FIGMA_TOKEN')}>
             <Field label="File keys (comma separated)"><input className="input" placeholder="from figma.com/design/<FILE_KEY>/…" value={s.integrations.figma.fileKeys.join(', ')} onChange={(e) => set('integrations.figma.fileKeys', e.target.value.split(',').map((x: string) => parseFigmaFileKey(x)).filter(Boolean))} /></Field>

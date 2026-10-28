@@ -1211,6 +1211,19 @@
                             "maxLength": 1000
                           }
                         }
+                      },
+                      "openapi": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "specPath": {
+                            "type": "string",
+                            "maxLength": 1000
+                          }
+                        }
                       }
                     }
                   },
@@ -2857,6 +2870,19 @@
                             "type": "boolean"
                           },
                           "reportsPath": {
+                            "type": "string",
+                            "maxLength": 1000
+                          }
+                        }
+                      },
+                      "openapi": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "specPath": {
                             "type": "string",
                             "maxLength": 1000
                           }

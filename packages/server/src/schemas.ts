@@ -37,6 +37,7 @@ export const settingsBody = obj({
     figma: obj({ enabled: bool, fileKeys: strings }),
     code: obj({ enabled: bool, reconstructionPath: str(1000), repoUrl: str(500, { pattern: '^(https://[^\\s]+)?$' }) }),
     tests: obj({ enabled: bool, reportsPath: str(1000) }),
+    openapi: obj({ enabled: bool, specPath: str(1000) }),
   }),
   ai: obj({
     provider: { enum: AI_PROVIDERS },

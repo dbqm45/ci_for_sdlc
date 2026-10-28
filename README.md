@@ -157,6 +157,14 @@ Workspace „Checkout” odtwarza przykłady z koncepcji produktu:
   `change-check.yml` albo *Settings → Integrations → Tests (JUnit XML)* w aplikacji — wtedy strona historyjki pokazuje
   kartę *Acceptance criteria ↔ tests*. Raport, którego nie da się odczytać, zatrzymuje bramkę albo analizę z powodem,
   nigdy nie znaczy „zero testów”. Szczegóły: [`docs/PDI-G4-PLAN.md`](docs/PDI-G4-PLAN.md), FAQ.
+- **Kontrakt API (OpenAPI 3)** — każda operacja z pliku OpenAPI (JSON albo YAML) dołącza do kontekstu historyjek, które
+  wskazuje (`x-requirements: [PAY-124]`) albo którym odpowiada treścią. Fakty kontraktu stają się twierdzeniami:
+  `202 Accepted` to przetwarzanie asynchroniczne (ARCH-002, ARCH-003), nagłówek `Idempotency-Key` to idempotencja
+  (ARCH-001), `maxItems` to limit elementów (CON-001). Reguła `API-001` pyta, co widzi użytkownik przy błędzie API
+  (400/422, 401, 403, 429), którego stanu nie ma ani w historyjce, ani w projekcie. Źródła: `npm run analyze --
+  --openapi <plik albo katalog>` albo *Settings → Integrations → API contract (OpenAPI)*. Plik, którego nie da się
+  odczytać (także Swagger 2.0), zatrzymuje bramkę albo analizę z powodem. Szczegóły:
+  [`docs/OPENAPI-PLAN.md`](docs/OPENAPI-PLAN.md).
 
 ---
 
@@ -259,8 +267,9 @@ MVP celowo obejmuje tylko **Level 1 — Definition Intelligence** (Jira + Conflu
 
 Lista kontrolna tych kroków jest na górze [`TODO.md`](TODO.md).
 
-1. **Do zrobienia ręcznie:** odświeżyć wzorzec wizualny `e2e/__screenshots__/settings.png` — w *Integrations* doszedł
-   blok *Tests (JUnit XML)*, więc nocny test wizualny strony *Settings* jest czerwony do czasu nowego wzorca.
+1. **Do zrobienia ręcznie:** odświeżyć wzorzec wizualny `e2e/__screenshots__/settings.png` — w *Integrations* doszły
+   bloki *Tests (JUnit XML)* i *API contract (OpenAPI)*, więc nocny test wizualny strony *Settings* jest czerwony do
+   czasu nowego wzorca.
    *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt `visual-baselines`
    i scommitować (procedura: [`docs/TESTING-REGRESSION.md`](docs/TESTING-REGRESSION.md)).
 2. **Następne luki ekosystemu SDLC** (mapa ekosystemu, luki G1–G8), od najmniejszej zależności:

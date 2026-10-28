@@ -9,6 +9,7 @@ import { workItemsUnder } from '../hierarchy.js';
 import { STORY_SHAPE_RULES } from './story-shape.js';
 import { RELEASE_RULES } from './release-plan.js';
 import { TEST_RULES } from './test-trace.js';
+import { API_RULES } from './api-contract.js';
 
 /**
  * Deterministic rules — the "linter" half of Hybrid Intelligence.
@@ -614,6 +615,7 @@ export const RULES: Rule[] = [
   // ------------------------------------------------------------------ release plan (REL-001…006)
   ...RELEASE_RULES,
   ...TEST_RULES,
+  ...API_RULES,
 ];
 
 function groupClaims(cs: Claim[]): Map<string, Claim[]> {

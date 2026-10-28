@@ -132,6 +132,27 @@ describe('analyze --tests (G4, docs/PDI-G4-PLAN.md)', () => {
   });
 });
 
+describe('analyze --openapi (docs/OPENAPI-PLAN.md)', () => {
+  const files = () => ({ [`${C}/CHG-12/intent.md`]: intent('CHG-12'), [`${C}/CHG-12/plan.md`]: plan('CHG-12', 'the list shows the 20 newest orders, newest first') });
+  const spec = 'openapi: 3.0.3\ninfo: { title: Orders API, version: "1" }\npaths:\n  /orders:\n    get:\n      x-requirements: [TSK-57]\n      responses:\n        "200": { description: OK }\n';
+
+  it('GATE-11: the operations of the contract join the analysis and are counted', async () => {
+    const root = checkout({ ...files(), 'api/openapi.yaml': spec });
+    const r = await gate(['--repo', root, '--openapi', join(root, 'api'), '--fail-on', 'critical']);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/API contract: 1 operation read/);
+  });
+
+  it('GATE-12: a contract file that cannot be read fails the gate whatever the threshold', async () => {
+    const root = checkout({ ...files(), 'api/openapi.yaml': 'swagger: "2.0"' });
+    const r = await gate(['--repo', root, '--openapi', join(root, 'api/openapi.yaml')], { GITHUB_ACTIONS: 'true' });
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/API contract files that could not be read/);
+    expect(r.out).toMatch(/::error file=.*openapi\.yaml,title=API contract::Swagger 2\.0 is not supported/);
+    expect(r.err).toMatch(/1 API contract file\(s\) could not be read/);
+  });
+});
+
 describe('the workflow template for repositories (docs/templates/change-check.yml)', () => {
   it('GATE-07: a pull request that changes only release.yaml or plan.md runs the check on the repository', () => {
     const yml = readFileSync(fileURLToPath(new URL('../../../docs/templates/change-check.yml', import.meta.url)), 'utf8');
