@@ -1,7 +1,12 @@
 # TODO
 
-## Następne kroki (stan 27.10.2026 wieczorem)
+## Następne kroki (stan 28.10.2026)
 
+- [ ] **Pierwszy płatny przebieg ewaluacji recenzenta AI (wstrzymany).** Telemetria i zestaw 14 przypadków są w
+      `main` (#91, `docs/AI-QUALITY-PLAN.md`). Brakuje klucza `ANTHROPIC_API_KEY` w środowisku, w którym uruchamiamy
+      przebieg. Po dodaniu klucza: `npm run eval:ai -- --paid --config anthropic:claude-haiku-5-5:low --config
+      anthropic:claude-opus-5-5:high` (szacunek 0,1–0,2 USD), raport i surowe wyniki do `docs/evals/`. Z wyniku:
+      wybór modelu i `effort` dla recenzenta oraz decyzja o embeddingach (czy TF-IDF gubi ustalenia).
 - [ ] **Wzorzec wizualny `e2e/__screenshots__/settings.png` (ręcznie, właściciel repo).** W *Settings → Integrations*
       doszedł blok *Tests (JUnit XML)* (#77), więc nocny test wizualny strony *Settings* jest czerwony do czasu nowego
       wzorca. *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt
@@ -21,6 +26,7 @@
       (krok 3 `docs/SAAS.md`).
   - [x] Wiele przestrzeni roboczych w jednej instalacji (#86, #88), w Postgresie z `CI_DATABASE_URL` (#89).
   - [x] Ramki Figmy z tabeli `design.md` zmiany (kontrakt pdi 0.9.0, #87).
+  - [x] Telemetria wywołań AI (tokeny, koszt, czas, `GET /api/ai/usage`) i zestaw ewaluacyjny recenzenta (#91).
 
 ## Plan: przyciski „Connect” dla Figma/Jira/Confluence (OAuth zamiast/obok env-secret)
 
