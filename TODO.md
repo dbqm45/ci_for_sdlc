@@ -32,6 +32,15 @@
       `npm run eval:ai` pokaże co najmniej tę samą czułość i trafność przy mniej odrzuconych dowodach i tokenach
       wyjścia. Przy okazji: wejścia przypadków ewaluacyjnych trzymane jako niezmienne kopie (dziś fiksury w repo — sprawdzić,
       czy żaden przypadek nie czyta źródła na żywo).
+- [ ] **Ocena recenzenta AI jedną liczbą z karą i „podwójnym zapisem”** (po pierwszym przebiegu ewaluacji; źródło:
+      F. Khan, „Engineering Multi-Agent AI for a 100 GB Data Warehouse”, 2026-10 — dwie niezależne drogi do odpowiedzi,
+      ich zgodność jako pewność; cele i kara ustalone przed pierwszą zmianą). W `npm run eval:ai`: (1) użyteczność obok
+      czułości i fałszywych alarmów: +1 trafione ustalenie, 0 pominięte, −2 fałszywe `critical` na poprawnej historyjce
+      — zmiana promptu lub modelu przyjęta tylko, gdy użyteczność rośnie na tych samych przypadkach (para przed/po);
+      (2) ramię „na ślepo”: recenzent bez listy ustaleń reguł (`types.ts`, dziś dostaje je, żeby nie dublować) —
+      odsetek ustaleń reguł, które AI znajduje samo, pokazuje, czy recenzent czyta historyjkę, czy zgaduje; ustalenie
+      znalezione i przez regułę, i przez AI na ślepo może dostać wyższą pewność w UI. Bez zmiany zachowania produktu,
+      dopóki wynik ewaluacji tego nie uzasadni.
 - [ ] **Wzorzec wizualny `e2e/__screenshots__/settings.png` (ręcznie, właściciel repo).** W *Settings → Integrations*
       doszły bloki *Tests (JUnit XML)* (#77) i *API contract (OpenAPI)*, więc nocny test wizualny strony *Settings* jest
       czerwony do czasu nowego wzorca. *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt
