@@ -24,6 +24,14 @@
       nimi; (3) stały punkt odniesienia „brak ustaleń”. Przy 14 przypadkach nie wybierać spośród wielu konfiguracji
       (wybór najlepszej z wielu na małym zbiorze daje zysk z samego szumu) — najpierw powiększyć zestaw albo
       rozdzielić przypadki na dobór i ocenę.
+- [ ] **Recenzent AI wskazuje akapit zamiast przepisywać cytat** (po pierwszym przebiegu ewaluacji, jeśli
+      `badQuotes` jest istotne; źródło: Netflix „Making Failure Diagnosis Reliable with Pensive AI”, 2026-10 — model
+      zwraca numery linii, tekst składa kod z własnej kopii). Dziś recenzent zwraca dosłowny cytat, a
+      `isVerbatimQuote` odrzuca nietrafione — ustalenie ginie przez literówkę w cytacie. Wariant: źródła w prompcie
+      z numerami akapitów (`[S3¶12]`), model zwraca identyfikator, cytat bierzemy ze źródła. Przyjąć, jeśli zestaw
+      `npm run eval:ai` pokaże co najmniej tę samą czułość i trafność przy mniej odrzuconych dowodach i tokenach
+      wyjścia. Przy okazji: wejścia przypadków ewaluacyjnych trzymane jako niezmienne kopie (dziś fiksury w repo — sprawdzić,
+      czy żaden przypadek nie czyta źródła na żywo).
 - [ ] **Wzorzec wizualny `e2e/__screenshots__/settings.png` (ręcznie, właściciel repo).** W *Settings → Integrations*
       doszły bloki *Tests (JUnit XML)* (#77) i *API contract (OpenAPI)*, więc nocny test wizualny strony *Settings* jest
       czerwony do czasu nowego wzorca. *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt
