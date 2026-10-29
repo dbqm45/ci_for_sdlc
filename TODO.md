@@ -15,6 +15,15 @@
       te ze wzmianką klucza; cytat nadal sprawdzany względem całego źródła. Przyjąć tylko, jeśli zestaw ewaluacyjny
       (`npm run eval:ai`) pokaże co najmniej tę samą czułość i poprawność cytatów przy niższej liczbie tokenów;
       w zestawie dopisać przypadek z długą stroną, w której istotny fragment jest za limitem.
+- [ ] **Pierwszy przebieg ewaluacji z granicami i jedną zmienną naraz** (źródło: artykuł „Structuring 40 Million
+      Documents into an Agentic Knowledge Graph”, F. Khan, 2026-08-26 — jedna nieruszana stała obcinająca dokumenty
+      do 1100 znaków kosztowała 14 punktów trafności, bo odcinała zdanie z wnioskiem). W `npm run eval:ai`:
+      (1) przebieg `maxCharsPerSource` jako jedynej zmiennej (np. 3000 / 6000 / 12000 / bez limitu) — dopiero wynik
+      mówi, czy 6000 coś odcina i czy pozycja o fragmentach wyżej jest potrzebna; (2) dwa ramiona odniesienia:
+      „ślepe” (bez źródeł) i „wyrocznia” (tylko fragment z dowodem z `expected`) — wynik systemu ma sens tylko między
+      nimi; (3) stały punkt odniesienia „brak ustaleń”. Przy 14 przypadkach nie wybierać spośród wielu konfiguracji
+      (wybór najlepszej z wielu na małym zbiorze daje zysk z samego szumu) — najpierw powiększyć zestaw albo
+      rozdzielić przypadki na dobór i ocenę.
 - [ ] **Wzorzec wizualny `e2e/__screenshots__/settings.png` (ręcznie, właściciel repo).** W *Settings → Integrations*
       doszły bloki *Tests (JUnit XML)* (#77) i *API contract (OpenAPI)*, więc nocny test wizualny strony *Settings* jest
       czerwony do czasu nowego wzorca. *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt
