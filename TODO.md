@@ -62,6 +62,18 @@
       - Założenie z `invalidated_if` spełnione albo minął `review_by` → osobne ustalenie „rozważ decyzję ponownie”.
       - Szablon PR z sekcją „Wpływ na decyzje” (`.github/pull_request_template.md`), ten sam co w pdi i tf.
       - Bez osobnego `INDEX.md` decyzji w repo: katalogiem jest rejestr pdi.
+- [ ] **Reguła: próg w historyjce bez scenariusza na granicy** (źródło: artykuł „Failing Example as the Start of a
+      Spec”, J. Wąsowski, 2026-10-28 — „rabat od 100,00” zaimplementowany jako `>` zamiast `>=`; błąd złapał tylko
+      przykład dokładnie na progu). Dziś AC-001…004 sprawdzają format, obserwowalny wynik i jedną akcję, a
+      `release-plan.ts` ma już wzorzec progu (`THRESHOLD`), ale tylko dla sekcji MVP eposu.
+      - Reguła (TDD, np. AC-005, `MISSING_COVERAGE`, warning): kryterium albo reguła biznesowa z progiem liczbowym
+        („co najmniej / powyżej / do N”, `≥`, `>`) i żaden scenariusz nie podaje wartości N ani wartości tuż po drugiej
+        stronie → ustalenie z pytaniem „Czy dokładnie N spełnia warunek?” (opcje: tak / nie / nie wiem). Słowa
+        „powyżej” i „do” bez doprecyzowania to też pytanie o granicę.
+      - Później, osobno: pytanie o kontrprzykład (czy reguła łączy się z innymi rabatami, zwrotem, wartością ujemną)
+        — tylko jeśli pierwsza reguła nie da szumu na danych demo.
+      - Sprawdzenie: strażnik pokrycia reguł (demo z progiem), test na polskim i angielskim brzmieniu, brak ustalenia,
+        gdy scenariusze mają 99,99 / 100,00.
 - [ ] **W tym repo:** konta i role w przestrzeniach roboczych (krok 3 `docs/SAAS.md`); OpenAPI — dalsze kroki z
       „Poza zakresem” w `docs/OPENAPI-PLAN.md` (pozytywny sygnał spójności, pola formularza vs schemat, Swagger 2.0).
   - [x] Wiele przestrzeni roboczych w jednej instalacji (#86, #88), w Postgresie z `CI_DATABASE_URL` (#89).
