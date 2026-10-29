@@ -22,6 +22,18 @@
       - [ ] sprintdeck, po jego MVP (konta, import z Jiry): prognoza przy zadaniu w pokoju.
 - [ ] **G6, G7, P1, P2** (jedno wejście dla ludzi, miary przepływu, wspólna platforma, Jira czy repo) — decyzje
       architektoniczne do podjęcia, nie pojedyncze PR-y.
+- [ ] **Reguła: PR rusza obszar przyjętej decyzji** (źródło: artykuł „Teaching AI Agents to Remember: ADRs, Specs,
+      Engineering Decisions”, A. Kokane, 2026-10-19 — dwa poprawne PR-y razem odwracają decyzję, bo drugi agent jej
+      nie znał). Zależy od pola `applies_to` decyzji w kontrakcie pdi (pozycja w `pdi/TODO.md`).
+      - Bramka na PR (`npm run analyze -- --repo …`) dostaje listę zmienionych plików (np. `--changed-files` z
+        `git diff --name-only` w `docs/templates/change-check.yml`) i przyjęte decyzje z rejestru pdi.
+      - Reguła (TDD, sprawdzenie na danych demo i w strażniku pokrycia reguł): zmieniony plik trafia w `applies_to`
+        przyjętej decyzji → ustalenie z decyzją, jej `why` i założeniami jako dowodem i pytaniem „Czy ten PR zmienia
+        decyzję X?” (opcje: nie / tak — nowa decyzja zastępująca / nie wiem). Nie blokuje sam z siebie; blokuje, gdy
+        autor zaznaczy „tak” bez decyzji zastępującej.
+      - Założenie z `invalidated_if` spełnione albo minął `review_by` → osobne ustalenie „rozważ decyzję ponownie”.
+      - Szablon PR z sekcją „Wpływ na decyzje” (`.github/pull_request_template.md`), ten sam co w pdi i tf.
+      - Bez osobnego `INDEX.md` decyzji w repo: katalogiem jest rejestr pdi.
 - [ ] **W tym repo:** konta i role w przestrzeniach roboczych (krok 3 `docs/SAAS.md`); OpenAPI — dalsze kroki z
       „Poza zakresem” w `docs/OPENAPI-PLAN.md` (pozytywny sygnał spójności, pola formularza vs schemat, Swagger 2.0).
   - [x] Wiele przestrzeni roboczych w jednej instalacji (#86, #88), w Postgresie z `CI_DATABASE_URL` (#89).
