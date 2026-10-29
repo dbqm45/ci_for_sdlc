@@ -7,6 +7,14 @@
       przebieg. Po dodaniu klucza: `npm run eval:ai -- --paid --config anthropic:claude-haiku-5-5:low --config
       anthropic:claude-opus-5-5:high` (szacunek 0,1–0,2 USD), raport i surowe wyniki do `docs/evals/`. Z wyniku:
       wybór modelu i `effort` dla recenzenta oraz decyzja o embeddingach (czy TF-IDF gubi ustalenia).
+- [ ] **Fragmenty źródeł dobrane do historyjki zamiast obcinania** (po pierwszym przebiegu ewaluacji; źródło: artykuł
+      „Stop feeding your AI agent everything: The case for selective context”, M. K., 2026-10). Dziś `semanticPass`
+      (`packages/core/src/project.ts`, `clean()`) obcina każde źródło do pierwszych `maxCharsPerSource` znaków
+      (domyślnie 6000), więc w długiej stronie fragment o danej historyjce może zostać odcięty, a do modelu trafia
+      wstęp. Zmiana: w tym samym limicie akapity i zdania najbardziej podobne do wymagania (TF-IDF z `text.ts`) oraz
+      te ze wzmianką klucza; cytat nadal sprawdzany względem całego źródła. Przyjąć tylko, jeśli zestaw ewaluacyjny
+      (`npm run eval:ai`) pokaże co najmniej tę samą czułość i poprawność cytatów przy niższej liczbie tokenów;
+      w zestawie dopisać przypadek z długą stroną, w której istotny fragment jest za limitem.
 - [ ] **Wzorzec wizualny `e2e/__screenshots__/settings.png` (ręcznie, właściciel repo).** W *Settings → Integrations*
       doszły bloki *Tests (JUnit XML)* (#77) i *API contract (OpenAPI)*, więc nocny test wizualny strony *Settings* jest
       czerwony do czasu nowego wzorca. *Actions → Regression (nightly) → Run workflow* z `update_snapshots`, obejrzeć artefakt
