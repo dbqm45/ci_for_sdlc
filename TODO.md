@@ -30,6 +30,17 @@
       - [ ] sprintdeck, po jego MVP (konta, import z Jiry): prognoza przy zadaniu w pokoju.
 - [ ] **G6, G7, P1, P2** (jedno wejście dla ludzi, miary przepływu, wspólna platforma, Jira czy repo) — decyzje
       architektoniczne do podjęcia, nie pojedyncze PR-y.
+- [ ] **Tabele z Confluence z nagłówkami przy komórkach** (źródło: artykuł „Why Your RAG Pipeline Dies on Real
+      Documents”, P. Perrone, 2026-10-01 — tabela spłaszczona do ciągu liczb bez nagłówków, bez żadnego błędu).
+      Dziś `htmlToText` (`packages/core/src/text.ts`) zamienia `</tr>` na nową linię, a komórki skleja spacjami:
+      w tabeli „Plan | Limit EU | Limit US” wiersz „Pro 5 10” traci powiązanie liczby z kolumną, więc ekstraktory
+      twierdzeń (`analysis/claims.ts`), reguły konfliktów i recenzent AI dostają liczby bez znaczenia.
+      - Zmiana (TDD): wiersz tabeli z nagłówkiem `<th>` (albo pierwszym wierszem) jako „Plan: Pro; Limit EU: 5;
+        Limit US: 10”; tabela bez nagłówka jak dziś; scalone komórki (`colspan`) powtarzają nagłówek.
+      - Sprawdzenie: test na stronie Confluence z tabelą parametrów (twierdzenie `max_items` / `timeout` z wiersza
+        tabeli i konflikt z historyjką), przypadek w zestawie ewaluacyjnym recenzenta AI; zmiana `meaningHash`
+        stron z tabelami da jednorazowy dryf — opisać w notatce wydania.
+      - Źródła PDF i skany nie dotyczą ci_for_sdlc (czyta HTML Confluence, Figmę, Markdown i OpenAPI).
 - [ ] **Reguła: PR rusza obszar przyjętej decyzji** (źródło: artykuł „Teaching AI Agents to Remember: ADRs, Specs,
       Engineering Decisions”, A. Kokane, 2026-10-19 — dwa poprawne PR-y razem odwracają decyzję, bo drugi agent jej
       nie znał). Zależy od pola `applies_to` decyzji w kontrakcie pdi (pozycja w `pdi/TODO.md`).
