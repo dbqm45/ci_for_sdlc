@@ -50,6 +50,33 @@ annotation on its file: the file and line the finding points at (`release.yaml` 
 findings on a change file are `::warning` (warning) or `::notice` (info) annotations that do not fail the gate. A table
 of the items goes to the run's summary.
 
+### With pdi
+
+```sh
+PDI_EVENTS_URL=http://localhost:8787 PDI_SIGNING_SECRET=… \
+  npm run analyze -- --repo ../my-service --send-to-pdi
+```
+
+`--send-to-pdi` sends the readiness of every change of the repository (also those `--items` leaves out of the report)
+to pdi as `readiness.changed`, signed and shaped as the server sends it in Jira mode (docs/PDI-F4-PLAN.md): a ready
+change opens "approve-for-implementation" in pdi's inbox. It needs `--repo`, `PDI_EVENTS_URL` (https, or http on
+localhost) and `PDI_SIGNING_SECRET` (pdi's `PDI_CI_FOR_SDLC_SIGNING_SECRET`); without them the gate exits 2 before
+the analysis. A change is sent only when its readiness differs from the last one sent, through the queue in
+`CI_DATA_DIR`, delivered once within 15 s (5 s per request). What was not delivered stays queued for the next run.
+After the report:
+
+```
+pdi: http://localhost:8787
+  pdi readiness.changed CHG-12 ready delivered
+  pdi readiness.changed CHG-13 not_ready queued (pdi answered 500)
+  pdi readiness.changed CHG-14 ready unchanged
+  pdi queued readiness.changed CHG-13 attempts=1 next=2026-10-30T10:01:00.000Z (pdi answered 500)
+```
+
+The `pdi queued` lines are what still waits in the queue (also from earlier runs). Delivery never changes the exit
+code. Keep `CI_DATA_DIR` between runs, or every run sends every change again. Without the flag the `PDI_*` variables
+are ignored (docs/PDI-L3-PLAN.md).
+
 ## On pull requests
 
 Copy [`templates/change-check.yml`](templates/change-check.yml) to `.github/workflows/` of the repository. It runs on

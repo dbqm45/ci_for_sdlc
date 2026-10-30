@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { decisionRecordedEvent, errorMessage, gateRequestedEvent, readinessEvents, type ChangeReadiness, type DecisionRecordedInput, type GateRequestInput } from '@ci/core';
+import { decisionRecordedEvent, errorMessage, gateRequestedEvent, readinessEvents, type ChangeReadiness, type DecisionRecordedInput, type GateRequestInput, type PdiEvent } from '@ci/core';
 import type { AutoCloseStep } from './auto-close.js';
 import type { PdiOutboxEntry, Store } from './store.js';
 
@@ -19,6 +19,8 @@ export interface PdiOptions {
   clock?: () => Date;
   /** CI_PUBLIC_URL, for links to findings in decision.recorded. */
   publicUrl?: string;
+  /** How long one request may take (default 10 s); the CLI gate uses less, since it exits. */
+  timeoutMs?: number;
 }
 
 export const SIGNATURE_TOLERANCE_SECONDS = 300;
@@ -55,6 +57,7 @@ export class PdiLink {
   private readonly fetch: typeof fetch;
   private readonly clock: () => Date;
   private readonly publicUrl?: string;
+  private readonly timeoutMs: number;
   private delivering?: Promise<void>;
   /** Queueing scheduled after analyses, in order; delivery waits for it. */
   private pending: Promise<unknown> = Promise.resolve();
@@ -69,6 +72,7 @@ export class PdiLink {
     this.fetch = opts.fetch ?? fetch;
     this.clock = opts.clock ?? (() => new Date());
     this.publicUrl = opts.publicUrl;
+    this.timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
   }
 
   /** Sending needs both the receiver's address and the secret; receiving only the secret. */
@@ -91,18 +95,19 @@ export class PdiLink {
 
   /**
    * After an analysis: queue `readiness.changed` for every change whose readiness differs from the last one sent.
-   * `changes` are those of all workspaces together (F5).
+   * `changes` are those of all workspaces together (F5). Returns the events queued.
    */
-  async enqueue(changes: ChangeReadiness[]) {
-    if (!this.enabled) return;
+  async enqueue(changes: ChangeReadiness[]): Promise<PdiEvent[]> {
+    if (!this.enabled) return [];
     const now = this.clock().toISOString();
-    let events: ReturnType<typeof readinessEvents>['events'] = [];
+    let events: PdiEvent[] = [];
     await this.store.updatePdiState((s) => {
       const r = readinessEvents(changes, s.sent ?? {}, now);
       events = r.events;
       return { ...s, sent: r.sent, seen: s.seen ?? [] };
     });
     if (events.length) await this.store.updatePdiOutbox((all) => [...all, ...events.map((event) => ({ event, attempts: 0, nextAt: now }))]);
+    return events;
   }
 
   /** F4: a person asks pdi to decide "Approve for implementation" for a change that is not ready (`gate.requested`). */
@@ -164,18 +169,20 @@ export class PdiLink {
   /**
    * Sends what is due; a failure stays queued with a doubling delay (1 min … 1 h). `readiness.changed` is dropped after
    * MAX_ATTEMPTS; a decision or a request for approval stays until pdi takes it, and one pdi refused (400) stays as
-   * failed without retries.
+   * failed without retries. With `budgetMs` (the CLI gate, L3) sending stops when the time is up: what is left stays
+   * queued without an attempt, and no request outlasts the budget.
    */
-  deliver(): Promise<void> {
-    this.delivering ??= this.deliverDue().finally(() => (this.delivering = undefined));
+  deliver(opts: { budgetMs?: number } = {}): Promise<void> {
+    this.delivering ??= this.deliverDue(opts.budgetMs === undefined ? Infinity : Date.now() + opts.budgetMs).finally(() => (this.delivering = undefined));
     return this.delivering;
   }
 
-  private async deliverDue() {
+  private async deliverDue(deadline: number) {
     await this.pending;
     if (!this.enabled) return;
     const due = (await this.store.pdiOutbox()).filter((e) => !e.failed && new Date(e.nextAt) <= this.clock());
     for (const queued of due) {
+      if (Date.now() >= deadline) break;
       let entry = queued;
       if (entry.reopensDecisionId) {
         // A reopen supersedes the DEC of the decision it reopens; until pdi has given that one, it waits (no attempt).
@@ -183,7 +190,7 @@ export class PdiLink {
         if (!dec) continue;
         entry = { ...entry, event: { ...entry.event, payload: { ...entry.event.payload, supersedes: dec } } };
       }
-      const r = await this.send(entry);
+      const r = await this.send(entry, Math.min(this.timeoutMs, deadline - Date.now()));
       const at = this.clock();
       const isDecision = entry.event.type === 'decision.recorded';
       // What a person did (a decision, a request for approval) stays until pdi takes it; a readiness update is replaced
@@ -217,7 +224,7 @@ export class PdiLink {
     if (ref) await store.updateAutoCloseLog((all) => all.map((e) => (e.proposalId === ref.proposalId && e.outcome === ref.outcome && e.at === ref.at ? { ...e, pdiDecision: dec } : e)));
   }
 
-  private async send(entry: PdiOutboxEntry): Promise<{ error?: string; status?: number; decision?: string }> {
+  private async send(entry: PdiOutboxEntry, timeoutMs: number): Promise<{ error?: string; status?: number; decision?: string }> {
     const body = JSON.stringify(entry.event);
     const ts = String(Math.floor(this.clock().getTime() / 1000));
     try {
@@ -225,7 +232,7 @@ export class PdiLink {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-pdi-timestamp': ts, 'x-pdi-event': entry.event.type, 'x-pdi-signature': pdiSignature(this.secret!, ts, body) },
         body,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       const answer: unknown = await res.json().catch(() => undefined);
       const field = (k: string) => (answer && typeof answer === 'object' && typeof (answer as Record<string, unknown>)[k] === 'string' ? ((answer as Record<string, unknown>)[k] as string) : undefined);

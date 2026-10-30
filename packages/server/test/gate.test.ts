@@ -1,9 +1,14 @@
+import { createHmac, randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer, type IncomingHttpHeaders } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, describe, expect, it } from 'vitest';
+import { Ajv2020 } from 'ajv/dist/2020.js';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { runGate } from '../src/gate.js';
+import { Store } from '../src/store.js';
 
 // The quality gate on a pull request (pdi plan "one SDLC flow", F2; docs/PDI-F2-PLAN.md): `analyze --repo <checkout>`
 // reads the repository's docs/project/changes only, prints the report and fails on the threshold or on a bad file;
@@ -150,6 +155,134 @@ describe('analyze --openapi (docs/OPENAPI-PLAN.md)', () => {
     expect(r.out).toMatch(/API contract files that could not be read/);
     expect(r.out).toMatch(/::error file=.*openapi\.yaml,title=API contract::Swagger 2\.0 is not supported/);
     expect(r.err).toMatch(/1 API contract file\(s\) could not be read/);
+  });
+});
+
+describe('analyze --send-to-pdi (L3, docs/PDI-L3-PLAN.md)', () => {
+  // A local pdi-receiver: records each request and answers with `status`.
+  const SECRET = randomBytes(16).toString('hex');
+  let status = 202;
+  let received: { url: string; headers: IncomingHttpHeaders; body: string }[] = [];
+  const receiver = createServer((req, res) => {
+    let body = '';
+    req.on('data', (c: Buffer) => (body += c.toString()));
+    req.on('end', () => {
+      received.push({ url: req.url ?? '', headers: req.headers, body });
+      res.writeHead(status, { 'content-type': 'application/json' }).end(status < 300 ? '{}' : '{"error":"down for maintenance"}');
+    });
+  });
+  let url = '';
+  beforeAll(async () => {
+    await new Promise<void>((ok) => receiver.listen(0, '127.0.0.1', ok));
+    url = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}`;
+  });
+  afterAll(() => new Promise<void>((ok) => receiver.close(() => ok())));
+  beforeEach(() => {
+    status = 202;
+    received = [];
+  });
+
+  const schema = JSON.parse(readFileSync(fileURLToPath(new URL('../../core/test/fixtures/pdi-contract/0.7.0/event.schema.json', import.meta.url)), 'utf8'));
+  const example = JSON.parse(readFileSync(fileURLToPath(new URL('../../core/test/fixtures/pdi-contract/0.4.0/events/event-readiness.changed.json', import.meta.url)), 'utf8'));
+  const validate = new Ajv2020({ allErrors: true, strict: false }).compile(schema);
+  const ready = 'the list shows the 20 newest orders, newest first';
+  const twoChanges = () =>
+    checkout({ [`${C}/CHG-12/intent.md`]: intent('CHG-12'), [`${C}/CHG-12/plan.md`]: plan('CHG-12', ready), [`${C}/CHG-13/intent.md`]: intent('CHG-13'), [`${C}/CHG-13/plan.md`]: plan('CHG-13', '').replace(/TSK-57/g, 'TSK-58') });
+  const pdiEnv = (data: string) => ({ CI_DATA_DIR: data, PDI_EVENTS_URL: url, PDI_SIGNING_SECRET: SECRET });
+  /** A data dir whose policy only records warnings, so a slice with a verification is ready (Figma links aside). */
+  const dataDir = async () => {
+    const dir = join(tmp, `data${n++}`);
+    const store = new Store(dir);
+    await store.init();
+    const settings = await store.settings();
+    await store.saveSettings({ ...settings, policy: { ...settings.policy, actions: { ...settings.policy.actions, warning: 'record' } } });
+    return dir;
+  };
+
+  it('L3-01: one signed readiness.changed per change of the repository, in the contract shape, reported as delivered', async () => {
+    const root = twoChanges();
+    const r = await gate(['--repo', root, '--send-to-pdi'], pdiEnv(await dataDir()));
+    expect(r.code).toBe(0);
+    expect(received.map((x) => x.url)).toEqual(['/events/ci_for_sdlc', '/events/ci_for_sdlc']);
+    const events = received.map((x) => JSON.parse(x.body));
+    expect(events.map((e) => [e.payload.change, e.payload.readiness])).toEqual([['CHG-12', 'ready'], ['CHG-13', 'not_ready']]);
+    for (const [i, x] of received.entries()) {
+      const ts = String(x.headers['x-pdi-timestamp']);
+      expect(x.headers['x-pdi-event']).toBe('readiness.changed');
+      expect(x.headers['x-pdi-signature']).toBe(`v1=${createHmac('sha256', SECRET).update(`${ts}.${x.body}`).digest('hex')}`);
+      expect(validate(events[i]), JSON.stringify(validate.errors)).toBe(true);
+      expect(Object.keys(events[i]).sort()).toEqual(Object.keys(example).sort());
+      expect(Object.keys(events[i].payload).sort()).toEqual(Object.keys(example.payload).sort());
+      expect(events[i]).toMatchObject({ type: 'readiness.changed', source: 'ci_for_sdlc', contract_version: example.contract_version });
+    }
+    expect(r.out).toContain(`pdi: ${url}`);
+    expect(r.out).toMatch(/^ {2}pdi readiness\.changed CHG-12 ready delivered$/m);
+    expect(r.out).toMatch(/^ {2}pdi readiness\.changed CHG-13 not_ready delivered$/m);
+    expect(r.out + r.err).not.toContain(SECRET);
+  });
+
+  it('L3-02: nothing is sent again while the readiness stays the same; a change that moves is sent alone', async () => {
+    const root = twoChanges();
+    const env = pdiEnv(await dataDir());
+    await gate(['--repo', root, '--send-to-pdi'], env);
+    received = [];
+    const again = await gate(['--repo', root, '--send-to-pdi'], env);
+    expect(received).toEqual([]);
+    expect(again.out).toMatch(/^ {2}pdi readiness\.changed CHG-12 ready unchanged$/m);
+    expect(again.out).toMatch(/^ {2}pdi readiness\.changed CHG-13 not_ready unchanged$/m);
+    writeFileSync(join(root, `${C}/CHG-13/plan.md`), plan('CHG-13', ready).replace(/TSK-57/g, 'TSK-58'));
+    const moved = await gate(['--repo', root, '--send-to-pdi'], env);
+    expect(received.map((x) => JSON.parse(x.body).payload)).toEqual([{ change: 'CHG-13', readiness: 'ready', open_questions: expect.any(Number) }]);
+    expect(moved.out).toMatch(/^ {2}pdi readiness\.changed CHG-13 ready delivered$/m);
+  });
+
+  it('L3-03: without PDI_EVENTS_URL, PDI_SIGNING_SECRET or --repo it refuses with exit 2 before the analysis', async () => {
+    const root = twoChanges();
+    const data = await dataDir();
+    for (const env of <Record<string, string>[]>[{ CI_DATA_DIR: data, PDI_SIGNING_SECRET: SECRET }, { CI_DATA_DIR: data, PDI_EVENTS_URL: url }, { CI_DATA_DIR: data, PDI_EVENTS_URL: 'http://pdi.example.com', PDI_SIGNING_SECRET: SECRET }]) {
+      const r = await gate(['--repo', root, '--send-to-pdi'], env);
+      expect(r.code).toBe(2);
+      expect(r.err).toMatch(/--send-to-pdi needs PDI_EVENTS_URL \(https, or http on localhost\) and PDI_SIGNING_SECRET/);
+      expect(r.out).not.toMatch(/CONTINUOUS INTELLIGENCE/);
+    }
+    const noRepo = await gate(['--send-to-pdi'], pdiEnv(data));
+    expect(noRepo.code).toBe(2);
+    expect(noRepo.err).toMatch(/--send-to-pdi needs --repo/);
+    expect(received).toEqual([]);
+  });
+
+  it('L3-04: a failed delivery is reported and stays queued, but the exit code is that of the gate', async () => {
+    const root = twoChanges();
+    const data = await dataDir();
+    const without = await gate(['--repo', root, '--fail-on', 'critical'], { CI_DATA_DIR: await dataDir() });
+    status = 500;
+    const r = await gate(['--repo', root, '--fail-on', 'critical', '--send-to-pdi'], pdiEnv(data));
+    expect(without.code).toBe(1);
+    expect(r.code).toBe(without.code);
+    expect(r.out).toMatch(/^ {2}pdi readiness\.changed CHG-12 ready queued \(pdi answered 500: down for maintenance\)$/m);
+    expect(r.out).toMatch(/^ {2}pdi queued readiness\.changed CHG-13 attempts=1 next=\S+ \(pdi answered 500: down for maintenance\)$/m);
+    const store = new Store(data);
+    await store.init();
+    expect((await store.pdiOutbox()).map((e) => e.event.payload.change)).toEqual(['CHG-12', 'CHG-13']);
+
+    const closed = createServer();
+    await new Promise<void>((ok) => closed.listen(0, '127.0.0.1', ok));
+    const gone = `http://127.0.0.1:${(closed.address() as AddressInfo).port}`;
+    await new Promise<void>((ok) => closed.close(() => ok()));
+    const down = await gate(['--repo', root, '--send-to-pdi'], { ...pdiEnv(await dataDir()), PDI_EVENTS_URL: gone });
+    expect(down.code).toBe(0);
+    expect(down.out).toMatch(/^ {2}pdi readiness\.changed CHG-12 ready queued \(pdi unreachable: .+\)$/m);
+  });
+
+  it('L3-05: without the flag there is no pdi traffic and the output is the same', async () => {
+    const root = twoChanges();
+    const plain = await gate(['--repo', root], { CI_DATA_DIR: await dataDir() });
+    const withEnv = await gate(['--repo', root], pdiEnv(await dataDir()));
+    expect(received).toEqual([]);
+    expect(withEnv.code).toBe(plain.code);
+    const stable = (s: string) => s.replace(/\(\d{4}-\d\d-\d\dT[\d:.]+Z\)/, '(…)');
+    expect(stable(withEnv.out)).toBe(stable(plain.out));
+    expect(withEnv.out).not.toMatch(/^ *pdi/m);
   });
 });
 
