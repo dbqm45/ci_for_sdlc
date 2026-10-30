@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { demoProject } from '@ci/core';
+import { demoProject, type ChangeReadiness } from '@ci/core';
 import { buildApp } from '../src/app.js';
-import { pdiSignature } from '../src/pdi.js';
+import { PdiLink, pdiSignature, type PdiOptions } from '../src/pdi.js';
+import { Store } from '../src/store.js';
 
 // F4 with pdi (docs/PDI-F4-PLAN.md): readiness.changed out to pdi-receiver, gate.decided in from pdi.
 
@@ -167,5 +168,38 @@ describe('without pdi configured', () => {
     expect((await off.app.inject({ method: 'GET', url: '/api/pdi' })).json()).toMatchObject({ enabled: false });
     await off.app.close();
     rmSync(other, { recursive: true, force: true });
+  });
+});
+
+describe('bounded delivery for the CLI gate (L3, docs/PDI-L3-PLAN.md)', () => {
+  const change = (id: string, readiness: ChangeReadiness['readiness']): ChangeReadiness => ({ change: id, readiness, openQuestions: 0, items: [] });
+  const link = async (f: typeof fetch, opts: Partial<PdiOptions> = {}) => {
+    const store = new Store(mkdtempSync(join(tmpdir(), 'ci-pdi-cli-')));
+    await store.init();
+    return { store, pdi: new PdiLink(store, { eventsUrl: 'https://pdi.example.com', secret: SECRET, fetch: f, ...opts }, {}) };
+  };
+
+  it('enqueue returns the events it queued, none when the readiness did not change', async () => {
+    const { pdi } = await link(fakeFetch as typeof fetch);
+    const first = await pdi.enqueue([change('CHG-1', 'ready'), change('CHG-2', 'not_ready')]);
+    expect(first.map((e) => [e.type, e.payload.change, e.payload.readiness])).toEqual([['readiness.changed', 'CHG-1', 'ready'], ['readiness.changed', 'CHG-2', 'not_ready']]);
+    expect(await pdi.enqueue([change('CHG-1', 'ready'), change('CHG-2', 'not_ready')])).toEqual([]);
+  });
+
+  it('gives up on a receiver that does not answer within timeoutMs, and leaves what is past budgetMs queued without an attempt', async () => {
+    const calls: string[] = [];
+    const hang = ((_url: string, init?: { body?: string; signal?: AbortSignal }) => {
+      calls.push(JSON.parse(String(init?.body)).payload.change);
+      return new Promise((_ok, fail) => init?.signal?.addEventListener('abort', () => fail(init.signal?.reason)));
+    }) as unknown as typeof fetch;
+    const { store, pdi } = await link(hang, { timeoutMs: 100 });
+    await pdi.enqueue([change('CHG-1', 'ready'), change('CHG-2', 'ready'), change('CHG-3', 'ready')]);
+    const started = Date.now();
+    await pdi.deliver({ budgetMs: 150 });
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(calls).toEqual(['CHG-1', 'CHG-2']);
+    const outbox = await store.pdiOutbox();
+    expect(outbox.map((e) => [e.event.payload.change, e.attempts])).toEqual([['CHG-1', 1], ['CHG-2', 1], ['CHG-3', 0]]);
+    expect(outbox[0]?.lastError).toMatch(/^pdi unreachable: /);
   });
 });

@@ -49,7 +49,12 @@ jobs:
           # A JUnit XML file or a directory of them, relative to the repository; empty = no test results. Once set, a
           # report that is missing or cannot be read fails the check, so tests that did not run are never "no tests".
           TEST_REPORTS: ''
+          # Optional: send each change's readiness to pdi (docs/REPO-CHANGES.md, "With pdi"); uncomment these two and
+          # the --send-to-pdi line below. Delivery never fails the check.
+          # PDI_EVENTS_URL: ${{ secrets.PDI_EVENTS_URL }}
+          # PDI_SIGNING_SECRET: ${{ secrets.PDI_SIGNING_SECRET }}
         run: |
           set -- --repo "$GITHUB_WORKSPACE" --repo-url "$REPO_URL" --fail-on critical
           if [ -n "$TEST_REPORTS" ]; then set -- "$@" --tests "$GITHUB_WORKSPACE/$TEST_REPORTS"; fi
+          # set -- "$@" --send-to-pdi
           npm run analyze -- "$@"

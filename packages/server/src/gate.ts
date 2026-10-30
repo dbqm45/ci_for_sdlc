@@ -10,6 +10,7 @@
  *                                                    # a pull request's docs/project/changes only (F2)
  *   npm run analyze -- --repo . --tests reports/junit   # with test results: each criterion's tests (G4)
  *   npm run analyze -- --repo . --openapi api/openapi.yaml   # with the API contract (docs/OPENAPI-PLAN.md)
+ *   npm run analyze -- --repo . --send-to-pdi        # also send each change's readiness to pdi (L3)
  *
  * With `--repo`, a change file that cannot be read fails the gate whatever the threshold; so does a `--tests` report
  * (a JUnit XML file, or a directory of them; repeatable) or an `--openapi` contract file (OpenAPI 3.x, a file or a
@@ -17,14 +18,19 @@
  * (`GITHUB_ACTIONS=true`) the problems and the findings that fail the gate are also error annotations on their files
  * (the file and line of the finding's evidence, else the item's), other open findings on a change file (REL-007,
  * REL-008) are warning or notice annotations, and the report is appended to `$GITHUB_STEP_SUMMARY`. Uses the persisted settings / decisions in CI_DATA_DIR (default .ci-data).
+ * With `--send-to-pdi` (needs `--repo`, PDI_EVENTS_URL and PDI_SIGNING_SECRET, else exit 2 before the analysis) the
+ * readiness of every change of the repository goes to pdi as `readiness.changed`, as the server sends it (pdi.ts): only
+ * when it differs from the last one sent, through the queue in CI_DATA_DIR, delivered once within 15 s (5 s per request). What
+ * was not delivered stays queued for the next run; delivery never changes the exit code (docs/PDI-L3-PLAN.md).
  * Exit codes: 0 passed, 1 failed, 2 could not run (e.g. no changes folder).
  */
 import { appendFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CHANGES_DIR, readOpenApi, readTestResults, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem } from '@ci/core';
+import { CHANGES_DIR, changeReadiness, readOpenApi, readTestResults, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem } from '@ci/core';
 import { AtlassianConnection, connectConfigFromEnv } from './connections.js';
 import { Engine } from './engine.js';
+import { PdiLink } from './pdi.js';
 import { Store } from './store.js';
 
 export interface GateIo {
@@ -32,6 +38,10 @@ export interface GateIo {
   out: (line: string) => void;
   err: (line: string) => void;
 }
+
+/** The gate exits after one delivery: at most this long for all of it, and per request (L3). */
+const PDI_BUDGET_MS = 15_000;
+const PDI_TIMEOUT_MS = 5_000;
 
 const icon = { healthy: '🟢', needs_attention: '🟡', critical: '🔴' } as const;
 
@@ -69,6 +79,11 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
     return i >= 0 ? args[i + 1] : undefined;
   };
   const repoPath = arg('repo');
+  const sendToPdi = args.includes('--send-to-pdi');
+  if (sendToPdi && !repoPath) {
+    io.err('✗ --send-to-pdi needs --repo: the changes sent to pdi are those of the repository');
+    return 2;
+  }
   const testPaths = args.flatMap((a, i) => (a === '--tests' && args[i + 1] ? [resolve(args[i + 1]!)] : []));
   const testResults = testPaths.length ? await readTestResults(testPaths) : undefined;
   const apiPaths = args.flatMap((a, i) => (a === '--openapi' && args[i + 1] ? [resolve(args[i + 1]!)] : []));
@@ -77,6 +92,11 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
   const here = dirname(fileURLToPath(import.meta.url));
   const store = new Store(resolve(io.env.CI_DATA_DIR ?? resolve(here, '../../../.ci-data')));
   await store.init();
+  const pdi = sendToPdi ? new PdiLink(store, { timeoutMs: PDI_TIMEOUT_MS }, io.env) : undefined;
+  if (pdi && !pdi.enabled) {
+    io.err('✗ --send-to-pdi needs PDI_EVENTS_URL (https, or http on localhost) and PDI_SIGNING_SECRET');
+    return 2;
+  }
   const connect = connectConfigFromEnv();
   const engine = new Engine(store, connect.mode === 'oauth' && !repoPath ? new AtlassianConnection(store, connect) : undefined, repoPath ? { path: resolve(repoPath), repoUrl } : undefined, testResults?.tests, apiContract?.documents);
   let result;
@@ -171,9 +191,32 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
     }
   }
 
+  if (pdi) await sendReadiness(pdi, store, changeReadiness(result.items, engine.state.context?.requirements ?? []), io);
+
   if (failing.length) io.err(`\n✗ Quality gate failed: ${failing.map((i) => i.key).join(', ')}`);
   if (problems.length) io.err(`\n✗ Quality gate failed: ${problems.length} change file(s) could not be read`);
   if (testProblems.length) io.err(`\n✗ Quality gate failed: ${testProblems.length} test report(s) could not be read`);
   if (apiProblems.length) io.err(`\n✗ Quality gate failed: ${apiProblems.length} API contract file(s) could not be read`);
   return failing.length || problems.length || testProblems.length || apiProblems.length ? 1 : 0;
+}
+
+/**
+ * L3: queue the readiness of the repository's changes, deliver what is due once, and print one line per change
+ * (`delivered`, `queued (<why>)` or `unchanged`) and one per entry still queued. Never changes the exit code.
+ */
+async function sendReadiness(pdi: PdiLink, store: Store, changes: ReturnType<typeof changeReadiness>, io: GateIo) {
+  io.out(`\npdi: ${pdi.eventsUrl}`);
+  const queuedNow = await pdi.enqueue(changes);
+  await pdi.deliver({ budgetMs: PDI_BUDGET_MS });
+  const outbox = await store.pdiOutbox();
+  for (const c of changes) {
+    const event = queuedNow.find((e) => e.payload.change === c.change);
+    const left = event && outbox.find((e) => e.event.id === event.id);
+    const state = !event ? 'unchanged' : left ? `queued (${left.lastError ?? 'not attempted yet'})` : 'delivered';
+    io.out(`  pdi readiness.changed ${c.change} ${c.readiness} ${state}`);
+  }
+  for (const e of outbox) {
+    const what = String(e.event.payload.change ?? e.event.payload.ref ?? '');
+    io.out(`  pdi queued ${e.event.type} ${what} attempts=${e.attempts} next=${e.failed ? 'never (refused)' : e.nextAt}${e.lastError ? ` (${e.lastError})` : ''}`);
+  }
 }
