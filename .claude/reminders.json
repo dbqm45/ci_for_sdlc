@@ -1,7 +1,1 @@
-[
-  {
-    "id": "e4-figma-links-after-reseed",
-    "from": "2026-10-29",
-    "text": "Sandbox odtworzony 25.10 bez Figmy (limit 429 na 4 dni). Uruchom raz `sandbox:seed -- --confirm` z FIGMA_TOKEN i SANDBOX_FIGMA_FILE_KEY (ramki we wtyczce już są po Seed), żeby dodać 7 linków z Jiry do Figmy; bez osobnego status (limit odczytów Starter). Potem usuń to przypomnienie z .claude/reminders.json i dopisz wynik w docs/TEST-DATA-GENERATOR.md (Weryfikacja E4 na żywo)."
-  }
-]
+[]
