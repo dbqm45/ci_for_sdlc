@@ -1,8 +1,10 @@
-import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { APPROVE_GATE, RULES, changeKeyOf, changeReadiness, mergeChangeReadiness, parseGateDecided, workspacePath, type AnalysisResult, type ChangeReadiness } from '@ci/core';
+import { Accounts, SESSION_COOKIE, LOGIN_COOKIE } from './accounts.js';
+import { ROLES, type Role } from './roles.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
@@ -35,6 +37,10 @@ export interface AppOptions {
   pdi?: PdiOptions;
   /** Postgres instead of files (F5); defaults to CI_DATABASE_URL. Empty = files in `dataDir`. */
   databaseUrl?: string;
+  /** Defaults to CI_AUTH_MODE: `token` (machines and loopback) or `accounts` (people log in with Atlassian). */
+  authMode?: 'token' | 'accounts';
+  /** Defaults to CI_BOOTSTRAP_EMAIL: the Atlassian e-mail of the first Owner. */
+  bootstrapEmail?: string;
 }
 
 /** A workspace's part of the pdi changes: its analysis and the changes of its stories. */
@@ -48,7 +54,9 @@ interface ChangePart {
  * The server. `engine` and `store` are those of the `default` workspace (F5, docs/WORKSPACES-F5-PLAN.md); the others
  * are in `workspaces`.
  */
-export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces }> {
+export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts }> {
+  const authMode = opts.authMode ?? process.env.CI_AUTH_MODE ?? 'token';
+  if (authMode !== 'token' && authMode !== 'accounts') throw new Error(`CI_AUTH_MODE must be "token" or "accounts", not "${authMode}".`);
   const connect = opts.connect ?? connectConfigFromEnv();
   // Strict bodies: unknown properties and wrong types are rejected, not silently dropped or coerced.
   const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } } });
@@ -93,8 +101,21 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   pdi.storeOf = (id) => workspaces.get(id)?.store;
   for (const w of workspaces.all()) await w.engine.reschedule();
 
+  // People, their roles and sessions live outside every workspace (docs/ACCOUNTS-PLAN.md).
+  const accounts = new Accounts(storage.backend('_platform'), {
+    enabled: authMode === 'accounts',
+    publicUrl: connect.publicUrl,
+    clientId: connect.atlassian.clientId,
+    clientSecret: connect.atlassian.clientSecret,
+    bootstrapEmail: opts.bootstrapEmail ?? (process.env.CI_BOOTSTRAP_EMAIL || undefined),
+  });
+  if (accounts.enabled) await accounts.init();
+
   const env = guardConfigFromEnv();
-  const guard: GuardConfig = { adminToken: opts.adminToken ?? env.adminToken, readToken: opts.readToken ?? env.readToken, allowedHosts: opts.allowedHosts ?? env.allowedHosts, allowedOrigins: opts.allowedOrigins ?? env.allowedOrigins };
+  const guard: GuardConfig = { adminToken: opts.adminToken ?? env.adminToken, readToken: opts.readToken ?? env.readToken, allowedHosts: opts.allowedHosts ?? env.allowedHosts, allowedOrigins: opts.allowedOrigins ?? env.allowedOrigins,
+    mode: authMode,
+    session: (req) => accounts.session(cookieValue(req.headers.cookie, SESSION_COOKIE)),
+  };
 
   await app.register(fastifySwagger, {
     openapi: {
@@ -196,8 +217,63 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     { prefix: '/api/w/:ws' },
   );
 
+  // ------------------------------------------------------------------ accounts (docs/ACCOUNTS-PLAN.md)
+  app.get<{ Querystring: { bootstrap?: string } }>('/api/auth/login', { schema: { hide: true, querystring: { type: 'object', properties: { bootstrap: { type: 'string', maxLength: 200 } } } } }, async (req, reply) => {
+    if (!accounts.enabled) throw httpError(404, 'Login is off: CI_AUTH_MODE is not "accounts".');
+    const { url, cookie } = accounts.start(req.query.bootstrap);
+    reply.header('set-cookie', cookie);
+    return reply.redirect(url);
+  });
+
+  app.get('/api/auth/me', { schema: { summary: 'The auth mode and the logged-in person, if any' } }, async (req) => ({
+    mode: authMode,
+    user: req.account ? { id: req.account.userId, name: req.account.name, email: req.account.email, role: req.account.role } : null,
+  }));
+
+  app.post('/api/auth/logout', { schema: { summary: 'End this session', ...MUTATION } }, async (req, reply) => {
+    await accounts.logout(cookieValue(req.headers.cookie, SESSION_COOKIE));
+    reply.header('set-cookie', accounts.sessionCookie('', 0));
+    return reply.code(204).send();
+  });
+
+  /** Who acts on the members: the person's role, or Owner for a machine with the admin token. */
+  const actorRole = (req: FastifyRequest): Role => req.account?.role ?? 'owner';
+  const memberParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 100 } } } as const;
+
+  app.get('/api/members', { schema: { summary: 'The people of the organization with their roles (Admin)' } }, async () => accounts.members());
+
+  app.patch<{ Params: { id: string }; Body: { role: Role } }>(
+    '/api/members/:id',
+    { schema: { summary: "Change a person's role (Admin; only an Owner gives or takes Owner)", params: memberParams, body: { type: 'object', required: ['role'], additionalProperties: false, properties: { role: { type: 'string', enum: ROLES } } }, response: errors(403, 404, 409, 422), ...MUTATION } },
+    async (req) => {
+      const name = await accounts.setRole(actorRole(req), req.params.id, req.body.role);
+      await main.store.audit({ at: new Date().toISOString(), kind: 'member', ...who(req, null), summary: `${name} is now ${req.body.role}` });
+      return accounts.members().find((m) => m.id === req.params.id);
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/members/:id', { schema: { summary: 'Remove a person and end their sessions (Admin)', params: memberParams, response: errors(403, 404, 409), ...MUTATION } }, async (req, reply) => {
+    const name = await accounts.remove(actorRole(req), req.params.id);
+    await main.store.audit({ at: new Date().toISOString(), kind: 'member', ...who(req, null), summary: `${name} removed from the organization` });
+    return reply.code(204).send();
+  });
+
+  /** Accounts mode: the browser comes back from a login (not from connecting a workspace). */
+  const loginCallback = async (req: FastifyRequest<{ Querystring: { code?: string; state?: string; error?: string } }>, reply: FastifyReply) => {
+    reply.header('set-cookie', accounts.loginCookie('', 0));
+    try {
+      const id = await accounts.complete({ ...req.query, cookieState: cookieValue(req.headers.cookie, LOGIN_COOKIE) });
+      reply.header('set-cookie', accounts.sessionCookie(id));
+      return reply.redirect('/');
+    } catch (e) {
+      if (!(e instanceof ConnectError)) req.log.error(e);
+      return reply.redirect(`/?login_error=${encodeURIComponent(e instanceof ConnectError ? e.message : 'The login failed. Details are in the server log.')}`);
+    }
+  };
+
   /** The browser comes back here from Atlassian, to the workspace that started the flow. Always a redirect to Settings. */
   app.get<{ Querystring: { code?: string; state?: string; error?: string } }>(CALLBACK_PATH, { schema: { hide: true, querystring: oauthCallbackQuery } }, async (req, reply) => {
+    if (accounts.enabled && (cookieValue(req.headers.cookie, LOGIN_COOKIE) !== undefined || accounts.issued(req.query.state))) return loginCallback(req, reply);
     reply.header('set-cookie', stateCookie('', connect.publicUrl, 0));
     const w = workspaces.all().find((x) => x.atlassian.issued(req.query.state)) ?? main;
     const back = (q: Record<string, string>) => reply.redirect(`/?${new URLSearchParams(q)}#${workspacePath(w.id)}/settings`);
@@ -326,5 +402,5 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       await pdi.deliver().catch(() => undefined);
       await pool.end();
     });
-  return { app, engine: main.engine, store: main.store, pdi, workspaces };
+  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts };
 }

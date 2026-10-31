@@ -2,9 +2,11 @@ import { STATUS_CODES } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { FigmaRateLimitError } from '@ci/core';
+import type { Account } from './accounts.js';
+import { atLeast, requiredRole } from './roles.js';
 
 /** How the caller proved it may change state. Recorded with every audit entry it causes. */
-export type Principal = 'admin_token' | 'loopback' | 'pdi_signature';
+export type Principal = 'admin_token' | 'loopback' | 'pdi_signature' | 'session';
 
 export interface GuardConfig {
   /** CI_ADMIN_TOKEN. Empty = local mode: only loopback clients may change state. */
@@ -15,11 +17,17 @@ export interface GuardConfig {
   allowedHosts: string[];
   /** CI_ALLOWED_ORIGINS: extra browser origins allowed to change state. */
   allowedOrigins: string[];
+  /** CI_AUTH_MODE: `token` (default) or `accounts`, where people log in and their role decides (docs/ACCOUNTS-PLAN.md). */
+  mode?: 'token' | 'accounts';
+  /** Accounts mode: the account behind the request's session cookie. */
+  session?: (req: FastifyRequest) => Promise<Account | undefined>;
 }
 
 declare module 'fastify' {
   interface FastifyRequest {
     principal: Principal | null;
+    /** The logged-in person (accounts mode). */
+    account: Account | null;
   }
 }
 
@@ -45,7 +53,9 @@ const bearerOf = (req: FastifyRequest) => {
   return auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
 };
 /** Reads reachable without the read token: liveness for monitors, and the OAuth redirect a browser follows without headers. */
-const OPEN_READS = new Set(['/api/health', '/api/connections/atlassian/callback']);
+const OPEN_READS = new Set(['/api/health', '/api/connections/atlassian/callback', '/api/auth/me']);
+/** Accounts mode: reachable without a session, so a browser can log in. */
+const LOGIN_READS = new Set([...OPEN_READS, '/api/auth/login']);
 
 /**
  * Host check against DNS rebinding, Origin check against CSRF, the admin
@@ -56,12 +66,56 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
   const hosts = new Set(cfg.allowedHosts.map((h) => h.toLowerCase()));
   const origins = new Set(cfg.allowedOrigins.map((o) => o.toLowerCase().replace(/\/$/, '')));
   app.decorateRequest('principal', null);
+  app.decorateRequest('account', null);
+  const accounts = cfg.mode === 'accounts';
+
+  const checkOrigin = (req: FastifyRequest, host: string) => {
+    const origin = req.headers.origin?.toLowerCase();
+    if (!origin || origin === 'null') return;
+    let o: URL | undefined;
+    try {
+      o = new URL(origin);
+    } catch {
+      /* rejected below */
+    }
+    const originOk = !!o && (origins.has(origin) || o.host === host || (isLoopbackName(o.hostname) && isLoopbackName(hostnameOf(host))));
+    if (!originOk) throw httpError(403, `Origin "${origin}" may not change data here. Add it to CI_ALLOWED_ORIGINS.`);
+  };
+
+  /** Accounts mode: machines with a bearer token, people with a session and a role strong enough for the route. */
+  const accountsGuard = async (req: FastifyRequest, host: string) => {
+    const mutating = MUTATING.has(req.method);
+    const given = bearerOf(req);
+    if (given || req.headers.authorization) {
+      if (cfg.adminToken && sameSecret(given, cfg.adminToken)) {
+        req.principal = 'admin_token';
+        return;
+      }
+      if (!mutating && cfg.readToken && sameSecret(given, cfg.readToken) && requiredRole(req.method, req.url) === 'viewer') return;
+      throw httpError(401, 'This token is not valid for this request.', { 'www-authenticate': 'Bearer realm="ci"' });
+    }
+    const account = await cfg.session?.(req);
+    if (!account) {
+      if (!mutating && LOGIN_READS.has(req.url.split('?')[0]!)) return;
+      throw httpError(401, 'Log in first.');
+    }
+    if (mutating) {
+      const origin = req.headers.origin;
+      if (!origin || origin === 'null') throw httpError(403, 'Origin header required: changes with a session come only from the app in a browser.');
+      checkOrigin(req, host);
+    }
+    const need = requiredRole(req.method, req.url);
+    if (!atLeast(account.role, need)) throw httpError(403, `This needs the ${need} role.`);
+    req.account = account;
+    req.principal = 'session';
+  };
 
   app.addHook('onRequest', async (req) => {
     if (!req.url.startsWith('/api/') || req.url.startsWith('/api/webhooks/') || /^\/api\/w\/[^/]+\/webhooks\//.test(req.url)) return;
     const host = (req.headers.host ?? '').toLowerCase();
-    const hostOk = hosts.has(host) || hosts.has(hostnameOf(host)) || isLoopbackName(hostnameOf(host)) || (!hosts.size && !!(cfg.adminToken || cfg.readToken));
+    const hostOk = hosts.has(host) || hosts.has(hostnameOf(host)) || isLoopbackName(hostnameOf(host)) || (!hosts.size && (accounts || !!(cfg.adminToken || cfg.readToken)));
     if (!hostOk) throw httpError(403, `Host "${host}" is not allowed. Add it to CI_ALLOWED_HOSTS.`);
+    if (accounts) return accountsGuard(req, host);
     if (!MUTATING.has(req.method)) {
       if (!cfg.readToken || OPEN_READS.has(req.url.split('?')[0]!)) return;
       const given = bearerOf(req);
@@ -69,17 +123,7 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
       throw httpError(401, 'Reading requires a token (Authorization: Bearer …): the CI_READ_TOKEN or the admin token of this server.', { 'www-authenticate': 'Bearer realm="ci"' });
     }
 
-    const origin = req.headers.origin?.toLowerCase();
-    if (origin && origin !== 'null') {
-      let o: URL | undefined;
-      try {
-        o = new URL(origin);
-      } catch {
-        /* rejected below */
-      }
-      const originOk = !!o && (origins.has(origin) || o.host === host || (isLoopbackName(o.hostname) && isLoopbackName(hostnameOf(host))));
-      if (!originOk) throw httpError(403, `Origin "${origin}" may not change data here. Add it to CI_ALLOWED_ORIGINS.`);
-    }
+    checkOrigin(req, host);
 
     if (cfg.adminToken) {
       const given = bearerOf(req);
@@ -95,6 +139,8 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
 
 /** The person acting. A display name sent by the client (X-CI-Actor, URL-encoded), not an identity: the principal is what authorizes. */
 export function actorOf(req: FastifyRequest, body?: { by?: string; decidedBy?: string } | null) {
+  // With a session the account is the actor; what the client claims is ignored.
+  if (req.account) return req.account.name.slice(0, 80);
   let header = '';
   const raw = req.headers['x-ci-actor'];
   if (typeof raw === 'string') {
