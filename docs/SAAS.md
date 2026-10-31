@@ -174,6 +174,7 @@ Każdy krok zachowuje działanie trybu self-hosted.
    `npm run db:import`; [`docs/WORKSPACES-F5-PLAN.md`](WORKSPACES-F5-PLAN.md)). Organizacja ponad przestrzeniami
    przyjdzie z kontami (krok 3).
 3. **Konta i organizacje:** logowanie OIDC (Google/Microsoft/Atlassian), zaproszenia, role.
+   *Stan 2026-10-31:* plan w [`docs/ACCOUNTS-PLAN.md`](ACCOUNTS-PLAN.md); pierwsza wersja loguje kontem Atlassian.
 4. **OAuth Atlassian i Figma** z szyfrowaniem tokenów przez KMS. Automatyczna rejestracja webhooków.
 5. **Kolejka i workery:** analizy w tle, analiza przyrostowa po webhookach.
 6. **AI platformowe:** Bedrock przez rolę IAM, limity per plan, licznik zużycia.
