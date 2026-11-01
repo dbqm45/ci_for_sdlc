@@ -1,4 +1,5 @@
 import type { AcceptanceStats, AnalysisResult, Approval, Decision, DeepPartial, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem, Settings } from '@ci/core';
+import type { Me, Role } from './lib/account';
 import { authStep } from './lib/auth';
 import type { ChangeState } from './lib/changes';
 import { DEFAULT_WORKSPACE, apiUrl } from './lib/workspace';
@@ -117,24 +118,53 @@ export interface SettingsResponse {
   etag: string;
 }
 
+let accounts = false;
+let loginNeeded: () => void = () => {};
+/** Accounts mode (GET /api/auth/me): people log in, no token is asked for; a lost session shows the login screen. */
+export const setAccountsMode = (on: boolean, onLoginNeeded: () => void = () => {}) => {
+  accounts = on;
+  loginNeeded = onLoginNeeded;
+};
+
+/** A member of the organization (Settings → Members). Never contains a session. */
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  lastLoginAt: string;
+}
+
+/** An open invitation. Its link is shown once, when it is created. */
+export interface Invitation {
+  id: string;
+  role: Role;
+  email: string;
+  invitedBy: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 async function req<T>(method: string, url: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
   return (await send(method, url, body, headers)).json as T;
 }
 
 async function send(method: string, url: string, body?: unknown, headers: Record<string, string> = {}, retried = false): Promise<{ json: unknown; res: Response }> {
-  const token = readToken();
+  // With a session the server knows who acts; a saved token would only override the person's role.
+  const token = accounts ? '' : readToken();
   const res = await fetch(workspaceApi(url), {
     method,
     headers: {
       ...(body !== undefined && { 'content-type': 'application/json' }),
-      ...(method !== 'GET' && { 'x-ci-actor': encodeURIComponent(currentUser()) }),
+      ...(method !== 'GET' && !accounts && { 'x-ci-actor': encodeURIComponent(currentUser()) }),
       ...(token && { authorization: `Bearer ${token}` }),
       ...headers,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const json: unknown = await res.json().catch(() => ({}));
-  const step = authStep({ status: res.status, challenge: !!res.headers.get('www-authenticate'), retried, used: token, current: readToken() });
+  const step = authStep({ status: res.status, challenge: !!res.headers.get('www-authenticate'), retried, used: token, current: readToken(), accounts });
+  if (accounts && res.status === 401) loginNeeded();
   // Another request saved a token while this one waited: try it without asking again.
   if (step === 'retry') return send(method, url, body, headers, true);
   if (step === 'prompt') {
@@ -221,7 +251,19 @@ export const api = {
   scenarios: () => req<{ id: string; title: string; description: string }[]>('GET', '/api/demo/scenarios'),
   applyScenario: (id: string) => req<AnalysisResult>('POST', `/api/demo/scenarios/${id}`),
   resetDemo: () => req<AnalysisResult>('POST', '/api/demo/reset'),
+  me: () => req<Me>('GET', '/api/auth/me'),
+  logout: () => send('POST', '/api/auth/logout').then(() => undefined),
+  members: () => req<Member[]>('GET', '/api/members'),
+  setRole: (id: string, role: Role) => req<Member>('PATCH', `/api/members/${encodeURIComponent(id)}`, { role }),
+  removeMember: (id: string) => send('DELETE', `/api/members/${encodeURIComponent(id)}`).then(() => undefined),
+  invitations: () => req<Invitation[]>('GET', '/api/invitations'),
+  /** The link is returned only here; only a hash of its token is kept on the server. */
+  invite: (role: Role, email: string) => req<Invitation & { link: string }>('POST', '/api/invitations', { role, ...(email.trim() && { email: email.trim() }) }),
+  revokeInvitation: (id: string) => send('DELETE', `/api/invitations/${encodeURIComponent(id)}`).then(() => undefined),
 };
+
+/** Where the browser goes to log in; an invitation token rides along. */
+export const loginUrl = (invite?: string) => `/api/auth/login${invite ? `?invite=${encodeURIComponent(invite)}` : ''}`;
 
 const USER_KEY = 'ci.user';
 export function currentUser(): string {

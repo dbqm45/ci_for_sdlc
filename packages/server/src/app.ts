@@ -3,7 +3,7 @@ import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import { existsSync } from 'node:fs';
 import { APPROVE_GATE, RULES, changeKeyOf, changeReadiness, mergeChangeReadiness, parseGateDecided, workspacePath, type AnalysisResult, type ChangeReadiness } from '@ci/core';
-import { Accounts, SESSION_COOKIE, LOGIN_COOKIE } from './accounts.js';
+import { Accounts, SESSION_COOKIE, LOGIN_COOKIE, type InvitedRole } from './accounts.js';
 import { ROLES, type Role } from './roles.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
@@ -218,9 +218,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   );
 
   // ------------------------------------------------------------------ accounts (docs/ACCOUNTS-PLAN.md)
-  app.get<{ Querystring: { bootstrap?: string } }>('/api/auth/login', { schema: { hide: true, querystring: { type: 'object', properties: { bootstrap: { type: 'string', maxLength: 200 } } } } }, async (req, reply) => {
+  const loginQuery = { type: 'object', properties: { bootstrap: { type: 'string', maxLength: 200 }, invite: { type: 'string', maxLength: 200 } } } as const;
+  app.get<{ Querystring: { bootstrap?: string; invite?: string } }>('/api/auth/login', { schema: { hide: true, querystring: loginQuery } }, async (req, reply) => {
     if (!accounts.enabled) throw httpError(404, 'Login is off: CI_AUTH_MODE is not "accounts".');
-    const { url, cookie } = accounts.start(req.query.bootstrap);
+    const { url, cookie } = accounts.start({ bootstrap: req.query.bootstrap, invite: req.query.invite });
     reply.header('set-cookie', cookie);
     return reply.redirect(url);
   });
@@ -258,11 +259,39 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     return reply.code(204).send();
   });
 
+  const invitationBody = {
+    type: 'object',
+    required: ['role'],
+    additionalProperties: false,
+    properties: { role: { type: 'string', enum: ROLES.filter((r) => r !== 'owner') }, email: { type: 'string', maxLength: 200, pattern: '^$|^[^\\s@]+@[^\\s@]+$' } },
+  } as const;
+  const invitationSummary = (inv: { role: string; email: string }) => `Invitation as ${inv.role}${inv.email ? ` for ${inv.email}` : ''}`;
+
+  app.get('/api/invitations', { schema: { summary: 'Invitations that can still be used (Admin); never their links' } }, async () => accounts.openInvitations());
+
+  app.post<{ Body: { role: InvitedRole; email?: string } }>(
+    '/api/invitations',
+    { schema: { summary: 'Create a one-time invitation link, valid 7 days (Admin)', body: invitationBody, response: errors(403, 422), ...MUTATION } },
+    async (req, reply) => {
+      const { actor, via } = who(req, null);
+      const inv = await accounts.invite(actor ?? 'admin', req.body.role, req.body.email);
+      await main.store.audit({ at: new Date().toISOString(), kind: 'member', actor, via, summary: `${invitationSummary(inv)} created` });
+      return reply.code(201).send(inv);
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/invitations/:id', { schema: { summary: 'Revoke an invitation (Admin)', params: memberParams, response: errors(403, 404), ...MUTATION } }, async (req, reply) => {
+    const inv = await accounts.revoke(req.params.id);
+    await main.store.audit({ at: new Date().toISOString(), kind: 'member', ...who(req, null), summary: `${invitationSummary(inv)} revoked` });
+    return reply.code(204).send();
+  });
+
   /** Accounts mode: the browser comes back from a login (not from connecting a workspace). */
   const loginCallback = async (req: FastifyRequest<{ Querystring: { code?: string; state?: string; error?: string } }>, reply: FastifyReply) => {
     reply.header('set-cookie', accounts.loginCookie('', 0));
     try {
-      const id = await accounts.complete({ ...req.query, cookieState: cookieValue(req.headers.cookie, LOGIN_COOKIE) });
+      const { id, joined } = await accounts.complete({ ...req.query, cookieState: cookieValue(req.headers.cookie, LOGIN_COOKIE) });
+      if (joined) await main.store.audit({ at: new Date().toISOString(), kind: 'member', actor: joined.name, via: 'session', summary: `${joined.name} joined as ${joined.role}` });
       reply.header('set-cookie', accounts.sessionCookie(id));
       return reply.redirect('/');
     } catch (e) {

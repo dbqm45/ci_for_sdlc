@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { api, currentUser, currentWorkspace, readToken, setWorkspace, workspaceApi, type AnalysisResult, errMsg } from './api';
+import { api, currentUser, currentWorkspace, loginUrl, readToken, setAccountsMode, setWorkspace, workspaceApi, type AnalysisResult, errMsg } from './api';
+import { disabledReason, loginErrorFrom, roleLabel, showLogin, type Me } from './lib/account';
 import { WorkspaceSelect } from './components/WorkspaceSelect';
 import { hashPath, parseHashPath } from './lib/workspace';
 import { ago, Sdot, Source, Spinner } from './components/ui';
@@ -42,6 +43,8 @@ interface AppCtx {
   toast: (msg: string) => void;
   navigate: (path: string) => void;
   version: number;
+  /** Who is logged in (accounts mode); undefined until GET /api/auth/me answers. */
+  me?: Me;
 }
 
 const Ctx = createContext<AppCtx>(null as unknown as AppCtx);
@@ -105,11 +108,12 @@ function initials(name: string): string {
 
 /** Avatar button + dropdown menu. Open/close state and focus trap are shared,
  * framework-free building blocks tested in test/disclosure.test.ts and test/focusTrap.test.ts. */
-function AccountMenu({ navigate }: { navigate: (p: string) => void }) {
+function AccountMenu({ navigate, me }: { navigate: (p: string) => void; me?: Me }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
-  const name = currentUser();
+  const user = me?.user;
+  const name = user?.name ?? currentUser();
 
   const close = useCallback(() => {
     setOpen((o) => disclosureReducer(o, 'close'));
@@ -156,7 +160,7 @@ function AccountMenu({ navigate }: { navigate: (p: string) => void }) {
             </div>
             <div>
               <div className="account-menu-user-name">{name}</div>
-              <div className="account-menu-role">Recorded on decisions</div>
+              <div className="account-menu-role">{user ? roleLabel(user.role) : 'Recorded on decisions'}</div>
             </div>
           </div>
           <div className="account-menu-divider" />
@@ -171,7 +175,13 @@ function AccountMenu({ navigate }: { navigate: (p: string) => void }) {
             <UserIcon size={16} />
             Account settings
           </button>
-          <button role="menuitem" className="account-menu-item" disabled title="No login system is configured yet">
+          <button
+            role="menuitem"
+            className="account-menu-item"
+            disabled={!user}
+            title={user ? undefined : 'No login system is configured yet'}
+            onClick={() => void api.logout().finally(() => location.reload())}
+          >
             <LogOutIcon size={16} />
             Log out
           </button>
@@ -181,8 +191,33 @@ function AccountMenu({ navigate }: { navigate: (p: string) => void }) {
   );
 }
 
+/** Accounts mode without a session: the only way in is logging in with Atlassian (or an invitation link). */
+function LoginScreen() {
+  const error = loginErrorFrom(location.search);
+  return (
+    <div className="login-screen">
+      <div className="card card-pad login-card">
+        <div className="brand-mark" style={{ width: 40, height: 40 }}>
+          <BrandMark size={24} />
+        </div>
+        <h1>Quorum</h1>
+        <p className="muted">Log in to see your team's product definition quality.</p>
+        {error && (
+          <div className="login-error" role="alert">
+            {error}
+          </div>
+        )}
+        <a className="btn primary" href={loginUrl()}>
+          Log in with Atlassian
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [path, ws, navigate] = useHashRoute();
+  const [me, setMe] = useState<Me>();
   const [analysis, setAnalysis] = useState<Analysis>();
   const [error, setError] = useState<string>();
   const [running, setRunning] = useState(false);
@@ -223,13 +258,27 @@ export function App() {
   }, [toast]);
 
   useEffect(() => {
+    // Accounts mode: the server knows the person by a session cookie; a lost session shows the login screen again.
+    api
+      .me()
+      .then((m) => {
+        setAccountsMode(m.mode === 'accounts', () => setMe({ mode: 'accounts', user: null }));
+        setMe(m);
+      })
+      .catch(() => setMe({ mode: 'token', user: null }));
+  }, []);
+
+  const ready = !!me && !showLogin(me);
+
+  useEffect(() => {
+    if (!ready) return;
     // Another workspace is another analysis: drop the one shown before fetching.
     setAnalysis(undefined);
     void refresh();
     // Live updates: server pushes an event after every analysis (schedule, webhook, other users).
     // Read with fetch, not EventSource, so the read token (CI_READ_TOKEN) goes in a header (lib/sse.ts).
     return subscribeEvents(workspaceApi('/api/events'), { analysis: () => void refresh(), status: (data) => setRunning(!!JSON.parse(data).running) }, { token: readToken });
-  }, [refresh, ws]);
+  }, [refresh, ws, ready]);
 
   // Close the drawer/rail-overlay on route change, and whenever the matching
   // breakpoint no longer applies (resize back to desktop).
@@ -260,9 +309,12 @@ export function App() {
   }, [drawerOpen, closeDrawer]);
 
   const ctx = useMemo<AppCtx>(
-    () => ({ analysis, refresh, runAnalysis, setAnalysis: (a) => (setAnalysis(a), setVersion((v) => v + 1)), toast, navigate, version }),
-    [analysis, refresh, runAnalysis, toast, navigate, version],
+    () => ({ analysis, refresh, runAnalysis, setAnalysis: (a) => (setAnalysis(a), setVersion((v) => v + 1)), toast, navigate, version, me }),
+    [analysis, refresh, runAnalysis, toast, navigate, version, me],
   );
+  const analyzeBlocked = disabledReason(me, 'member');
+
+  if (showLogin(me)) return <LoginScreen />;
 
   const [section, param, focus] = path.split('/').filter(Boolean);
   let page;
@@ -391,7 +443,7 @@ export function App() {
                 Quorum
               </div>
               <div className="grow" />
-              <AccountMenu navigate={navigate} />
+              <AccountMenu navigate={navigate} me={me} />
             </div>
             {analysis && (
               <div className="mobile-status-row">
@@ -406,7 +458,7 @@ export function App() {
                   </span>
                 </div>
                 <div className="mobile-status-badges header-badges">{statusBadges}</div>
-                <button className="btn primary" onClick={runAnalysis} disabled={running}>
+                <button className="btn primary" onClick={runAnalysis} disabled={running || !!analyzeBlocked} title={analyzeBlocked}>
                   {running ? <Spinner /> : <RefreshIcon size={16} />} Analyze now
                 </button>
               </div>
@@ -426,10 +478,10 @@ export function App() {
               {analysis && <span className="topbar-last-analysis-ms"> in {analysis.durationMs} ms</span>}
               {analysis?.ai.enabled && <span className="badge accent">AI: {analysis.ai.model}</span>}
             </div>
-            <button className="btn primary" onClick={runAnalysis} disabled={running}>
+            <button className="btn primary" onClick={runAnalysis} disabled={running || !!analyzeBlocked} title={analyzeBlocked}>
               {running ? <Spinner /> : <RefreshIcon size={16} />} Analyze now
             </button>
-            <AccountMenu navigate={navigate} />
+            <AccountMenu navigate={navigate} me={me} />
           </header>
           <main className="content" key={ws}>
             {page}

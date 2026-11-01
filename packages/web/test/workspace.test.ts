@@ -31,6 +31,9 @@ describe('API URL of a workspace', () => {
     ['/api/workspaces', 'mobile', '/api/workspaces'],
     ['/api/pdi', 'mobile', '/api/pdi'],
     ['/api/rules', 'mobile', '/api/rules'],
+    ['/api/auth/me', 'mobile', '/api/auth/me'],
+    ['/api/members/u1', 'mobile', '/api/members/u1'],
+    ['/api/invitations', 'mobile', '/api/invitations'],
   ])('WSU-03: %s in %s → %s', (url, ws, expected) => {
     expect(apiUrl(url, ws)).toBe(expected);
   });

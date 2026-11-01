@@ -34,6 +34,9 @@ const ROUTE_ROLES: Record<string, Role> = {
   'GET /members': 'admin',
   'PATCH /members/:id': 'admin',
   'DELETE /members/:id': 'admin',
+  'GET /invitations': 'admin',
+  'POST /invitations': 'admin',
+  'DELETE /invitations/:id': 'admin',
   // Anyone logged in.
   'POST /auth/logout': 'viewer',
 };

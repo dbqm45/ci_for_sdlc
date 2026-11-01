@@ -6,6 +6,8 @@ import { Card, Sdot, SourceLogo, Spinner, StatusIcon } from '../components/ui';
 import { parseFigmaFileKey } from '../components/figmaFileKey';
 import { SparkleIcon, SyncIcon } from '../components/icons';
 import { WorkspaceAdmin } from '../components/WorkspaceAdmin';
+import { Members } from '../components/Members';
+import { atLeast, disabledReason } from '../lib/account';
 
 const EFFORTS: readonly AiEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -25,7 +27,8 @@ const PROVIDERS: readonly { id: AiProviderKind; label: string; hint: string }[] 
 ];
 
 export function Settings() {
-  const { toast, refresh } = useApp();
+  const { toast, refresh, me } = useApp();
+  const adminBlocked = disabledReason(me, 'admin');
   const [data, setData] = useState<Awaited<ReturnType<typeof api.settings>>>();
   const [s, setS] = useState<SettingsData>();
   const [rules, setRules] = useState<Awaited<ReturnType<typeof api.rules>>>([]);
@@ -110,7 +113,7 @@ export function Settings() {
           <h1>Settings</h1>
           <p>Integrations, AI provider, security and policy. Secrets are never stored by the app — they are read from the server environment.</p>
         </div>
-        <button className="btn primary" onClick={save} disabled={saving}>
+        <button className="btn primary" onClick={save} disabled={saving || !!adminBlocked} title={adminBlocked}>
           {saving ? <Spinner /> : 'Save & re-analyze'}
         </button>
       </div>
@@ -126,9 +129,11 @@ export function Settings() {
           <Field label="Project name">
             <input className="input" value={s.project.name} onChange={(e) => set('project.name', e.target.value)} />
           </Field>
-          <Field label="Your name (recorded on decisions)">
-            <input className="input" value={user} onChange={(e) => setUser(e.target.value)} />
-          </Field>
+          {me?.mode !== 'accounts' && (
+            <Field label="Your name (recorded on decisions)">
+              <input className="input" value={user} onChange={(e) => setUser(e.target.value)} />
+            </Field>
+          )}
           <Field label="Domain vocabulary (facts compared across sources)">
             <select className="input" value={s.project.claimPack ?? 'general'} onChange={(e) => set('project.claimPack', e.target.value)}>
               {CLAIM_PACK_OPTIONS.map((p) => (
@@ -142,7 +147,9 @@ export function Settings() {
         <WorkspaceAdmin toast={toast} />
       </Card>
 
-      <Card title="Integrations" actions={<button className="btn sm" onClick={async () => setTest(await api.testConnections())}>Test connections</button>}>
+      {me?.user && atLeast(me.user.role, 'admin') && <Members me={me.user} toast={toast} />}
+
+      <Card title="Integrations" actions={<button className="btn sm" disabled={!!adminBlocked} title={adminBlocked} onClick={async () => setTest(await api.testConnections())}>Test connections</button>}>
         {test && (
           <div className={`banner ${test.error ? 'bad' : ''}`} style={{ marginBottom: 12 }}>
             {Object.entries(test).map(([k, v]) => (
