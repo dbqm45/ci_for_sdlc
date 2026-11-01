@@ -110,14 +110,14 @@ function toSite(v: unknown): AtlassianSite | undefined {
   return { id: v.id as string, name: text(v.name) ?? (v.url as string), url: (v.url as string).replace(/\/$/, ''), scopes: Array.isArray(v.scopes) ? v.scopes.filter((s): s is string => typeof s === 'string') : [] };
 }
 
-interface TokenResponse {
+export interface TokenResponse {
   accessToken: string;
   expiresIn: number;
   refreshToken?: string;
 }
 
 /** POSTs to Atlassian's token endpoint; `refused` = the grant was rejected (expired, revoked), not a network problem. */
-async function tokenRequest(body: Record<string, string>): Promise<TokenResponse> {
+export async function tokenRequest(body: Record<string, string>): Promise<TokenResponse> {
   const res = await fetch(`${ATLASSIAN_AUTH}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body) });
   const json: unknown = await res.json().catch(() => undefined);
   if (!res.ok) {
