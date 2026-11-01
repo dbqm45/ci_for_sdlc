@@ -54,6 +54,17 @@ export interface RepoSource {
  * The Continuous Intelligence loop: Context → Analyze → Questions → Decide →
  * Detect drift → Analyze. Runs on demand, on a schedule, or on webhooks.
  */
+/**
+ * PRB-16: a decision in the repository (the change's decisions.md) answers its question in place of a stored one; it
+ * is reviewed with the change, so it is the one a pull request's gate and the server agree on.
+ */
+export function withRepoDecisions<D extends { questionId: string }>(stored: D[], context: Pick<ProjectContext, 'decisions'>): (D | NonNullable<ProjectContext['decisions']>[number])[] {
+  const fromRepo = context.decisions ?? [];
+  if (!fromRepo.length) return stored;
+  const asked = new Set(fromRepo.map((d) => d.questionId));
+  return [...stored.filter((d) => !asked.has(d.questionId)), ...fromRepo];
+}
+
 export class Engine extends EventEmitter {
   state: EngineState = { running: false };
   private queue: Promise<unknown> = Promise.resolve();
@@ -106,9 +117,9 @@ export class Engine extends EventEmitter {
   }
 
   private async loadRepo(settings: Settings, repo: RepoSource): Promise<ProjectContext> {
-    const { requirements, problems } = await readRepoChanges(repo.path, { repoUrl: repo.repoUrl });
+    const { requirements, problems, decisions } = await readRepoChanges(repo.path, { repoUrl: repo.repoUrl });
     this.state.repoProblems = problems;
-    return { project: settings.project, requirements, documents: [], frames: [], fetchedAt: new Date().toISOString() };
+    return { project: settings.project, requirements, documents: [], frames: [], fetchedAt: new Date().toISOString(), ...(decisions.length && { decisions }) };
   }
 
   private async loadSources(settings: Settings): Promise<ProjectContext> {
@@ -144,7 +155,8 @@ export class Engine extends EventEmitter {
     this.emit('status', { running: true, reason });
     try {
       const settings = await this.store.settings();
-      const [context, decisions, approvals, previous] = await Promise.all([this.loadContext(settings), this.store.decisions().then(activeDecisions), this.store.approvals(), this.store.snapshot()]);
+      const [context, stored, approvals, previous] = await Promise.all([this.loadContext(settings), this.store.decisions().then(activeDecisions), this.store.approvals(), this.store.snapshot()]);
+      const decisions = withRepoDecisions(stored, context);
 
       const analyzer = createSemanticAnalyzer(settings.ai, {
         anthropicApiKey: process.env.ANTHROPIC_API_KEY,
@@ -211,7 +223,7 @@ export class Engine extends EventEmitter {
           return next;
         });
         await recordAutoClose(this.store, applied.map(({ f, id }) => ({ event: proposalEvent(f, 'applied', at, { by: AUTO_CLOSE_ACTOR, decisionId: id }), question: f.question!.text, actor: f.answer!.rule })), this.autoCloseSink);
-        ({ result, snapshot, graph } = await runAnalysis(await this.store.decisions().then(activeDecisions)));
+        ({ result, snapshot, graph } = await runAnalysis(withRepoDecisions(await this.store.decisions().then(activeDecisions), context)));
       }
       await Promise.all(audits);
       if (this.aiCache.size !== cacheSize) await this.store.saveAiCache(this.aiCache);

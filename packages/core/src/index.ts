@@ -32,3 +32,4 @@ export { MAX_TEST_CASES, MAX_TEST_FILE_BYTES, TestResultsError, parseJUnit, read
 export { MAX_API_OPERATIONS, MAX_OPENAPI_FILE_BYTES, OpenApiError, parseOpenApi, readOpenApi, type OpenApiProblem } from './connectors/openapi.js';
 export { DESIGN_STATES, DesignFormatError, parseDesignMd, type DesignFrameLink, type DesignRow } from './connectors/design.js';
 export { CHANGES_DIR, MAX_CHANGES, MAX_CHANGE_FILE_BYTES, RepoFileError, parseChange, readRepoChanges, type RepoChanges, type RepoProblem } from './connectors/repo.js';
+export { parseRepoDecisions } from './connectors/repo-decisions.js';

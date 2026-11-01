@@ -11,6 +11,7 @@ so a pull request that changes a plan gets a red check when the plan is not read
 | --- | --- |
 | `intent.md` (required) | The change as an epic: title from its first `# ` heading, its text as the description, the header's `status`. Without `release.yaml` the "Metryki sukcesu" / "Success metrics" section is the MVP's outcome and metric. |
 | `plan.md` | Each slice (`TSK-n`) of the first table with a "Cięcie" / "Slice" column as a story under the change: "Wartość" / "Value" is its title, "Weryfikacja" / "Verification" its acceptance criterion, "Wydanie" / "Release" and "Flaga" / "Flag" its release line and flag. Optional columns for REL-008: "Rodzaj" / "Kind" (`foundation`, `fundament`, `F` or tf's `F-NN` make a foundation; anything else, or no column, a slice; a value starting "(fundament)" is a foundation too), "Odblokowuje" / "Unblocks" (task keys or text) and "Wymagania" / "Requirements" (ids like `US-02`, `FR-007`, `AC-3`). `dropped` slices are left out. |
+| `decisions.md` (optional) | Decisions on findings: an entry in tf's format with `ustalenie: <finding>` (e.g. `DES-001:TSK-1`) answers that finding's question as a decision in the UI does, with `skutek` (`resolve` by default, `accept_risk`, `dismiss`, `confirm`). Its heading is the answer, `dlaczego` the note, `kto` and `kiedy` who and when, `id` pdi's DEC. It takes the place of a stored decision on the same question. Entries without `ustalenie` are left alone. See [`REPO-DECISIONS-PLAN.md`](REPO-DECISIONS-PLAN.md). |
 | `release.yaml` | The release plan, which wins over the plan's columns: each slice's line from `releases[].tasks`, its flags from `flags[].tasks`, and the MVP (outcome, metric with target and `horizon_days`, guardrails) for REL-002. Each flag's plan (`owner`, `remove_by`, `rollout[]` with `stage`, `min_days`, `exit`) for REL-007. A slice only in `release.yaml` is a story titled with its key. |
 
 The YAML header of `intent.md` and `plan.md` must name the change of its folder (`change: CHG-12`). Every item is
@@ -35,8 +36,10 @@ the gate then fails whatever the threshold. A change is never read as an empty p
 npm run analyze -- --repo ../my-service --repo-url https://github.com/acme/my-service --fail-on critical
 ```
 
-`--repo` analyses only that checkout's changes (no Jira, no demo); settings, policy and decisions still come from
-`CI_DATA_DIR`. Exit codes: 0 passed, 1 an item is below the threshold (`--fail-on critical`: not ready; `warning`: not
+`--repo` analyses only that checkout's changes (no Jira, no demo); settings and policy still come from `CI_DATA_DIR`,
+and decisions from both `CI_DATA_DIR` and the changes' `decisions.md` (the repository's win on the same question).
+A bad `decisions.md` entry (a finding of another change, no `kto`, a bad date or effect) is reported with its line
+and fails the gate like any file problem. Exit codes: 0 passed, 1 an item is below the threshold (`--fail-on critical`: not ready; `warning`: not
 ready or needs attention) or a file could not be read, 2 the analysis could not run (for example no
 `docs/project/changes` folder).
 

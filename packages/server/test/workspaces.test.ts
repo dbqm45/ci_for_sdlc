@@ -45,7 +45,7 @@ async function label(ws: string, key: string) {
   await w.store.saveDemoContext(project);
   await w.engine.analyze('label');
 }
-const storyKeys = async (ws: string, ready: boolean) => (await ctx!.workspaces.get(ws)!.engine.analyze('setup')).items.filter((i) => i.type === 'story' && (i.readiness === 'ready') === ready).map((i) => i.key);
+const storyKeys = async (ws: string, ready: boolean) => (await ctx!.workspaces.get(ws)!.engine.analyze('setup')).items.filter((i) => i.type === 'story' && i.readiness === (ready ? 'ready' : 'not_ready')).map((i) => i.key);
 
 describe('workspaces', () => {
   it('WS-01: default is listed; a new workspace is created once, with a valid id, and stays after a restart', async () => {

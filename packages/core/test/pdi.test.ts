@@ -35,11 +35,11 @@ describe('changeKeyOf', () => {
 describe('changeReadiness', () => {
   const reqs = [req('PAY-1', ['change:CHG-12']), req('PAY-2', ['change:CHG-12']), req('PAY-3', ['change:CHG-13']), req('PAY-9', []), req('PAY-100', ['change:CHG-12'], 'epic')];
 
-  it('is ready only when every story of the change is ready', () => {
-    const out = changeReadiness([item('PAY-1', 'ready'), item('PAY-2', 'ready'), item('PAY-3', 'needs_attention')], reqs);
+  it('PRB-17: is not ready only when a story has a blocking finding; warnings alone do not hold the change back', () => {
+    const out = changeReadiness([item('PAY-1', 'ready'), item('PAY-2', 'not_ready'), item('PAY-3', 'needs_attention', { openChallenges: 1 })], reqs);
     expect(out).toEqual([
-      { change: 'CHG-12', readiness: 'ready', openQuestions: 0, items: ['PAY-1', 'PAY-2'] },
-      { change: 'CHG-13', readiness: 'not_ready', openQuestions: 0, items: ['PAY-3'] },
+      { change: 'CHG-12', readiness: 'not_ready', openQuestions: 0, items: ['PAY-1', 'PAY-2'] },
+      { change: 'CHG-13', readiness: 'ready', openQuestions: 1, items: ['PAY-3'] },
     ]);
   });
 
