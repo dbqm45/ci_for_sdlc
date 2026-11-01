@@ -32,8 +32,8 @@ npm run local
 
 Klucze bierze ze zmiennych środowiskowych, z 1Password (`op run` z plikiem odwołań `~/.config/ci-sdlc.env`, zob.
 [`docs/LOCAL-ENVIRONMENT.md`](docs/LOCAL-ENVIRONMENT.md), sekcja 2) albo pyta o brakujące w terminalu; niczego nie
-zapisuje do pliku. Przycisk *Connect Atlassian*: `npm run local -- --oauth`; tryb deweloperski: `npm run local -- --dev`;
-wszystkie opcje: `npm run local -- --help`.
+zapisuje do pliku. Przycisk *Connect Atlassian*: `npm run local -- --oauth`; logowanie kontem Atlassian:
+`npm run local -- --accounts`; tryb deweloperski: `npm run local -- --dev`; wszystkie opcje: `npm run local -- --help`.
 
 Tryb deweloperski (hot reload UI + API):
 

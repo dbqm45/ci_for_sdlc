@@ -44,6 +44,9 @@ Konto ma kilka stron Atlassiana? Pod przyciskiem pojawia się lista *Atlassian s
    - *Jira API → Add → Configure*: zakres `read:jira-work` (*View Jira issue data*).
    - *Confluence API → Add → Configure → Granular scopes*: `read:space:confluence`, `read:page:confluence`,
      `read:label:confluence`.
+   - *User identity API → Add*: zakres `read:me`. Potrzebny tylko do logowania kontem Atlassian
+     (`CI_AUTH_MODE=accounts`, sekcja niżej); serwer czyta nim imię, e-mail i identyfikator konta, bez dostępu do Jiry
+     i Confluence.
 4. **Authorization → OAuth 2.0 (3LO) → Configure**: w *Callback URL* wpisz adres z Settings (pokazuje go plakietka,
    gdy czegoś brakuje), np. `http://localhost:4317/api/connections/atlassian/callback`. Adres musi się zgadzać co do znaku
    z `CI_PUBLIC_URL`.
@@ -77,9 +80,34 @@ podaj klucz projektu i spaces, *Test connections*, *Save & re-analyze*.
 **Odłączenie:** *Disconnect* usuwa token z serwera. Żeby odebrać aplikacji dostęp także po stronie Atlassiana, usuń ją
 w ustawieniach konta Atlassiana (lista połączonych aplikacji).
 
+## Logowanie do aplikacji kontem Atlassian (opcjonalne)
+
+Ta sama aplikacja z kroku 1 służy też do logowania ludzi do Continuous Intelligence (role Owner, Admin, Member,
+Viewer; szczegóły w [`ACCOUNTS-PLAN.md`](ACCOUNTS-PLAN.md)). Działa w obu trybach połączenia (`token` i `oauth`).
+
+1. W konsoli dodaj zakres `read:me` (krok 1.3) i zapisz zmiany.
+2. Ustaw zmienne serwera:
+
+   | Zmienna | Wartość |
+   |---|---|
+   | `CI_AUTH_MODE` | `accounts` |
+   | `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET` | z kroku 1.5 |
+   | `CI_PUBLIC_URL` | jak w tabeli wyżej |
+   | `CI_BOOTSTRAP_EMAIL` | opcjonalnie: e-mail konta Atlassian, które zostanie pierwszym Ownerem |
+
+   *Callback URL* jest ten sam co dla połączenia (`…/api/connections/atlassian/callback`); nie dodawaj drugiego.
+   `CI_ENCRYPTION_KEY` jest potrzebny tylko dla połączenia w trybie `oauth`.
+3. Pierwszy Owner: bez `CI_BOOTSTRAP_EMAIL` serwer wypisuje przy starcie jednorazowy link
+   `…/api/auth/login?bootstrap=…`. Otwórz go i zaloguj się kontem Atlassian. Kolejne osoby zapraszasz w
+   *Settings → Members* linkiem ważnym 7 dni.
+
+Lokalnie: `npm run local -- --accounts` (łączy się z `--oauth`, np. `npm run local -- --oauth --accounts`). Skrypt
+ustawia `CI_AUTH_MODE=accounts`, bierze klucze tak samo jak `--oauth`, sprawdza `CI_BOOTSTRAP_EMAIL` tylko po nazwie i
+po starcie wypisuje *Callback URL*.
+
 ## Ograniczenia
 
-- Połączenie jest jedno dla całej instalacji (aplikacja nie ma kont użytkowników). Klika je admin, korzystają wszyscy.
+- Połączenie jest jedno dla całej instalacji. Klika je admin (w trybie kont: rola Admin), korzystają wszyscy.
 - `npm run analyze` (CLI) w trybie `oauth` korzysta z tego samego połączenia. Nie uruchamiaj go w tej samej chwili co
   analizy w serwerze: oba procesy mogłyby odświeżyć token jednocześnie, a Atlassian unieważnia stary token odświeżania.
 - Zakresy dobrano do wywołań, których używa konektor (wyszukiwanie JQL, remote links, Confluence REST v2: spaces, pages,

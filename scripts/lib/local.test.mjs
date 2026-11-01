@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DEFAULT_PORT, missingRequired, modeOf, needsInstall, nodeOk, optionalStatus, parseArgs, plan, shouldUseOp } from './local.mjs';
+import { DEFAULT_PORT, accountsOf, missingRequired, modeOf, needsInstall, nodeOk, optionalStatus, parseArgs, plan, shouldUseOp } from './local.mjs';
 
 // Expected behaviour: docs/CONNECT-ATLASSIAN.md (modes, callback) and docs/LOCAL-ENVIRONMENT.md, section 2
 // (keys from the environment or 1Password, never from a file the script writes).
@@ -11,6 +11,10 @@ describe('LOC-ARGS: npm run local options', () => {
   });
   it('LOC-ARGS-2: reads every option', () => {
     assert.deepEqual(parseArgs(['--oauth', '--dev', '--port', '4317', '--env-file', '~/x.env', '--no-prompt']), { mode: 'oauth', dev: true, port: 4317, envFile: '~/x.env', prompt: false, help: false });
+  });
+  it('LOC-ARGS-4: --accounts turns on logging in, with either connection mode', () => {
+    assert.deepEqual(parseArgs(['--accounts']), { dev: false, prompt: true, help: false, accounts: true });
+    assert.deepEqual(parseArgs(['--accounts', '--oauth']), { mode: 'oauth', dev: false, prompt: true, help: false, accounts: true });
   });
   for (const [argv, error] of [
     [['--oauth', '--token'], /jedno/],
@@ -39,6 +43,30 @@ describe('LOC-MODE: which connection mode', () => {
     const status = optionalStatus('token', { JIRA_API_TOKEN: 'dummy-secret-value' });
     assert.deepEqual(status.find((s) => s.name === 'JIRA_API_TOKEN'), { name: 'JIRA_API_TOKEN', set: true });
     assert.equal(JSON.stringify(status).includes('dummy-secret-value'), false);
+  });
+});
+
+describe('LOC-ACC: logging in with Atlassian (docs/ACCOUNTS-PLAN.md)', () => {
+  it('LOC-ACC-1: --accounts wins; otherwise CI_AUTH_MODE=accounts turns it on', () => {
+    assert.equal(accountsOf({ accounts: true }, {}), true);
+    assert.equal(accountsOf({}, { CI_AUTH_MODE: 'accounts' }), true);
+    assert.equal(accountsOf({}, { CI_AUTH_MODE: 'token' }), false);
+    assert.equal(accountsOf({}, {}), false);
+  });
+  it('LOC-ACC-2: logging in needs the Atlassian app, not the encryption key; with oauth the variables are not asked twice', () => {
+    assert.deepEqual(missingRequired('token', {}, true).map((m) => m.name), ['ATLASSIAN_CLIENT_ID', 'ATLASSIAN_CLIENT_SECRET']);
+    assert.deepEqual(missingRequired('oauth', {}, true).map((m) => m.name), ['ATLASSIAN_CLIENT_ID', 'ATLASSIAN_CLIENT_SECRET', 'CI_ENCRYPTION_KEY']);
+    assert.deepEqual(missingRequired('token', { ATLASSIAN_CLIENT_ID: 'dummy-id', ATLASSIAN_CLIENT_SECRET: 'dummy-secret' }, true), []);
+  });
+  it('LOC-ACC-3: CI_AUTH_MODE=accounts is set and CI_BOOTSTRAP_EMAIL is reported by name only', () => {
+    const p = plan({ mode: 'token', dev: false, accounts: true }, {});
+    assert.equal(p.vars.CI_AUTH_MODE, 'accounts');
+    assert.equal(p.callbackUrl, 'http://localhost:4317/api/connections/atlassian/callback');
+    assert.equal(plan({ mode: 'token', dev: false }, {}).vars.CI_AUTH_MODE, undefined);
+    const status = optionalStatus('token', { CI_BOOTSTRAP_EMAIL: 'owner@example.test' }, true);
+    assert.deepEqual(status.find((s) => s.name === 'CI_BOOTSTRAP_EMAIL'), { name: 'CI_BOOTSTRAP_EMAIL', set: true });
+    assert.equal(JSON.stringify(status).includes('owner@example.test'), false);
+    assert.equal(optionalStatus('token', {}).some((s) => s.name === 'CI_BOOTSTRAP_EMAIL'), false);
   });
 });
 
