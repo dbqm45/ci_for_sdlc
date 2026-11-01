@@ -9,7 +9,7 @@ import { createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_ENV_FILE, UNDER_OP, USAGE, missingRequired, modeOf, needsInstall, nodeOk, optionalStatus, parseArgs, plan, shouldUseOp } from './lib/local.mjs';
+import { DEFAULT_ENV_FILE, accountsOf, UNDER_OP, USAGE, missingRequired, modeOf, needsInstall, nodeOk, optionalStatus, parseArgs, plan, shouldUseOp } from './lib/local.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const WIN = process.platform === 'win32';
@@ -56,17 +56,19 @@ if (needsInstall({ lockMtimeMs: mtime(`${ROOT}/package-lock.json`), installedMti
 
 // --- Keys
 const mode = modeOf(args, process.env);
-const p = plan({ mode, dev: args.dev, port: args.port }, process.env);
+const accounts = accountsOf(args, process.env);
+const p = plan({ mode, dev: args.dev, port: args.port, accounts }, process.env);
 const env = { ...process.env, ...p.vars };
 delete env[UNDER_OP];
 
-const missing = missingRequired(mode, env);
+const label = accounts ? `${mode} + accounts` : mode;
+const missing = missingRequired(mode, env, accounts);
 if (missing.length) {
-  if (!args.prompt || !process.stdin.isTTY) fail(`Brakuje zmiennych dla trybu ${mode}: ${missing.map((m) => m.name).join(', ')}. Ustaw je (np. z menedżera haseł) i uruchom ponownie.`);
-  step(`Tryb ${mode}: brakuje ${missing.length} klucz(y). Wklej je z menedżera haseł (nie będą widoczne ani zapisane)`);
+  if (!args.prompt || !process.stdin.isTTY) fail(`Brakuje zmiennych dla trybu ${label}: ${missing.map((m) => m.name).join(', ')}. Ustaw je (np. z menedżera haseł) i uruchom ponownie.`);
+  step(`Tryb ${label}: brakuje ${missing.length} klucz(y). Wklej je z menedżera haseł (nie będą widoczne ani zapisane)`);
   for (const m of missing) {
     const value = (await askHidden(`  ${m.name} (${m.hint}): `)).trim();
-    if (!value) fail(`Bez ${m.name} tryb ${mode} nie wystartuje.`);
+    if (!value) fail(`Bez ${m.name} tryb ${label} nie wystartuje.`);
     env[m.name] = value;
   }
 }
@@ -84,10 +86,11 @@ child.on('exit', (code) => {
 });
 
 if (await waitForHealth(p.healthUrl, 180_000)) {
-  const opt = optionalStatus(mode, env);
+  const opt = optionalStatus(mode, env, accounts);
   console.log(`\n${bold('Gotowe:')} ${bold(p.appUrl)}`);
   console.log(`  Tryb połączenia z Atlassianem: ${mode}${mode === 'oauth' ? ` (Settings → Integrations → Connect Atlassian)` : ''}`);
-  if (mode === 'oauth') console.log(`  Callback URL w aplikacji Atlassiana: ${p.callbackUrl}`);
+  if (accounts) console.log('  Logowanie: kontem Atlassian (CI_AUTH_MODE=accounts). Pierwszy Owner: CI_BOOTSTRAP_EMAIL albo link z logu serwera wyżej');
+  if (mode === 'oauth' || accounts) console.log(`  Callback URL w aplikacji Atlassiana: ${p.callbackUrl}`);
   console.log(`  Klucze: ${opt.map((o) => `${o.name} ${o.set ? '✓' : '—'}`).join(', ')}`);
   console.log('  Zatrzymanie: Ctrl+C\n');
 } else if (!stopping) {

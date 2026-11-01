@@ -18,6 +18,9 @@ export const REQUIRED = {
   ],
 };
 
+/** Logging in with Atlassian (CI_AUTH_MODE=accounts): the same Atlassian app, scope read:me (docs/CONNECT-ATLASSIAN.md). */
+export const REQUIRED_ACCOUNTS = REQUIRED.oauth.slice(0, 2);
+
 /** Shown as set / not set (names only), so it is clear what the app will be able to read. */
 export const OPTIONAL = {
   token: ['JIRA_API_TOKEN', 'CONFLUENCE_API_TOKEN', 'FIGMA_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'CI_ENCRYPTION_KEY'],
@@ -28,6 +31,7 @@ export const USAGE = `Użycie: npm run local -- [opcje]
 
   --oauth              przycisk "Connect Atlassian" zamiast JIRA_API_TOKEN (CI_CONNECT_MODE=oauth)
   --token              połączenie tokenem API (domyślnie, chyba że CI_CONNECT_MODE=oauth)
+  --accounts           logowanie kontem Atlassian i role (CI_AUTH_MODE=accounts); łączy się z --oauth i --token
   --dev                tryb programisty: Vite z przeładowaniem na http://localhost:${VITE_PORT}
   --port <numer>       port serwera (domyślnie ${DEFAULT_PORT})
   --env-file <plik>    plik z odwołaniami 1Password (op://…), domyślnie ${DEFAULT_ENV_FILE}
@@ -39,7 +43,7 @@ Skrypt nigdy nie zapisuje ich do pliku.`;
 
 /**
  * @param {string[]} argv
- * @returns {{ mode?: 'token' | 'oauth', dev: boolean, port?: number, envFile?: string, prompt: boolean, help: boolean, error?: string }}
+ * @returns {{ mode?: 'token' | 'oauth', accounts?: boolean, dev: boolean, port?: number, envFile?: string, prompt: boolean, help: boolean, error?: string }}
  */
 export function parseArgs(argv) {
   const out = { dev: false, prompt: true, help: false };
@@ -49,7 +53,8 @@ export function parseArgs(argv) {
       const mode = a.slice(2);
       if (out.mode && out.mode !== mode) return { ...out, error: 'Wybierz jedno: --oauth albo --token.' };
       out.mode = mode;
-    } else if (a === '--dev') out.dev = true;
+    } else if (a === '--accounts') out.accounts = true;
+    else if (a === '--dev') out.dev = true;
     else if (a === '--no-prompt') out.prompt = false;
     else if (a === '--help' || a === '-h') out.help = true;
     else if (a === '--port' || a === '--env-file') {
@@ -77,6 +82,13 @@ export function parseArgs(argv) {
 export const modeOf = (args, env) => (args.mode ?? (env.CI_CONNECT_MODE?.trim() === 'oauth' ? 'oauth' : 'token'));
 
 /**
+ * Logging in with accounts: the flag, or CI_AUTH_MODE=accounts already in the environment.
+ * @param {{ accounts?: boolean }} args
+ * @param {Record<string, string | undefined>} env
+ */
+export const accountsOf = (args, env) => !!args.accounts || env.CI_AUTH_MODE?.trim() === 'accounts';
+
+/**
  * Whether to re-run under `op run --env-file`: only with the 1Password CLI, a references file, and not already inside.
  * @param {{ underOp: boolean, opAvailable: boolean, envFileExists: boolean }} s
  */
@@ -90,7 +102,7 @@ export const needsInstall = (s) => s.installedMtimeMs === undefined || (s.lockMt
 
 /**
  * What to start and with which extra variables. Variables already set win over the defaults (e.g. CI_PUBLIC_URL).
- * @param {{ mode: 'token' | 'oauth', dev: boolean, port?: number }} o
+ * @param {{ mode: 'token' | 'oauth', dev: boolean, port?: number, accounts?: boolean }} o
  * @param {Record<string, string | undefined>} env
  */
 export function plan(o, env) {
@@ -101,6 +113,7 @@ export function plan(o, env) {
     PORT: String(port),
     HOST: env.HOST || '127.0.0.1',
     CI_PUBLIC_URL: env.CI_PUBLIC_URL || appUrl,
+    ...(o.accounts ? { CI_AUTH_MODE: 'accounts' } : {}),
   };
   return {
     npmScript: o.dev ? 'dev' : 'start',
@@ -115,15 +128,20 @@ export function plan(o, env) {
 /**
  * @param {'token' | 'oauth'} mode
  * @param {Record<string, string | undefined>} env
+ * @param {boolean} [accounts]
  */
-export const missingRequired = (mode, env) => REQUIRED[mode].filter((v) => !env[v.name]?.trim());
+export function missingRequired(mode, env, accounts = false) {
+  const need = [...(accounts ? REQUIRED_ACCOUNTS : []), ...REQUIRED[mode]].filter((v, i, all) => all.findIndex((x) => x.name === v.name) === i);
+  return need.filter((v) => !env[v.name]?.trim());
+}
 
 /**
  * Names of the optional variables with whether each is set. Never the values.
  * @param {'token' | 'oauth'} mode
  * @param {Record<string, string | undefined>} env
+ * @param {boolean} [accounts] adds CI_BOOTSTRAP_EMAIL (without it the first Owner uses the link from the server log)
  */
-export const optionalStatus = (mode, env) => OPTIONAL[mode].map((name) => ({ name, set: !!env[name]?.trim() }));
+export const optionalStatus = (mode, env, accounts = false) => [...(accounts ? ['CI_BOOTSTRAP_EMAIL'] : []), ...OPTIONAL[mode]].map((name) => ({ name, set: !!env[name]?.trim() }));
 
 /**
  * Node 22 or newer (the runtime of CI and the Docker image).
