@@ -5,9 +5,10 @@
  */
 export type AuthStep = 'ok' | 'fail' | 'prompt' | 'retry' | 'forget';
 
-export function authStep(a: { status: number; challenge: boolean; retried: boolean; used: string; current: string }): AuthStep {
+export function authStep(a: { status: number; challenge: boolean; retried: boolean; used: string; current: string; accounts?: boolean }): AuthStep {
   if (a.status !== 401) return 'ok';
-  if (!a.challenge) return 'fail';
+  // Accounts mode: people log in on the login screen; a token is only for machines.
+  if (!a.challenge || a.accounts) return 'fail';
   if (a.retried) return 'forget';
   if (a.current && a.current !== a.used) return 'retry';
   return 'prompt';

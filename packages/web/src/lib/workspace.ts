@@ -5,7 +5,7 @@
 export const DEFAULT_WORKSPACE = 'default';
 
 /** Routes of the whole installation, never of one workspace. */
-const GLOBAL = ['/api/workspaces', '/api/pdi', '/api/changes', '/api/health', '/api/rules', '/api/openapi.json'];
+const GLOBAL = ['/api/workspaces', '/api/pdi', '/api/changes', '/api/health', '/api/rules', '/api/openapi.json', '/api/auth', '/api/members', '/api/invitations'];
 
 /** The workspace an address names (none: stay where you are) and the page path inside it. */
 export function parseHashPath(path: string): { ws?: string; path: string } {
