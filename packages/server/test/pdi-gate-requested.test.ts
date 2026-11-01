@@ -37,7 +37,7 @@ async function start(opts: { pdi?: boolean; ready?: boolean } = {}) {
   status = 202;
   ctx = await buildApp({ dataDir: dir, adminToken: '', allowedHosts: [], allowedOrigins: [], connect: undefined, pdi: opts.pdi === false ? { eventsUrl: '', secret: '' } : { eventsUrl: 'https://pdi.example.com', secret: 'shared-with-pdi', fetch: fakeFetch as typeof fetch, clock: () => now } });
   const first = await ctx.engine.analyze('initial');
-  key = first.items.find((i) => i.type === 'story' && (i.readiness === 'ready') === !!opts.ready)!.key;
+  key = first.items.find((i) => i.type === 'story' && i.readiness === (opts.ready ? 'ready' : 'not_ready'))!.key;
   const project = demoProject();
   project.requirements.find((r) => r.key === key)!.labels.push('change:CHG-12');
   await ctx.store.saveDemoContext(project);

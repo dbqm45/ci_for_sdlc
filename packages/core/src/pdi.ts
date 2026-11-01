@@ -57,7 +57,9 @@ export function changeKeyOf(labels: string[], prefix = CHANGE_LABEL_PREFIX): str
 
 /**
  * Readiness of every change that has at least one analysed story: `drift` when a story has an open drift finding
- * (its approved baseline moved), `ready` when every story is ready, else `not_ready`. Ordered by change key.
+ * (its approved baseline moved), `not_ready` when a story has a blocking finding, else `ready`. A story that only
+ * needs attention (warnings) does not hold the change back, as it does not hold back its own approval (PRB-17); its
+ * open questions still go to pdi in `open_questions`. Ordered by change key.
  */
 export function changeReadiness(items: ItemAnalysis[], requirements: RequirementItem[], prefix = CHANGE_LABEL_PREFIX): ChangeReadiness[] {
   const byKey = new Map(items.map((i) => [i.key, i]));
@@ -74,9 +76,9 @@ export function changeReadiness(items: ItemAnalysis[], requirements: Requirement
       change,
       readiness: stories.some((s) => s.findings.some((f) => f.origin === 'drift' && f.status === 'open'))
         ? 'drift'
-        : stories.every((s) => s.readiness === 'ready')
-          ? 'ready'
-          : 'not_ready',
+        : stories.some((s) => s.readiness === 'not_ready')
+          ? 'not_ready'
+          : 'ready',
       openQuestions: stories.reduce((n, s) => n + s.challenges.filter((c) => !c.answered).length, 0),
       items: stories.map((s) => s.key),
     }));

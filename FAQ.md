@@ -233,6 +233,17 @@ kryterium wyjścia (`exit`), bez właściciela albo bez daty usunięcia (`remove
 samokontrola planu z tf: fundament bez „Odblokowuje” (albo odblokowujący zadanie, którego w zmianie nie ma) i cięcie
 bez wymagania (bez weryfikacji i bez ID typu `US-02`). W Jirze obie milczą.
 
+**Jak odpowiedzieć na ustalenie zmiany trzymanej w repo?**
+Wpisem w `decisions.md` tej zmiany, w formacie tf (`decision_record.py decision add … --finding DES-001:TSK-1`):
+nagłówek to odpowiedź, a pole `ustalenie` wskazuje ustalenie (reguła i element, np. `DES-001:TSK-1`); opcjonalne
+`skutek: accept_risk` przyjmuje ryzyko zamiast rozwiązywać. Decyzja przechodzi review w PR razem ze zmianą, a bramka
+i serwer ją uwzględniają. Szczegóły: [`docs/REPO-DECISIONS-PLAN.md`](docs/REPO-DECISIONS-PLAN.md).
+
+**Czy ostrzeżenie wstrzymuje zmianę w pdi?**
+Nie. Zmiana jest dla pdi `not_ready` tylko wtedy, gdy któraś jej historyjka ma blokujące ustalenie; historyjka, która
+tylko wymaga uwagi, nie wstrzymuje zmiany (tak jak nie wstrzymuje własnego zatwierdzenia). Otwarte pytania pdi widzi
+w liczbie `open_questions`.
+
 **Skąd wiadomo, czy kryterium akceptacji ma test i czy ten test przechodzi?**
 
 Z wyników testów w formacie JUnit XML, który zapisuje prawie każdy runner (Vitest, Jest, pytest, JUnit, Playwright):

@@ -1,10 +1,11 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { FlagPlan, RepoFacts, RequirementItem } from '../model.js';
+import type { ActiveDecision, FlagPlan, RepoFacts, RequirementItem } from '../model.js';
 import { isRecord, records, str } from '../guards.js';
 import { CHANGE_LABEL_PREFIX } from '../pdi.js';
 import { DesignFormatError, parseDesignMd, type DesignRow } from './design.js';
+import { parseRepoDecisions } from './repo-decisions.js';
 
 /**
  * Connector for changes kept in a repository (pdi plan "one SDLC flow", step F2; docs/PDI-F2-PLAN.md):
@@ -48,6 +49,8 @@ export interface RepoProblem {
 export interface RepoChanges {
   requirements: RequirementItem[];
   problems: RepoProblem[];
+  /** Decisions on findings from the changes' decisions.md (PRB-16, connectors/repo-decisions.ts). */
+  decisions: ActiveDecision[];
 }
 
 /** The YAML header (`---` … `---`) and the body after it; `bodyLine` is the file's line the body starts on. */
@@ -354,6 +357,7 @@ export async function readRepoChanges(root: string, opts: { repoUrl?: string } =
   folders.sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   const requirements: RequirementItem[] = [];
   const problems: RepoProblem[] = [];
+  const decisions: ActiveDecision[] = [];
   if (folders.length > MAX_CHANGES) problems.push({ path: CHANGES_DIR, message: `more than ${MAX_CHANGES} changes; only the first ${MAX_CHANGES} were read` });
   for (const folder of folders.slice(0, MAX_CHANGES)) {
     const rel = (file: string) => `${CHANGES_DIR}/${folder}/${file}`;
@@ -377,11 +381,23 @@ export async function readRepoChanges(root: string, opts: { repoUrl?: string } =
         problems.push({ path: rel('design.md'), message: err instanceof DesignFormatError ? err.message : `cannot read: ${(err as Error).message}` });
         design = undefined;
       }
-      requirements.push(...parseChange(folder, { intent: texts['intent.md'], plan: texts['plan.md'], release: texts['release.yaml'], design }, { urlOf }));
+      const items = parseChange(folder, { intent: texts['intent.md'], plan: texts['plan.md'], release: texts['release.yaml'], design }, { urlOf });
+      requirements.push(...items);
+      // decisions.md is optional too, and a bad entry drops only that entry.
+      try {
+        const text = await readSmall(join(dir, folder, 'decisions.md'));
+        if (text !== undefined) {
+          const r = parseRepoDecisions(text, { change: folder, path: rel('decisions.md'), items: new Set(items.map((i) => i.key)) });
+          decisions.push(...r.decisions);
+          problems.push(...r.problems);
+        }
+      } catch (err) {
+        problems.push({ path: rel('decisions.md'), message: `cannot read: ${(err as Error).message}` });
+      }
     } catch (err) {
       if (!(err instanceof RepoFileError)) throw err;
       problems.push({ path: rel(err.file), message: err.message });
     }
   }
-  return { requirements, problems };
+  return { requirements, problems, decisions };
 }

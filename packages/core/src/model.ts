@@ -230,6 +230,11 @@ export interface ProjectContext {
   fetchedAt: string;
   /** Test results (`analyze --tests`, G4); absent = no results given, and the TEST rules stay silent. */
   tests?: TestCase[];
+  /**
+   * Decisions on findings kept in the repository with the change (`decisions.md`, PRB-16); they take the place of a
+   * stored decision on the same question.
+   */
+  decisions?: ActiveDecision[];
 }
 
 // ---------------------------------------------------------------------------

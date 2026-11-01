@@ -60,6 +60,18 @@ describe('analyze --repo', () => {
     expect((await gate(['--repo', root])).code).toBe(0);
   });
 
+  it('GATE-13 (PRB-16): a decision in the change\'s decisions.md settles the finding, so the gate passes; a bad entry fails it', async () => {
+    const decided = (finding: string) =>
+      `# Decyzje zmiany CHG-12\n\n## The list is checked by hand in the review\n- ref: CHG-12/D1\n- id:\n- wyslano: nie\n- kiedy: 2026-10-30\n- kto: Ann\n- rodzaj: product\n- dlaczego: A spike, no criteria yet.\n- zrodlo: claude-cli\n- szkic: human\n- ustalenie: ${finding}\n- skutek: accept_risk\n`;
+    const files = (d: string) => ({ [`${C}/CHG-12/intent.md`]: intent('CHG-12'), [`${C}/CHG-12/plan.md`]: plan('CHG-12', ''), [`${C}/CHG-12/decisions.md`]: d });
+    const ok = await gate(['--repo', checkout(files(decided('REQ-001:TSK-57'))), '--fail-on', 'critical']);
+    expect(ok.code).toBe(0);
+    expect(ok.out).not.toMatch(/✗ No acceptance criteria/);
+    const bad = await gate(['--repo', checkout(files(decided('REQ-001:TSK-99'))), '--fail-on', 'critical']);
+    expect(bad.code).toBe(1);
+    expect(`${bad.out}\n${bad.err}`).toMatch(/decisions\.md.*TSK-99, which is not CHG-12 or one of its slices/);
+  });
+
   it('GATE-03: a bad file fails the gate whatever the threshold, and its change is left out', async () => {
     const root = checkout({ [`${C}/CHG-12/intent.md`]: intent('CHG-12'), [`${C}/CHG-13/intent.md`]: intent('CHG-14') });
     const r = await gate(['--repo', root]);

@@ -13,8 +13,10 @@ Stan: 2026-10-26, zrobione (PR w toku). Strony pdi (dbqm45/pdi#16) i tf (dbqm45/
 ## Przepływ
 1. Po każdej analizie ci_for_sdlc liczy gotowość każdej zmiany z jej historyjek:
    - `drift` — któraś historyjka była zatwierdzona, a ma ustalenie z dryfu (`origin: drift`): baseline się rozjechał;
-   - `ready` — wszystkie historyjki zmiany są `ready`;
-   - `not_ready` — w pozostałych przypadkach;
+   - `not_ready` — któraś historyjka ma blokujące ustalenie (`not_ready`);
+   - `ready` — w pozostałych przypadkach: historyjka, która tylko wymaga uwagi (ostrzeżenia), nie wstrzymuje zmiany,
+     tak jak nie wstrzymuje własnego zatwierdzenia (PRB-17, 2026-11-01; wcześniej `ready` wymagało wszystkich
+     historyjek `ready`);
    - `open_questions` — liczba otwartych pytań (wyzwań bez odpowiedzi) w historyjkach zmiany.
 2. Gdy gotowość zmiany jest inna niż ostatnio wysłana (albo zmiana pojawia się pierwszy raz), do kolejki trafia
    `readiness.changed` (kontrakt pdi 0.4.0). Dostawa: `POST $PDI_EVENTS_URL/events/ci_for_sdlc` z nagłówkami
