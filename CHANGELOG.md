@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.38] - 2026-11-01
+
+### Nowe
+
+- **scripts:** add --accounts to npm run local and read:me docs (#106)
+
 ## [0.1.37] - 2026-11-01
 
 ### Nowe
