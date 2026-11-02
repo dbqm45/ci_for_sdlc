@@ -9,6 +9,7 @@ export { extractClaims, findConflicts, formatClaimValue, ATTRIBUTE_LABELS, GENER
 export { EV_CLAIM_PACK } from './analysis/claim-pack-ev.js';
 export { claimPackOf } from './analysis/claim-packs.js';
 export { RULES } from './analysis/rules.js';
+export { OWASP_TOP10_CWES, SECURITY_RULES, placeOfResult, securityByItem, securityRuleOf } from './analysis/security-scan.js';
 export { parseAcceptanceCriteria, normalizeAction } from './analysis/acceptance.js';
 export { storyStatement, joinedActions } from './analysis/story-shape.js';
 export { MVP_LINE, releaseLineOf, releasePlanOf } from './analysis/release-plan.js';
@@ -28,6 +29,7 @@ export { errorMessage } from './errors.js';
 export { MAX_RECONSTRUCTION_BYTES, RECONSTRUCTION_FORMAT, ReconstructionError, isClaimable, parseReconstruction, readReconstruction, reconstructionToDocuments, type Reconstruction } from './connectors/reconstruction.js';
 export { ATLASSIAN_API, RELEASE_LINE_SOURCES, type ReleaseLineSource, fetchJira, fetchConfluence, jiraIssueToRequirement, adfToText, splitSections, type AtlassianOAuthAccess, type JiraConfig, type ConfluenceConfig } from './connectors/atlassian.js';
 export { clearFigmaCache, fetchFigma, figmaApiBase, framesFromDocument, FigmaRateLimitError, type FigmaConfig } from './connectors/figma.js';
+export { MAX_SARIF_FILE_BYTES, MAX_SARIF_RESULTS, SarifError, parseSarif, readSarif, type SarifProblem } from './connectors/sarif.js';
 export { MAX_TEST_CASES, MAX_TEST_FILE_BYTES, TestResultsError, parseJUnit, readTestResults, testRefs, type TestResultsProblem } from './connectors/tests.js';
 export { MAX_API_OPERATIONS, MAX_OPENAPI_FILE_BYTES, OpenApiError, parseOpenApi, readOpenApi, type OpenApiProblem } from './connectors/openapi.js';
 export { DESIGN_STATES, DesignFormatError, parseDesignMd, type DesignFrameLink, type DesignRow } from './connectors/design.js';

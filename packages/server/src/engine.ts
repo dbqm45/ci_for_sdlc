@@ -24,6 +24,7 @@ import {
   type ContextGraph,
   type AiAuditRecord,
   type DocumentItem,
+  type SecurityScan,
   type ProjectContext,
   type SemanticOutput,
   type TestCase,
@@ -82,6 +83,8 @@ export class Engine extends EventEmitter {
     private tests?: TestCase[],
     /** API operations of `analyze --openapi` (docs/OPENAPI-PLAN.md), attached to the context of every run. */
     private api?: DocumentItem[],
+    /** Security scan of `analyze --sarif` (Z8c, docs/SECURITY-SCAN-PLAN.md), attached to the context of every run. */
+    private security?: SecurityScan,
   ) {
     super();
   }
@@ -91,7 +94,7 @@ export class Engine extends EventEmitter {
     // The claim vocabulary is the project's setting in every mode, the demo workspace included.
     // Test results (G4): `analyze --tests` wins over the setting; a report that cannot be read stops the analysis.
     const tests = this.tests ?? (await this.loadTests(settings));
-    const ctx: ProjectContext = { ...loaded, project: { ...loaded.project, claimPack: settings.project.claimPack ?? 'general' }, ...(tests && { tests }) };
+    const ctx: ProjectContext = { ...loaded, project: { ...loaded.project, claimPack: settings.project.claimPack ?? 'general' }, ...(tests && { tests }), ...(this.security && { securityScan: this.security }) };
     // The API contract (OpenAPI): `analyze --openapi` wins over the setting; a file that cannot be read stops the analysis.
     const api = this.api ?? (await this.loadApi(settings)) ?? [];
     // tf's reconstruction from code is the current state of the code, next to the specification in either mode.

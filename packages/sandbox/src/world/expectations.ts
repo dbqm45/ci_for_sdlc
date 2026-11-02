@@ -77,6 +77,10 @@ export const EXPECTATIONS: RuleExpectation[] = [
   { rule: 'TEST-003', fires: [], silent: ['PAY-123'], gap: 'test results only; fires on the demo project with packages/core/test/fixtures/junit/results.xml (PAY-126)' },
   // docs/OPENAPI-PLAN.md: only with an API contract (`analyze --openapi`); the world has none, so the rule stays silent.
   { rule: 'API-001', fires: [], silent: ['PAY-123'], gap: 'API contract only; fires on the demo project with packages/core/test/fixtures/openapi/cards.yaml (PAY-124)' },
+  // docs/SECURITY-SCAN-PLAN.md: only with a security scan (`analyze --repo --sarif`); the world has none, so all three stay silent.
+  { rule: 'SEC-001', fires: [], silent: ['PAY-123'], gap: 'security scan only; fires on packages/core/test/fixtures/repo-changes with fixtures/sarif/scan.sarif (TSK-2, CHG-1)' },
+  { rule: 'SEC-002', fires: [], silent: ['PAY-123'], gap: 'security scan only; fires on packages/core/test/fixtures/repo-changes with fixtures/sarif/scan.sarif (TSK-2)' },
+  { rule: 'SEC-003', fires: [], silent: ['PAY-123'], gap: 'security scan only; fires on packages/core/test/fixtures/repo-changes with fixtures/sarif/scan.sarif (CHG-1)' },
 ];
 
 export const DERIVED_EXPECTATIONS: DerivedRuleExpectation[] = [

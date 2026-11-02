@@ -6,6 +6,9 @@
 # With your tests' JUnit XML (TEST_REPORTS below), each acceptance criterion also gets its tests: a test named after
 # its criterion (TSK-57/AC-1 …, or US-02/AC-1 for a requirement id of the slice's row) is that criterion's test, and
 # TEST-001…003 report a criterion without a test, a failing one and one the item no longer has (docs/PDI-G4-PLAN.md).
+# With a security scan as SARIF (SARIF_REPORTS below; docs/SECURITY-SCAN-PLAN.md), each result goes to the slice whose
+# commits (trailer `Change: TSK-n`) changed its file, else to the changes the pull request touches: SEC-001 (an error,
+# or a warning about an OWASP Top 10 weakness) blocks, SEC-002 and SEC-003 inform; annotations sit on the file and line.
 # The check then also needs to run when code changes: widen or drop `paths`.
 name: Definition check
 
@@ -25,7 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # The full history: the slices' files come from the commits' `Change:` trailers, and --base needs the base branch.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       # ci_for_sdlc itself, next to the checkout. Pin `ref` to a release tag (vX.Y.Z) rather than main.
       - uses: actions/checkout@v7
         with:
@@ -41,6 +47,15 @@ jobs:
       #   continue-on-error: true   # a red test is reported by the check (TEST-002) and by your own test workflow
       - run: npm ci --workspace @ci/core --workspace @ci/server
         working-directory: .ci_for_sdlc
+      # Optional: a security scan writing SARIF where SARIF_REPORTS points. Semgrep with the OWASP Top 10 rules (the
+      # registry pack is downloaded on each run; a scan that fails writes no file, and the check fails on the missing one):
+      # - run: pipx install semgrep
+      # - run: semgrep scan --config p/owasp-top-ten --sarif --output reports/security/semgrep.sarif
+      #   continue-on-error: true   # findings are reported by the check (SEC-001…003)
+      # And your dependencies: npm audit has no SARIF output, so ci_for_sdlc converts its JSON.
+      # - run: |
+      #     npm audit --json > "$RUNNER_TEMP/audit.json" || true
+      #     node .ci_for_sdlc/scripts/npm-audit-sarif.mjs "$RUNNER_TEMP/audit.json" reports/security/npm-audit.sarif --lockfile package-lock.json
       - name: Check the changes
         working-directory: .ci_for_sdlc
         env:
@@ -49,6 +64,11 @@ jobs:
           # A JUnit XML file or a directory of them, relative to the repository; empty = no test results. Once set, a
           # report that is missing or cannot be read fails the check, so tests that did not run are never "no tests".
           TEST_REPORTS: ''
+          # SARIF files or directories of them, relative to the repository and separated by spaces (e.g.
+          # reports/security); empty = no security scan. Once set, a report that is missing or cannot be read fails
+          # the check. Results outside the slices' files go to the changes this pull request touches (BASE_REF).
+          SARIF_REPORTS: ''
+          BASE_REF: ${{ github.base_ref }}
           # Optional: send each change's readiness to pdi (docs/REPO-CHANGES.md, "With pdi"); uncomment these two and
           # the --send-to-pdi line below. Delivery never fails the check.
           # PDI_EVENTS_URL: ${{ secrets.PDI_EVENTS_URL }}
@@ -56,5 +76,6 @@ jobs:
         run: |
           set -- --repo "$GITHUB_WORKSPACE" --repo-url "$REPO_URL" --fail-on critical
           if [ -n "$TEST_REPORTS" ]; then set -- "$@" --tests "$GITHUB_WORKSPACE/$TEST_REPORTS"; fi
+          if [ -n "$SARIF_REPORTS" ]; then for p in $SARIF_REPORTS; do set -- "$@" --sarif "$GITHUB_WORKSPACE/$p"; done; set -- "$@" --base "origin/$BASE_REF"; fi
           # set -- "$@" --send-to-pdi
           npm run analyze -- "$@"

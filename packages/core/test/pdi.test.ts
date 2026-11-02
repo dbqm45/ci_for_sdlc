@@ -53,6 +53,15 @@ describe('changeReadiness', () => {
     expect(out.map((c) => [c.change, c.items])).toEqual([['CHG-12', ['PAY-1']]]);
   });
 
+  it('holds a change back on a blocking security finding of the change itself (Z8c), though epics are otherwise left out', () => {
+    const sec = (status: string, blocks: boolean) => ({ ...item('PAY-100', 'ready', { type: 'epic' }), findings: [{ id: 's1', ruleId: 'SEC-001', origin: 'rule', status, blocks }] }) as unknown as ItemAnalysis;
+    const all = [...reqs, req('PAY-100', ['change:CHG-12'], 'epic')];
+    expect(changeReadiness([item('PAY-1', 'ready'), sec('open', true)], all).map((c) => [c.change, c.readiness, c.items])).toEqual([['CHG-12', 'not_ready', ['PAY-1']]]);
+    expect(changeReadiness([item('PAY-1', 'ready'), sec('open', false)], all)[0]?.readiness).toBe('ready');
+    expect(changeReadiness([item('PAY-1', 'ready'), sec('resolved', true)], all)[0]?.readiness).toBe('ready');
+    expect(changeReadiness([sec('open', true)], [req('PAY-100', ['change:CHG-30'], 'epic')]).map((c) => [c.change, c.readiness, c.items])).toEqual([['CHG-30', 'not_ready', []]]);
+  });
+
   it('uses the configured prefix', () => {
     expect(changeReadiness([item('PAY-1', 'ready')], [req('PAY-1', ['chg/CHG-5'])], 'chg/')[0]?.change).toBe('CHG-5');
   });

@@ -7,7 +7,7 @@
  * building?", not "is the code correct?".
  */
 
-export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision' | 'code' | 'test' | 'api';
+export type SourceSystem = 'jira' | 'confluence' | 'figma' | 'decision' | 'code' | 'test' | 'api' | 'security';
 
 // ---------------------------------------------------------------------------
 // Normalized source contexts (output of connectors + normalizer)
@@ -221,6 +221,33 @@ export interface AcTestResult {
   tests: { name: string; status: TestCase['status']; message?: string }[];
 }
 
+/** One result of a security scan in SARIF 2.1.0 (Z8c, docs/SECURITY-SCAN-PLAN.md, connectors/sarif.ts). */
+export interface ScanResult {
+  /** `tool.driver.name` of the run (`Semgrep OSS`, `npm audit`). */
+  tool: string;
+  ruleId: string;
+  level: 'error' | 'warning' | 'note';
+  /** The first line of the result's message. */
+  message: string;
+  /** The file of the first location, relative to the repository root, and the line in it. */
+  path?: string;
+  line?: number;
+  /** CWE numbers of the rule and the result (`CWE-78: …`, `external/cwe/cwe-078`, `properties.cwe`). */
+  cwes: number[];
+  helpUri?: string;
+  /** The report it was read from. */
+  report: string;
+}
+
+/** Security scan results with what is needed to give each one to a slice or a change (Z8c). */
+export interface SecurityScan {
+  results: ScanResult[];
+  /** Files each slice touched: commits with a `Change: TSK-n` trailer, per slice key. */
+  sliceFiles: Record<string, string[]>;
+  /** With a base ref: the files the pull request changes and the slices its commits name. */
+  pr?: { files: string[]; slices: string[] };
+}
+
 export interface ProjectContext {
   /** `claimPack`: the claim vocabulary of the project's domain (settings `project.claimPack`); absent = general. */
   project: { key: string; name: string; claimPack?: ClaimPackId };
@@ -230,6 +257,8 @@ export interface ProjectContext {
   fetchedAt: string;
   /** Test results (`analyze --tests`, G4); absent = no results given, and the TEST rules stay silent. */
   tests?: TestCase[];
+  /** Security scan results (`analyze --sarif`, Z8c); absent = no scan given, and the SEC rules stay silent. */
+  securityScan?: SecurityScan;
   /**
    * Decisions on findings kept in the repository with the change (`decisions.md`, PRB-16); they take the place of a
    * stored decision on the same question.
