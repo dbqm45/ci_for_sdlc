@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.40] - 2026-11-02
+
+### Nowe
+
+- **server:** read SARIF security scans in the gate (#109)
+
 ## [0.1.39] - 2026-11-01
 
 ### Poprawione
