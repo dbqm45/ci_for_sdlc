@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@ci/core": "*",
-    "@fastify/static": "^10.1.7",
+    "@fastify/static": "^10.1.8",
     "@fastify/swagger": "^9.9.2",
     "fastify": "^5.12.7",
     "pg": "^8.23.1",

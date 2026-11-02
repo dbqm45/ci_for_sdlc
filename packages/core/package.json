@@ -13,12 +13,12 @@
     "eval:ai": "tsx evals/run.ts"
   },
   "dependencies": {
-    "@anthropic-ai/bedrock-sdk": "^1.0.0",
-    "@anthropic-ai/sdk": "^1.1.0",
+    "@anthropic-ai/bedrock-sdk": "^1.1.0",
+    "@anthropic-ai/sdk": "^1.3.0",
     "yaml": "2.9.1"
   },
   "devDependencies": {
-    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/core": "^10.1.1",
     "@types/node": "^22.10.0",
     "@vitest/coverage-v8": "^5.0.5",
     "ajv": "^8.20.0",
