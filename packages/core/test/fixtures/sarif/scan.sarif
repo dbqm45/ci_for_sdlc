@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Semgrep OSS",
+          "rules": [
+            {
+              "id": "javascript.lang.security.detect-child-process",
+              "defaultConfiguration": { "level": "error" },
+              "helpUri": "https://semgrep.dev/r/javascript.lang.security.detect-child-process",
+              "properties": { "tags": ["CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')", "OWASP-A03:2021 - Injection", "security"] }
+            },
+            {
+              "id": "javascript.lang.security.ssrf",
+              "defaultConfiguration": { "level": "warning" },
+              "properties": { "tags": ["CWE-918: Server-Side Request Forgery (SSRF)", "OWASP-A10:2021 - Server-Side Request Forgery (SSRF)"] }
+            },
+            {
+              "id": "javascript.lang.correctness.regex-dos",
+              "defaultConfiguration": { "level": "warning" },
+              "properties": { "tags": ["CWE-1333: Inefficient Regular Expression Complexity"] }
+            },
+            {
+              "id": "javascript.lang.best-practice.leftover-debug",
+              "defaultConfiguration": { "level": "note" },
+              "properties": { "tags": [] }
+            }
+          ]
+        }
+      },
+      "invocations": [{ "executionSuccessful": true, "toolExecutionNotifications": [] }],
+      "results": [
+        {
+          "ruleId": "javascript.lang.security.detect-child-process",
+          "message": { "text": "exec() runs a command built from request input.\nUse execFile with an argument list." },
+          "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/retry.ts", "uriBaseId": "%SRCROOT%" }, "region": { "startLine": 12, "startColumn": 3 } } }],
+          "fingerprints": { "matchBasedId/v1": "requires login" }
+        },
+        {
+          "ruleId": "javascript.lang.correctness.regex-dos",
+          "message": { "text": "The regular expression can take exponential time." },
+          "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/retry.ts", "uriBaseId": "%SRCROOT%" }, "region": { "startLine": 30 } } }]
+        },
+        {
+          "ruleId": "javascript.lang.security.ssrf",
+          "message": { "text": "The request URL comes from user input." },
+          "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/vault.ts", "uriBaseId": "%SRCROOT%" }, "region": { "startLine": 8 } } }]
+        },
+        {
+          "ruleId": "javascript.lang.best-practice.leftover-debug",
+          "message": { "text": "console.log left in the code." },
+          "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/vault.ts", "uriBaseId": "%SRCROOT%" }, "region": { "startLine": 20 } } }]
+        },
+        {
+          "ruleId": "javascript.lang.security.detect-child-process",
+          "message": { "text": "exec() in a test helper." },
+          "locations": [{ "physicalLocation": { "artifactLocation": { "uri": "src/retry.ts", "uriBaseId": "%SRCROOT%" }, "region": { "startLine": 40 } } }],
+          "suppressions": [{ "kind": "inSource" }]
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DEMO_SCENARIOS, RULES, analyzeProject, demoProject, parseJUnit, parseOpenApi, readRepoChanges, type ProjectContext } from '../src/index.js';
+import { DEMO_SCENARIOS, RULES, analyzeProject, demoProject, parseJUnit, parseOpenApi, readRepoChanges, readSarif, type ProjectContext } from '../src/index.js';
 
 /**
  * Coverage guard for the test data world: every rule must have demo data where it fires
@@ -9,7 +9,9 @@ import { DEMO_SCENARIOS, RULES, analyzeProject, demoProject, parseJUnit, parseOp
  * so the demo world (and later the sandbox seeder built on it) grows with the rules. Rules of repository mode only
  * (REL-007, REL-008) are covered by the changes in fixtures/repo-changes, read as `analyze --repo` reads a checkout;
  * the test-result rules (TEST-001…003) by the demo project with fixtures/junit/results.xml, as `analyze --tests` reads it;
- * the API contract rules (API-001) by the demo project with fixtures/openapi/cards.yaml, as `analyze --openapi` reads it.
+ * the API contract rules (API-001) by the demo project with fixtures/openapi/cards.yaml, as `analyze --openapi` reads it;
+ * the security scan rules (SEC-001…003) by the changes in fixtures/repo-changes with fixtures/sarif/scan.sarif, as
+ * `analyze --repo --sarif` reads them.
  */
 
 const NOW = new Date('2026-10-05T10:00:00Z');
@@ -36,6 +38,7 @@ async function observe() {
       return ctx;
     }),
     repoCtx,
+    { ...repoCtx, securityScan: { results: (await readSarif([fileURLToPath(new URL('fixtures/sarif/scan.sarif', import.meta.url))])).results, sliceFiles: { 'TSK-2': ['src/retry.ts'] } } },
     { ...demoProject(), tests: parseJUnit(await readFile(new URL('fixtures/junit/results.xml', import.meta.url), 'utf8'), 'results.xml') },
     (() => {
       const ctx = demoProject();

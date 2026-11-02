@@ -165,6 +165,13 @@ Workspace „Checkout” odtwarza przykłady z koncepcji produktu:
   --openapi <plik albo katalog>` albo *Settings → Integrations → API contract (OpenAPI)*. Plik, którego nie da się
   odczytać (także Swagger 2.0), zatrzymuje bramkę albo analizę z powodem. Szczegóły:
   [`docs/OPENAPI-PLAN.md`](docs/OPENAPI-PLAN.md).
+- **Skan bezpieczeństwa (SARIF)** — wyniki Semgrepa (`p/owasp-top-ten`), CodeQL albo `npm audit` (przez konwerter
+  `scripts/npm-audit-sarif.mjs`) w formacie SARIF 2.1.0 trafiają do cięcia, którego commity (trailer `Change: TSK-n`)
+  zmieniły plik wyniku, a inne do zmiany. `SEC-001` (błąd albo ostrzeżenie o CWE z OWASP Top 10) blokuje gotowość
+  elementu, `SEC-002` (inne ostrzeżenie) i `SEC-003` (uwaga) informują. Źródła: `npm run analyze -- --repo <ścieżka>
+  --sarif <plik albo katalog> [--base <ref>]` i zmienna `SARIF_REPORTS` w szablonie `change-check.yml`; w GitHub
+  Actions wyniki są adnotacjami na pliku i linii oraz tabelą w podsumowaniu. Raport, którego nie da się odczytać,
+  oblewa bramkę. Szczegóły: [`docs/SECURITY-SCAN-PLAN.md`](docs/SECURITY-SCAN-PLAN.md).
 
 ---
 

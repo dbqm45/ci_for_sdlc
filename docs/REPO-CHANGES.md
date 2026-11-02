@@ -47,11 +47,24 @@ ready or needs attention) or a file could not be read, 2 the analysis could not 
 id of the slice's row, `US-02/AC-1`) is that criterion's test, and TEST-001…003 report a criterion without a test, a
 failing one, and one the item does not have (docs/PDI-G4-PLAN.md). A report that cannot be read fails the gate.
 
+`--sarif <file or directory>` (repeatable; needs `--repo`) adds a security scan as SARIF 2.1.0: Semgrep's or CodeQL's
+`--sarif` output, or `npm audit --json` converted by `scripts/npm-audit-sarif.mjs` (npm audit writes no SARIF). A
+result on a file that a slice's commits changed (commits with the trailer `Change: TSK-57`) is that slice's; any other
+result is the change's: the change whose folder holds the file, else the changes the pull request touches
+(`--base <ref>`: its slices and change folders, from `git log <ref>..HEAD` and `git diff <ref>...HEAD`), else every
+change, so no result is lost. SEC-001 (critical: an error, or a warning about a CWE of the OWASP Top 10 2021 or 2025)
+makes the item not ready, so the change is not ready for pdi either; SEC-002 (another warning) and SEC-003 (a note)
+only inform. The policy's `actions` and `disabledRules` apply as to any rule. A report that cannot be read (missing,
+not JSON, not SARIF 2.1.0, a run that did not execute, over 10 MB or 20 000 results) fails the gate, and so does a
+`--base` that git cannot read: a scan that did not run is never a clean scan. Details:
+[`SECURITY-SCAN-PLAN.md`](SECURITY-SCAN-PLAN.md).
+
 In GitHub Actions (`GITHUB_ACTIONS=true`) each file problem and each finding that fails the gate is also an `::error`
 annotation on its file: the file and line the finding points at (`release.yaml` for REL-007, the slice's row in
 `plan.md` for REL-008), else the item's (`intent.md` for a change, its row in `plan.md` for a slice). Other open
-findings on a change file are `::warning` (warning) or `::notice` (info) annotations that do not fail the gate. A table
-of the items goes to the run's summary.
+findings with a file (on a change file, or a scan result on code) are `::warning` (warning) or `::notice` (info)
+annotations that do not fail the gate, one per place and rule, naming every item. A table of the items goes to the
+run's summary, and with `--sarif` a table of the scan results (level, SEC rule, scanner rule, place, items).
 
 ### With pdi
 
@@ -92,3 +105,10 @@ To trace acceptance criteria to tests, set `TEST_REPORTS` in the template to whe
 example. Empty (the default) means no test results. Once it is set, a report that is missing or cannot be read fails
 the check, so tests that did not run never read as "no tests". Criteria can break when code changes, so widen or drop
 the template's `paths` too.
+
+To add a security scan, uncomment the template's Semgrep step (`semgrep scan --config p/owasp-top-ten --sarif`) and/or
+its npm audit step, and set `SARIF_REPORTS` to where they write (e.g. `reports/security`; several paths separated by
+spaces). The template checks out the full history (`fetch-depth: 0`) and passes `--base origin/<base branch>`, so
+results outside the slices' files go to the changes the pull request touches. Commit code with the trailer
+`Change: TSK-57` to put its results on that slice. Semgrep downloads the registry pack on every run; if that fails it
+writes no file and the check fails on the missing report. Widen or drop `paths` so the check runs when code changes.

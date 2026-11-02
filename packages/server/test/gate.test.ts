@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHmac, randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingHttpHeaders } from 'node:http';
@@ -170,6 +171,94 @@ describe('analyze --openapi (docs/OPENAPI-PLAN.md)', () => {
   });
 });
 
+describe('analyze --sarif (Z8c, docs/SECURITY-SCAN-PLAN.md)', () => {
+  const plan2 = (change: string, slice: string) =>
+    `${head('plan', change)}| Cięcie | Wydanie | Flaga | Wartość | Pliki | Weryfikacja |\n|---|---|---|---|---|---|\n| ${slice} | R1 | f-${slice} | Customer sees the list of their last orders | web/ | the list shows the 20 newest orders, newest first |\n`;
+  const sarif = (results: { rule: string; level: string; path: string; line: number; cwe?: number }[]) =>
+    JSON.stringify({
+      version: '2.1.0',
+      runs: [
+        {
+          tool: { driver: { name: 'Semgrep OSS', rules: results.map((r) => ({ id: r.rule, defaultConfiguration: { level: r.level }, properties: { tags: r.cwe ? [`CWE-${r.cwe}: x`] : [] } })) } },
+          results: results.map((r) => ({ ruleId: r.rule, message: { text: `${r.rule} here` }, locations: [{ physicalLocation: { artifactLocation: { uri: r.path, uriBaseId: '%SRCROOT%' }, region: { startLine: r.line } } }] })),
+        },
+      ],
+    });
+  /** A git checkout with CHG-12 (slice TSK-57) and CHG-13 (TSK-58); TSK-57's commit touches web/history.ts. */
+  function repo() {
+    const root = checkout({ [`${C}/CHG-12/intent.md`]: intent('CHG-12'), [`${C}/CHG-12/plan.md`]: plan2('CHG-12', 'TSK-57'), [`${C}/CHG-13/intent.md`]: intent('CHG-13'), [`${C}/CHG-13/plan.md`]: plan2('CHG-13', 'TSK-58') });
+    const git = (...a: string[]) => execFileSync('git', ['-C', root, ...a], { encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@e', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@e' } });
+    const commit = (files: Record<string, string>, message: string) => {
+      for (const [p, t] of Object.entries(files)) {
+        mkdirSync(join(root, p, '..'), { recursive: true });
+        writeFileSync(join(root, p), t);
+      }
+      git('add', '-A');
+      git('commit', '-q', '-m', message);
+    };
+    git('init', '-q', '-b', 'main');
+    commit({}, 'docs: changes');
+    commit({ 'web/history.ts': 'x' }, 'feat: history\n\nChange: TSK-57');
+    return { root, git, commit };
+  }
+
+  it('GATE-14: --sarif needs --repo: without it the gate does not run', async () => {
+    const r = await gate(['--sarif', 'scan.sarif']);
+    expect(r.code).toBe(2);
+    expect(r.err).toMatch(/--sarif needs --repo/);
+  });
+
+  it('GATE-15: an error on a file of a slice blocks the slice (SEC-001); a note goes to the changes; annotations and a summary table', async () => {
+    const { root } = repo();
+    writeFileSync(join(root, 'scan.sarif'), sarif([{ rule: 'js.exec', level: 'error', path: 'web/history.ts', line: 3, cwe: 78 }, { rule: 'js.debug', level: 'note', path: 'lib/x.ts', line: 1 }]));
+    const summary = join(root, 'summary.md');
+    const r = await gate(['--repo', root, '--sarif', join(root, 'scan.sarif'), '--fail-on', 'critical'], { GITHUB_ACTIONS: 'true', GITHUB_STEP_SUMMARY: summary });
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/Security scan: 2 results \(1 error, 0 warning, 1 note\) from 1 file\(s\)/);
+    expect(r.out).toMatch(/::error file=web\/history\.ts,line=3,title=TSK-57 not ready::js\.exec at web\/history\.ts:3/);
+    expect(r.out).toMatch(/::notice file=lib\/x\.ts,line=1,title=SEC-003 CHG-12%2C CHG-13::js\.debug at lib\/x\.ts:1/);
+    expect(r.out.match(/title=SEC-003/g)).toHaveLength(1);
+    expect(r.err).toMatch(/Quality gate failed: .*TSK-57/);
+    const md = readFileSync(summary, 'utf8');
+    expect(md).toMatch(/### Security scan/);
+    expect(md).toMatch(/\| error \| SEC-001 \| `js\.exec` \| `web\/history\.ts:3` \| TSK-57 \|/);
+    expect(md).toMatch(/\| note \| SEC-003 \| `js\.debug` \| `lib\/x\.ts:1` \| CHG-12, CHG-13 \|/);
+  });
+
+  it('GATE-16: a report that cannot be read fails the gate whatever the threshold', async () => {
+    const { root } = repo();
+    writeFileSync(join(root, 'bad.sarif'), 'nope');
+    const r = await gate(['--repo', root, '--sarif', join(root, 'bad.sarif')], { GITHUB_ACTIONS: 'true' });
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/Security scan reports that could not be read/);
+    expect(r.out).toMatch(/::error file=.*bad\.sarif,title=Security scan::Not JSON/);
+    expect(r.err).toMatch(/1 security scan report\(s\) could not be read/);
+  });
+
+  it('GATE-17: with --base the other results go to the changes the pull request touches; a base git cannot read fails the gate', async () => {
+    const { root, git, commit } = repo();
+    git('checkout', '-q', '-b', 'topic');
+    commit({ [`${C}/CHG-13/notes.md`]: 'x' }, 'docs: notes');
+    writeFileSync(join(root, '..', `${root.split('/').pop()}.sarif`), sarif([{ rule: 'js.redos', level: 'warning', path: 'lib/x.ts', line: 2, cwe: 1333 }]));
+    const report = join(root, '..', `${root.split('/').pop()}.sarif`);
+    const r = await gate(['--repo', root, '--sarif', report, '--base', 'main', '--fail-on', 'warning'], { GITHUB_ACTIONS: 'true' });
+    expect(r.out).toMatch(/::error file=lib\/x\.ts,line=2,title=CHG-13 not ready::js\.redos at lib\/x\.ts:2/);
+    expect(r.out).not.toMatch(/title=CHG-12 not ready::js\.redos/);
+    const bad = await gate(['--repo', root, '--sarif', report, '--base', 'origin/nope'], { GITHUB_ACTIONS: 'true' });
+    expect(bad.code).toBe(1);
+    expect(bad.out).toMatch(/::error title=Security scan::Cannot read the pull request against origin\/nope/);
+  });
+
+  it('GATE-18: a clean scan passes, and without --sarif nothing about a scan is printed', async () => {
+    const { root } = repo();
+    writeFileSync(join(root, 'clean.sarif'), sarif([]));
+    const r = await gate(['--repo', root, '--sarif', join(root, 'clean.sarif'), '--fail-on', 'critical']);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/Security scan: 0 results \(0 error, 0 warning, 0 note\) from 1 file\(s\)/);
+    expect((await gate(['--repo', root, '--fail-on', 'critical'])).out).not.toMatch(/Security scan/);
+  });
+});
+
 describe('analyze --send-to-pdi (L3, docs/PDI-L3-PLAN.md)', () => {
   // A local pdi-receiver: records each request and answers with `status`.
   const SECRET = randomBytes(16).toString('hex');
@@ -314,5 +403,14 @@ describe('the workflow template for repositories (docs/templates/change-check.ym
     expect(yml).toMatch(/^\s+TEST_REPORTS: ''/m);
     expect(yml).toMatch(/if \[ -n "\$TEST_REPORTS" \]; then set -- "\$@" --tests "\$GITHUB_WORKSPACE\/\$TEST_REPORTS"; fi/);
     expect(yml, 'no -e check that would skip a report the tests did not write').not.toMatch(/-e "\$GITHUB_WORKSPACE\/\$TEST_REPORTS"/);
+  });
+  it('GATE-19: a security scan is opt-in through SARIF_REPORTS, placed on the pull request with --base and the full history', () => {
+    const yml = readFileSync(fileURLToPath(new URL('../../../docs/templates/change-check.yml', import.meta.url)), 'utf8');
+    expect(yml).toMatch(/^\s+SARIF_REPORTS: ''/m);
+    expect(yml).toMatch(/if \[ -n "\$SARIF_REPORTS" \]; then for p in \$SARIF_REPORTS; do set -- "\$@" --sarif "\$GITHUB_WORKSPACE\/\$p"; done; set -- "\$@" --base "origin\/\$BASE_REF"; fi/);
+    expect(yml).toMatch(/BASE_REF: \$\{\{ github\.base_ref \}\}/);
+    expect(yml).toMatch(/fetch-depth: 0/);
+    expect(yml).toMatch(/# - run: semgrep scan --config p\/owasp-top-ten --sarif --output reports\/security\/semgrep\.sarif/);
+    expect(yml).toMatch(/node \.ci_for_sdlc\/scripts\/npm-audit-sarif\.mjs/);
   });
 });

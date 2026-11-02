@@ -59,15 +59,25 @@ export function changeKeyOf(labels: string[], prefix = CHANGE_LABEL_PREFIX): str
  * Readiness of every change that has at least one analysed story: `drift` when a story has an open drift finding
  * (its approved baseline moved), `not_ready` when a story has a blocking finding, else `ready`. A story that only
  * needs attention (warnings) does not hold the change back, as it does not hold back its own approval (PRB-17); its
- * open questions still go to pdi in `open_questions`. Ordered by change key.
+ * open questions still go to pdi in `open_questions`. A blocking security scan finding of the change itself (SEC-n on
+ * its epic, Z8c) makes it `not_ready` as well. Ordered by change key.
  */
 export function changeReadiness(items: ItemAnalysis[], requirements: RequirementItem[], prefix = CHANGE_LABEL_PREFIX): ChangeReadiness[] {
   const byKey = new Map(items.map((i) => [i.key, i]));
   const groups = new Map<string, ItemAnalysis[]>();
+  const insecure = new Set<string>();
   for (const r of requirements) {
     const change = changeKeyOf(r.labels, prefix);
     const a = byKey.get(r.key);
-    if (!change || !a || !LEAF.has(a.type)) continue;
+    if (!change || !a) continue;
+    if (!LEAF.has(a.type)) {
+      // A security scan result no slice owns is the change's own finding (Z8c): it holds the change back too.
+      if (a.findings.some((f) => f.ruleId?.startsWith('SEC-') && f.blocks && f.status === 'open')) {
+        insecure.add(change);
+        if (!groups.has(change)) groups.set(change, []);
+      }
+      continue;
+    }
     groups.set(change, [...(groups.get(change) ?? []), a]);
   }
   return [...groups.entries()]
@@ -76,7 +86,7 @@ export function changeReadiness(items: ItemAnalysis[], requirements: Requirement
       change,
       readiness: stories.some((s) => s.findings.some((f) => f.origin === 'drift' && f.status === 'open'))
         ? 'drift'
-        : stories.some((s) => s.readiness === 'not_ready')
+        : insecure.has(change) || stories.some((s) => s.readiness === 'not_ready')
           ? 'not_ready'
           : 'ready',
       openQuestions: stories.reduce((n, s) => n + s.challenges.filter((c) => !c.answered).length, 0),
