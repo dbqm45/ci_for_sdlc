@@ -85,6 +85,8 @@ export class Engine extends EventEmitter {
     private api?: DocumentItem[],
     /** Security scan of `analyze --sarif` (Z8c, docs/SECURITY-SCAN-PLAN.md), attached to the context of every run. */
     private security?: SecurityScan,
+    /** Change targets from release.yaml and coverage/mutation reports (Z7b-1b). */
+    private targets?: { byChange?: Map<string, import('@ci/core').ChangeTargets>; reports?: import('@ci/core').TargetReports },
   ) {
     super();
   }
@@ -94,7 +96,14 @@ export class Engine extends EventEmitter {
     // The claim vocabulary is the project's setting in every mode, the demo workspace included.
     // Test results (G4): `analyze --tests` wins over the setting; a report that cannot be read stops the analysis.
     const tests = this.tests ?? (await this.loadTests(settings));
-    const ctx: ProjectContext = { ...loaded, project: { ...loaded.project, claimPack: settings.project.claimPack ?? 'general' }, ...(tests && { tests }), ...(this.security && { securityScan: this.security }) };
+    const ctx: ProjectContext = {
+      ...loaded,
+      project: { ...loaded.project, claimPack: settings.project.claimPack ?? 'general' },
+      ...(tests && { tests }),
+      ...(this.security && { securityScan: this.security }),
+      ...(this.targets?.byChange?.size && { targetsByChange: this.targets.byChange }),
+      ...(this.targets?.reports && { targetReports: this.targets.reports }),
+    };
     // The API contract (OpenAPI): `analyze --openapi` wins over the setting; a file that cannot be read stops the analysis.
     const api = this.api ?? (await this.loadApi(settings)) ?? [];
     // tf's reconstruction from code is the current state of the code, next to the specification in either mode.

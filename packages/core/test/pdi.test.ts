@@ -88,6 +88,20 @@ describe('readinessEvents', () => {
     expect(events).toEqual([]);
     expect(sent).toEqual({ 'CHG-12': 'ready', 'CHG-99': 'drift' });
   });
+
+  it('attaches targets_status and bumps contract_version to 0.12.0 when the change has it (Z7b-1b)', () => {
+    const notReady = { change: 'CHG-12', readiness: 'not_ready' as const, openQuestions: 1, items: ['PAY-1'] };
+    const status = { overall: 'not_met', checked_at: now, details: [{ name: 'coverage', kind: 'coverage', status: 'not_met', observed: '82%', required: '>= 90%' }] };
+    const { events } = readinessEvents([notReady], {}, now, new Map([['CHG-12', status]]));
+    expect(events[0]?.contract_version).toBe('0.12.0');
+    expect(events[0]?.payload).toMatchObject({ change: 'CHG-12', readiness: 'not_ready', open_questions: 1, targets_status: status });
+  });
+
+  it('keeps contract_version 0.4.0 when no targets_status is given', () => {
+    const { events } = readinessEvents([ready], {}, now);
+    expect(events[0]?.contract_version).toBe('0.4.0');
+    expect(events[0]?.payload).not.toHaveProperty('targets_status');
+  });
 });
 
 describe('parseGateDecided', () => {
