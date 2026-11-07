@@ -264,6 +264,60 @@ export interface ProjectContext {
    * stored decision on the same question.
    */
   decisions?: ActiveDecision[];
+  /**
+   * Change targets (`release.yaml` → `targets`; pdi contract 0.12.0, Z7b-1b). Absent = no targets given, and the TGT
+   * rules stay silent for the change.
+   */
+  targetsByChange?: Map<string, ChangeTargets>;
+  /** Coverage and mutation reports (`analyze --coverage`, `--mutation`; Z7b-1b). Absent = no reports read. */
+  targetReports?: TargetReports;
+}
+
+export interface TargetReports {
+  coverage?: import('./connectors/coverage.js').CoverageRead;
+  mutation?: import('./connectors/mutation.js').MutationRead;
+}
+
+/** The `targets` block of a change's release.yaml (pdi contract 0.12.0 release_plan.targets). */
+export interface ChangeTargets {
+  coverage?: CoverageTarget;
+  mutation?: MutationTarget;
+  performance?: PerformanceTarget[];
+  evaluations?: EvaluationTarget[];
+}
+
+export interface TargetExclusion {
+  pattern: string;
+  reason: string;
+}
+
+export interface CoverageTarget {
+  kind?: 'changed_lines' | 'whole_project';
+  min_percent: number;
+  tool?: string;
+  exclusions?: TargetExclusion[];
+}
+
+export interface MutationTarget {
+  kind?: 'changed_lines' | 'whole_project';
+  min_score: number;
+  tool?: string;
+  exclusions?: TargetExclusion[];
+}
+
+export interface PerformanceTarget {
+  name: string;
+  metric: string;
+  limit: string;
+  note?: string;
+}
+
+export interface EvaluationTarget {
+  name: string;
+  dataset: string;
+  metric: string;
+  min: number;
+  note?: string;
 }
 
 // ---------------------------------------------------------------------------

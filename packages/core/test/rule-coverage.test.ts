@@ -18,8 +18,9 @@ const NOW = new Date('2026-10-05T10:00:00Z');
 
 // Known gaps in demo data (test-data generator plan, stage E1). The test for each one is
 // expected to fail; once data covers the case it passes, the test turns red and the entry goes.
+// TGT-001…004 (Z7b-1b) need a demo with `targetsByChange` and coverage/mutation reports — see TARGETS-PLAN.md.
 const KNOWN_GAPS = {
-  fires: [] as string[],
+  fires: ['TGT-001', 'TGT-002', 'TGT-003', 'TGT-004'] as string[],
   silent: [] as string[],
 };
 

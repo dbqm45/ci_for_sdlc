@@ -81,6 +81,11 @@ export const EXPECTATIONS: RuleExpectation[] = [
   { rule: 'SEC-001', fires: [], silent: ['PAY-123'], gap: 'security scan only; fires on packages/core/test/fixtures/repo-changes with fixtures/sarif/scan.sarif (TSK-2, CHG-1)' },
   { rule: 'SEC-002', fires: [], silent: ['PAY-123'], gap: 'security scan only; fires on packages/core/test/fixtures/repo-changes with fixtures/sarif/scan.sarif (TSK-2)' },
   { rule: 'SEC-003', fires: [], silent: ['PAY-123'], gap: 'security scan only; fires on packages/core/test/fixtures/repo-changes with fixtures/sarif/scan.sarif (CHG-1)' },
+  // Z7b-1b / TARGETS-PLAN.md: only with `--coverage` / `--mutation` reports and a change with `targets` in release.yaml; the world has neither, so all four stay silent.
+  { rule: 'TGT-001', fires: [], silent: ['PAY-100'], gap: 'change targets only; needs a release.yaml with `targets.coverage` and a coverage report (Z7b-1b)' },
+  { rule: 'TGT-002', fires: [], silent: ['PAY-100'], gap: 'change targets only; needs a release.yaml with `targets.mutation` and a mutation report (Z7b-1b)' },
+  { rule: 'TGT-003', fires: [], silent: ['PAY-100'], gap: 'change targets only; needs a release.yaml with `targets.performance` (Z7b-1b, Z10e)' },
+  { rule: 'TGT-004', fires: [], silent: ['PAY-100'], gap: 'change targets only; needs a release.yaml with `targets.evaluations` (Z7b-1b, DZ7)' },
 ];
 
 export const DERIVED_EXPECTATIONS: DerivedRuleExpectation[] = [

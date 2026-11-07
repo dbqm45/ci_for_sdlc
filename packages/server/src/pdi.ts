@@ -95,14 +95,19 @@ export class PdiLink {
 
   /**
    * After an analysis: queue `readiness.changed` for every change whose readiness differs from the last one sent.
-   * `changes` are those of all workspaces together (F5). Returns the events queued.
+   * `changes` are those of all workspaces together (F5). `targetsStatusByChange` (Z7b-1b) attaches the per-change
+   * `targets_status` payload (pdi contract 0.12.0); events with it bump `contract_version` to 0.12.0. Returns the
+   * events queued.
    */
-  async enqueue(changes: ChangeReadiness[]): Promise<PdiEvent[]> {
+  async enqueue(
+    changes: ChangeReadiness[],
+    targetsStatusByChange?: Map<string, Record<string, unknown>>,
+  ): Promise<PdiEvent[]> {
     if (!this.enabled) return [];
     const now = this.clock().toISOString();
     let events: PdiEvent[] = [];
     await this.store.updatePdiState((s) => {
-      const r = readinessEvents(changes, s.sent ?? {}, now);
+      const r = readinessEvents(changes, s.sent ?? {}, now, targetsStatusByChange);
       events = r.events;
       return { ...s, sent: r.sent, seen: s.seen ?? [] };
     });

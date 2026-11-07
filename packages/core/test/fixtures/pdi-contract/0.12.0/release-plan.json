@@ -1,0 +1,85 @@
+{
+  "change": "CHG-12",
+  "mvp": {
+    "release": "R1",
+    "outcome": "Klient może ponowić nieudaną płatność bez podwójnego obciążenia",
+    "metric": {
+      "name": "odzyskane_platnosci",
+      "target": ">= 25%",
+      "horizon_days": 30
+    },
+    "guardrails": [
+      "podwojne_obciazenia = 0"
+    ]
+  },
+  "releases": [
+    {
+      "id": "R1",
+      "name": "MVP",
+      "tasks": [
+        "TSK-57",
+        "TSK-58"
+      ]
+    },
+    {
+      "id": "R2",
+      "tasks": [
+        "TSK-59",
+        "TSK-60"
+      ]
+    }
+  ],
+  "flags": [
+    {
+      "key": "payment-retry",
+      "tasks": [
+        "TSK-57",
+        "TSK-58"
+      ],
+      "owner": "PO Payments",
+      "remove_by": "2026-12-31",
+      "rollout": [
+        {
+          "stage": "internal",
+          "min_days": 3,
+          "exit": "0 błędów krytycznych"
+        },
+        {
+          "stage": "10%",
+          "min_days": 7,
+          "exit": "odzyskane >= 15%, duplikaty = 0"
+        },
+        {
+          "stage": "100%"
+        }
+      ]
+    }
+  ],
+  "targets": {
+    "coverage": {
+      "kind": "changed_lines",
+      "min_percent": 90,
+      "tool": "pytest-cov",
+      "exclusions": [
+        {
+          "pattern": "src/legacy/retry.py",
+          "reason": "stary moduł do usunięcia po CHG-18"
+        }
+      ]
+    },
+    "mutation": {
+      "kind": "changed_lines",
+      "tool": "mutmut",
+      "min_score": 70
+    },
+    "performance": [
+      {
+        "name": "retry_endpoint_p95",
+        "metric": "response_time_p95_ms",
+        "limit": "<= 400",
+        "note": "próg wynika z SLO 99,5% w 28 dni"
+      }
+    ],
+    "evaluations": []
+  }
+}

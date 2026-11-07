@@ -8,6 +8,8 @@ import type { ItemAnalysis, RequirementItem } from './model.js';
 
 export const CHANGE_LABEL_PREFIX = 'change:';
 export const PDI_CONTRACT_VERSION = '0.4.0';
+/** Contract version of a readiness.changed event that carries targets_status (Z7b-1b). */
+export const PDI_CONTRACT_VERSION_TARGETS = '0.12.0';
 const KEY = /^[A-Z][A-Z0-9]+-[0-9]+$/;
 const EVENT_ID = /^[A-Za-z0-9._-]{1,128}$/;
 /** Leaf work items, the ones that are approved; epic and feature readiness is derived. */
@@ -119,21 +121,36 @@ export function mergeChangeReadiness(parts: ChangeReadiness[][]): ChangeReadines
     }));
 }
 
-/** `readiness.changed` for each change whose state differs from the last one sent; `sent` is the new last-sent map. */
-export function readinessEvents(current: ChangeReadiness[], lastSent: Record<string, string>, at: string): { events: PdiEvent[]; sent: Record<string, string> } {
+/**
+ * `readiness.changed` for each change whose state differs from the last one sent; `sent` is the new last-sent map.
+ * `targetsStatusByChange` attaches the targets_status payload (Z7b-1b, pdi contract 0.12.0) when a change has one;
+ * such events bump `contract_version` to 0.12.0 so pdi knows to read the field.
+ */
+export function readinessEvents(
+  current: ChangeReadiness[],
+  lastSent: Record<string, string>,
+  at: string,
+  targetsStatusByChange?: Map<string, Record<string, unknown>>,
+): { events: PdiEvent[]; sent: Record<string, string> } {
   const sent = { ...lastSent };
   const events: PdiEvent[] = [];
   const stamp = isoSeconds(at).replace(/[-:]/g, '');
   for (const c of current) {
     if (sent[c.change] === c.readiness) continue;
     sent[c.change] = c.readiness;
+    const targetsStatus = targetsStatusByChange?.get(c.change);
     events.push({
       id: `ci-${c.change}-${c.readiness}-${stamp}`,
       type: 'readiness.changed',
       occurred_at: isoSeconds(at),
       source: 'ci_for_sdlc',
-      contract_version: PDI_CONTRACT_VERSION,
-      payload: { change: c.change, readiness: c.readiness, open_questions: c.openQuestions },
+      contract_version: targetsStatus ? PDI_CONTRACT_VERSION_TARGETS : PDI_CONTRACT_VERSION,
+      payload: {
+        change: c.change,
+        readiness: c.readiness,
+        open_questions: c.openQuestions,
+        ...(targetsStatus && { targets_status: targetsStatus }),
+      },
     });
   }
   return { events, sent };

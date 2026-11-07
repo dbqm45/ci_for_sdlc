@@ -13,6 +13,8 @@
  *   npm run analyze -- --repo . --send-to-pdi        # also send each change's readiness to pdi (L3)
  *   npm run analyze -- --repo . --sarif reports/security [--base origin/main]
  *                                                    # with a security scan (SARIF): SEC-001…003 (docs/SECURITY-SCAN-PLAN.md)
+ *   npm run analyze -- --repo . --coverage reports/lcov.info --mutation reports/stryker.json
+ *                                                    # with coverage and mutation reports: TGT-001…TGT-004 (Z7b-1b, docs/TARGETS-PLAN.md)
  *
  * With `--repo`, a change file that cannot be read fails the gate whatever the threshold; so does a `--tests` report
  * (a JUnit XML file, or a directory of them; repeatable) or an `--openapi` contract file (OpenAPI 3.x, a file or a
@@ -32,7 +34,7 @@
 import { appendFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CHANGES_DIR, changeReadiness, placeOfResult, readOpenApi, readSarif, readTestResults, securityByItem, securityRuleOf, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem, type SecurityScan } from '@ci/core';
+import { CHANGES_DIR, changeReadiness, placeOfResult, readCoverage, readMutation, readOpenApi, readRepoTargets, readSarif, readTestResults, securityByItem, securityRuleOf, targetsByItem, targetsStatusOf, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem, type SecurityScan, type TargetSummary } from '@ci/core';
 import { AtlassianConnection, connectConfigFromEnv } from './connections.js';
 import { Engine } from './engine.js';
 import { PdiLink } from './pdi.js';
@@ -97,14 +99,34 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
     io.err('✗ --sarif needs --repo: the scan results go to the slices and changes of the repository');
     return 2;
   }
+  const coveragePaths = args.flatMap((a, i) => (a === '--coverage' && args[i + 1] ? [resolve(args[i + 1]!)] : []));
+  if (coveragePaths.length && !repoPath) {
+    io.err('✗ --coverage needs --repo: the reports are read against the changes of the repository');
+    return 2;
+  }
+  const mutationPaths = args.flatMap((a, i) => (a === '--mutation' && args[i + 1] ? [resolve(args[i + 1]!)] : []));
+  if (mutationPaths.length && !repoPath) {
+    io.err('✗ --mutation needs --repo: the reports are read against the changes of the repository');
+    return 2;
+  }
   const testPaths = args.flatMap((a, i) => (a === '--tests' && args[i + 1] ? [resolve(args[i + 1]!)] : []));
   const testResults = testPaths.length ? await readTestResults(testPaths) : undefined;
   const apiPaths = args.flatMap((a, i) => (a === '--openapi' && args[i + 1] ? [resolve(args[i + 1]!)] : []));
   const apiContract = apiPaths.length ? await readOpenApi(apiPaths) : undefined;
   // Z8c: the scan, and the files of each slice from the repository's history (and the pull request's, with --base).
   const scanRead = sarifPaths.length ? await readSarif(sarifPaths, { root: resolve(repoPath!) }) : undefined;
-  const slices = scanRead ? await readSliceFiles(resolve(repoPath!), { base: arg('base') }) : undefined;
+  // Z7b-1b: slice files also drive target coverage/mutation; read them when needed so TGT rules see the touched files.
+  const needSlices = scanRead || coveragePaths.length || mutationPaths.length;
+  const slices = needSlices && repoPath ? await readSliceFiles(resolve(repoPath!), { base: arg('base') }) : undefined;
   const security: SecurityScan | undefined = scanRead && slices && { results: scanRead.results, sliceFiles: slices.sliceFiles, ...(slices.pr && { pr: slices.pr }) };
+  const coverageRead = coveragePaths.length ? await readCoverage(coveragePaths) : undefined;
+  const mutationRead = mutationPaths.length ? await readMutation(mutationPaths) : undefined;
+  // Z7b-1b: targets from each change's release.yaml; even without --coverage/--mutation they drive the TGT rules
+  // (a target with a missing report becomes a blocking finding).
+  const repoTargets = repoPath ? await readRepoTargets(resolve(repoPath)) : undefined;
+  const slicesForTargets: SecurityScan | undefined = !security && slices && repoTargets?.targetsByChange.size
+    ? { results: [], sliceFiles: slices.sliceFiles, ...(slices.pr && { pr: slices.pr }) }
+    : security;
   const repoUrl = arg('repo-url');
   const here = dirname(fileURLToPath(import.meta.url));
   const store = new Store(resolve(io.env.CI_DATA_DIR ?? resolve(here, '../../../.ci-data')));
@@ -115,7 +137,25 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
     return 2;
   }
   const connect = connectConfigFromEnv();
-  const engine = new Engine(store, connect.mode === 'oauth' && !repoPath ? new AtlassianConnection(store, connect) : undefined, repoPath ? { path: resolve(repoPath), repoUrl } : undefined, testResults?.tests, apiContract?.documents, security);
+  const engine = new Engine(
+    store,
+    connect.mode === 'oauth' && !repoPath ? new AtlassianConnection(store, connect) : undefined,
+    repoPath ? { path: resolve(repoPath), repoUrl } : undefined,
+    testResults?.tests,
+    apiContract?.documents,
+    slicesForTargets,
+    repoTargets?.targetsByChange.size || coverageRead || mutationRead
+      ? {
+          ...(repoTargets?.targetsByChange.size && { byChange: repoTargets.targetsByChange }),
+          ...((coverageRead || mutationRead) && {
+            reports: {
+              ...(coverageRead && { coverage: coverageRead }),
+              ...(mutationRead && { mutation: mutationRead }),
+            },
+          }),
+        }
+      : undefined,
+  );
   let result;
   try {
     result = await engine.analyze('cli');
@@ -226,7 +266,22 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
     }
   }
 
-  if (pdi) await sendReadiness(pdi, store, changeReadiness(result.items, engine.state.context?.requirements ?? []), io);
+  if (pdi) {
+    const readiness = changeReadiness(result.items, engine.state.context?.requirements ?? []);
+    const nowIso = new Date().toISOString();
+    const targetsByChange = engine.state.context?.targetsByChange;
+    const summaries = targetsByChange?.size ? targetsByItem(engine.state.context!) : undefined;
+    const statusByChange =
+      targetsByChange?.size
+        ? new Map(
+            [...targetsByChange.entries()].map(([change, targets]) => [
+              change,
+              targetsStatusOf(change, targets, summaries?.get(change), nowIso) as unknown as Record<string, unknown>,
+            ]),
+          )
+        : undefined;
+    await sendReadiness(pdi, store, readiness, io, statusByChange);
+  }
 
   if (failing.length) io.err(`\n✗ Quality gate failed: ${failing.map((i) => i.key).join(', ')}`);
   if (problems.length) io.err(`\n✗ Quality gate failed: ${problems.length} change file(s) could not be read`);
@@ -264,9 +319,15 @@ function securitySummary(results: SecurityScan['results'], ctx: Parameters<typeo
  * L3: queue the readiness of the repository's changes, deliver what is due once, and print one line per change
  * (`delivered`, `queued (<why>)` or `unchanged`) and one per entry still queued. Never changes the exit code.
  */
-async function sendReadiness(pdi: PdiLink, store: Store, changes: ReturnType<typeof changeReadiness>, io: GateIo) {
+async function sendReadiness(
+  pdi: PdiLink,
+  store: Store,
+  changes: ReturnType<typeof changeReadiness>,
+  io: GateIo,
+  targetsStatusByChange?: Map<string, Record<string, unknown>>,
+) {
   io.out(`\npdi: ${pdi.eventsUrl}`);
-  const queuedNow = await pdi.enqueue(changes);
+  const queuedNow = await pdi.enqueue(changes, targetsStatusByChange);
   await pdi.deliver({ budgetMs: PDI_BUDGET_MS });
   const outbox = await store.pdiOutbox();
   for (const c of changes) {

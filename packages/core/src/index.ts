@@ -31,6 +31,44 @@ export { ATLASSIAN_API, RELEASE_LINE_SOURCES, type ReleaseLineSource, fetchJira,
 export { clearFigmaCache, fetchFigma, figmaApiBase, framesFromDocument, FigmaRateLimitError, type FigmaConfig } from './connectors/figma.js';
 export { MAX_SARIF_FILE_BYTES, MAX_SARIF_RESULTS, SarifError, parseSarif, readSarif, type SarifProblem } from './connectors/sarif.js';
 export { MAX_TEST_CASES, MAX_TEST_FILE_BYTES, TestResultsError, parseJUnit, readTestResults, testRefs, type TestResultsProblem } from './connectors/tests.js';
+export {
+  MAX_COVERAGE_FILE_BYTES,
+  MAX_COVERAGE_LINES,
+  CoverageError,
+  parseLcov,
+  parseCobertura,
+  readCoverage,
+  coveragePercentOfChanged,
+  type CoverageProblem,
+  type CoverageRead,
+  type FileCoverage,
+} from './connectors/coverage.js';
+export {
+  MAX_RELEASE_PLAN_FILE_BYTES,
+  ReleasePlanError,
+  parseTargets,
+  parseReleasePlanTargets,
+  readRepoTargets,
+  changeOfReleasePlan,
+  type ReleasePlanProblem,
+  type TargetsRead,
+} from './connectors/release-plan.js';
+export { TARGET_RULES, TGT_001, TGT_002, TGT_003, TGT_004, targetsByItem, targetsStatusOf, globMatch, type TargetSummary } from './analysis/targets.js';
+export {
+  MAX_MUTANTS,
+  MAX_MUTATION_FILE_BYTES,
+  MutationError,
+  parseStryker,
+  parseMutmut,
+  readMutation,
+  mutationScoreOfChanged,
+  SCORED as MUTATION_SCORED_STATUSES,
+  type FileMutants,
+  type Mutant,
+  type MutantStatus,
+  type MutationProblem,
+  type MutationRead,
+} from './connectors/mutation.js';
 export { MAX_API_OPERATIONS, MAX_OPENAPI_FILE_BYTES, OpenApiError, parseOpenApi, readOpenApi, type OpenApiProblem } from './connectors/openapi.js';
 export { DESIGN_STATES, DesignFormatError, parseDesignMd, type DesignFrameLink, type DesignRow } from './connectors/design.js';
 export { CHANGES_DIR, MAX_CHANGES, MAX_CHANGE_FILE_BYTES, RepoFileError, parseChange, readRepoChanges, type RepoChanges, type RepoProblem } from './connectors/repo.js';
