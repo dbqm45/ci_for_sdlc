@@ -38,6 +38,17 @@
         "examples/design.md": "packages/core/test/fixtures/pdi-contract/0.9.0/design.md",
         "examples/design-links.json": "packages/core/test/fixtures/pdi-contract/0.9.0/design-links.json"
       }
+    },
+    {
+      "version": "0.12.0",
+      "files": {
+        "release-plan.schema.json": "packages/core/test/fixtures/pdi-contract/0.12.0/release-plan.schema.json",
+        "event.schema.json": "packages/core/test/fixtures/pdi-contract/0.12.0/event.schema.json",
+        "examples/release-plan.json": "packages/core/test/fixtures/pdi-contract/0.12.0/release-plan.json",
+        "examples/release-plan-ai.json": "packages/core/test/fixtures/pdi-contract/0.12.0/release-plan-ai.json",
+        "examples/event-readiness.changed.json": "packages/core/test/fixtures/pdi-contract/0.12.0/event-readiness.changed.json",
+        "examples/event-gate.requested.json": "packages/core/test/fixtures/pdi-contract/0.12.0/event-gate.requested.json"
+      }
     }
   ]
 }
