@@ -44,6 +44,17 @@ export {
   type FileCoverage,
 } from './connectors/coverage.js';
 export {
+  MAX_RELEASE_PLAN_FILE_BYTES,
+  ReleasePlanError,
+  parseTargets,
+  parseReleasePlanTargets,
+  readRepoTargets,
+  changeOfReleasePlan,
+  type ReleasePlanProblem,
+  type TargetsRead,
+} from './connectors/release-plan.js';
+export { TARGET_RULES, TGT_001, TGT_002, TGT_003, TGT_004, targetsByItem, targetsStatusOf, globMatch, type TargetSummary } from './analysis/targets.js';
+export {
   MAX_MUTANTS,
   MAX_MUTATION_FILE_BYTES,
   MutationError,

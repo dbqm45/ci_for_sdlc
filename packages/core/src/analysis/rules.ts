@@ -11,6 +11,7 @@ import { RELEASE_RULES } from './release-plan.js';
 import { TEST_RULES } from './test-trace.js';
 import { API_RULES } from './api-contract.js';
 import { SECURITY_RULES } from './security-scan.js';
+import { TARGET_RULES } from './targets.js';
 
 /**
  * Deterministic rules — the "linter" half of Hybrid Intelligence.
@@ -618,6 +619,8 @@ export const RULES: Rule[] = [
   ...TEST_RULES,
   ...API_RULES,
   ...SECURITY_RULES,
+  // ------------------------------------------------------------------ change targets (TGT-001…004, Z7b-1b)
+  ...TARGET_RULES,
 ];
 
 function groupClaims(cs: Claim[]): Map<string, Claim[]> {
