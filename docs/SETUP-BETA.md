@@ -32,6 +32,10 @@ Opcjonalne:
 | `CI_BETA_PAUSE_AFTER_DAYS` | `7` | po ilu dniach zaległej ankiety analizy zespołu są wstrzymane |
 | `CI_BETA_APPLICATIONS` | (otwarte) | `closed` zamyka formularz `#/beta` (410), gdy masz już 3–5 zespołów |
 | `CI_BETA_JOB` | (włączone) | `off` wyłącza zadanie bety (przypomnienia, wstrzymanie, koniec) — tylko do diagnozy |
+| `POSTHOG_API_KEY` 🔒 | (brak) | pomiar użycia (T8) wysyłany też do PostHog; bez klucza zdarzenia są tylko we własnym logu, a miary liczy panel operatora (*Usage*) |
+| `POSTHOG_HOST` | `https://eu.i.posthog.com` | region PostHog (zostaw UE; PostHog dopisz do listy podprzetwarzających i DPA, `BETA-PLAN.md` §5) |
+| `CI_USAGE_SECRET` 🔒 | losowy, zapisany raz w bazie | sekret pseudonimów osób, przestrzeni i organizacji; ustaw, jeśli pseudonimy mają przetrwać przeniesienie danych |
+| `CI_USAGE` | (włączony) | `off` wyłącza cały pomiar użycia |
 
 Bez `RESEND_API_KEY` i `CI_MAIL_FROM` serwer działa, ale maile trafiają tylko do logu (odbiorca i temat, nigdy treść
 z linkiem) — wtedy link zaproszenia przekazujesz sam z panelu operatora.
