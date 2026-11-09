@@ -47,7 +47,7 @@ Każda pozycja to osobny PR z testami; kolejność według zależności.
 | T1 | **Hosting produkcyjny:** obraz z `Dockerfile`, usługa w regionie UE, zarządzany Postgres z odtwarzaniem do punktu w czasie, domena i HTTPS | dane klientów nie mogą leżeć na laptopie | `render.yaml` (Render, Frankfurt), instrukcja i mapa w `DEPLOYMENT.md`; założenie kont i domena — właściciel |
 | T2 | **Aplikacja Atlassian (OAuth 3LO) na domenie produkcyjnej**, logowanie i połączenie Jiry/Confluence per przestrzeń | każdy zespół łączy własną witrynę | kod jest (#104, OAuth Atlassian), rejestracja aplikacji na produkcji brak |
 | T3 | **Figma per przestrzeń:** token Figmy zapisany zaszyfrowany w przestrzeni (albo OAuth Figmy) zamiast `FIGMA_TOKEN` serwera | dziś jeden token na instalację — nie do przyjęcia przy kilku klientach | brak |
-| T4 | **AI z limitem per przestrzeń:** klucz platformy (Anthropic albo Bedrock w UE), licznik zużycia z telemetrii (#91) i twardy limit miesięczny; po przekroczeniu analiza bez AI | koszt AI to główny koszt zmienny | telemetria jest, limitu brak |
+| T4 | **AI z limitem per przestrzeń:** klucz platformy (Anthropic albo Bedrock w UE), licznik zużycia z telemetrii (#91) i twardy limit miesięczny; po przekroczeniu analiza bez AI | koszt AI to główny koszt zmienny | zrobione w kodzie: AI platformy (`CI_AI_PROVIDER`, w becie Claude przez Bedrock w UE), limit $50 na przestrzeń i miesiąc zmieniany przez operatora ([`AI-PLATFORM.md`](AI-PLATFORM.md)); konto AWS i dostęp do modelu — właściciel |
 | T5 | **Kopie i odtwarzanie:** dzienna kopia bazy poza dostawcą hostingu, próba odtworzenia przed startem i raz w becie | utrata decyzji klienta zabija zaufanie | zrobione w kodzie: zadanie `quorum-backup` do Backblaze B2 (UE) i `restore-check` ([`BACKUPS.md`](BACKUPS.md)); konfiguracja B2 i pierwsza próba odtworzenia — właściciel |
 | T6 | **Monitoring i alerty:** `/api/health` w zewnętrznym monitorze, logi błędów z alertem, panel zużycia AI | dowiadujemy się o awarii przed klientem | health jest |
 | T7 | **Usunięcie danych klienta na żądanie:** usunięcie przestrzeni z kasowaniem (dziś archiwizacja) i odłączenie OAuth | wymóg RODO i DPA | archiwizacja jest, kasowania brak |
@@ -62,7 +62,7 @@ w procesie serwera jest już kolejkowana. Wracamy do tego, gdy analiza jednego z
 ## 5. Prawo i zaufanie (minimum)
 - Podmiot, który zawiera umowy (działalność lub spółka) — decyzja właściciela, z doradcą.
 - Regulamin bety, polityka prywatności, **umowa powierzenia (DPA)** z listą podprzetwarzających (hosting, baza,
-  kopie bazy — Backblaze B2, dostawca AI, poczta) i regionem danych.
+  kopie bazy — Backblaze B2, dostawca AI — AWS Bedrock w UE, poczta) i regionem danych.
 - Jasna informacja, co trafia do modelu AI (treść historyjek i stron, przycięta przez `maxCharsPerSource`, z
   `redactPersonalData`) i że dostawca AI nie trenuje na danych (sprawdzić w aktualnych warunkach dostawcy).
 - Kontakt w sprawie incydentu i czas reakcji (np. odpowiedź w 1 dzień roboczy).
@@ -179,7 +179,9 @@ Zasady:
 ## 10. Decyzje właściciela przed startem
 1. Hosting i region (rekomendacja: zarządzana platforma kontenerów w UE z zarządzanym Postgresem; ShipScope działa
    już na Render, co upraszcza obsługę — sprawdzić aktualny cennik i dostępność regionu UE).
-2. Dostawca AI dla bety (Anthropic API albo Bedrock w regionie UE) i limit miesięczny na przestrzeń.
+2. Dostawca AI dla bety (Anthropic API albo Bedrock w regionie UE) i limit miesięczny na przestrzeń. **Decyzja
+   (2026-11-09):** Claude przez Bedrock w UE, płaci platforma, $50 na przestrzeń i miesiąc, zmieniane w trakcie
+   bety; własny klucz zespołu (BYOK) po becie.
 3. Nazwa produktu i domena (potrzebne do aplikacji Atlassian, T2).
 4. Podmiot prawny i dokumenty z §5.
 5. Lista kandydatów do bety.

@@ -113,6 +113,29 @@ export class ApiError extends Error {
 /** A readable message for anything caught. */
 export const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+/** The platform's AI as a workspace sees it (T4): set by the operator, with this month's spend against the limit. */
+export interface AiPlatformInfo {
+  provider: string;
+  model: string;
+  effort?: string;
+  budget?: { month: string; limitUsd?: number; spentUsd: number; exhausted: boolean; unpricedCalls: number };
+}
+
+/** A workspace's AI spend this month, for the operator (GET /api/ai-budget). */
+export interface AiBudgetRow {
+  workspace: string;
+  name: string;
+  orgName?: string;
+  month: string;
+  limitUsd?: number;
+  custom: boolean;
+  spentUsd: number;
+  calls: number;
+  unpricedCalls: number;
+  exhausted: boolean;
+  removed?: boolean;
+}
+
 /** Settings as read, with the ETag to send back as If-Match so concurrent edits are not lost. */
 export interface SettingsResponse {
   settings: Settings;
@@ -236,7 +259,7 @@ export const api = {
   rules: () => req<{ id: string; name: string; description: string; appliesTo: string[] }[]>('GET', '/api/rules'),
   settings: async () => {
     const { json, res } = await send('GET', '/api/settings');
-    return { ...(json as { settings: Settings; secrets: Record<string, boolean>; defaultModels: Record<string, string>; connectMode: ConnectMode }), etag: res.headers.get('etag') ?? '' };
+    return { ...(json as { settings: Settings; secrets: Record<string, boolean>; defaultModels: Record<string, string>; connectMode: ConnectMode; aiPlatform?: AiPlatformInfo }), etag: res.headers.get('etag') ?? '' };
   },
   /** `etag` is the one returned with the settings being edited; a 412 means someone else saved in between. */
   saveSettings: async (patch: DeepPartial<Settings>, etag: string): Promise<SettingsResponse> => {
@@ -266,6 +289,9 @@ export const api = {
   applyForBeta: (body: ReturnType<typeof applicationBody>) => req<{ received: true }>('POST', '/api/beta/apply', body),
   /** Operator only. */
   betaEnrollments: () => req<BetaEnrollment[]>('GET', '/api/beta/enrollments'),
+  aiBudget: () => req<{ provider: string; model: string; defaultLimitUsd?: number; workspaces: AiBudgetRow[] }>('GET', '/api/ai-budget'),
+  /** A number of dollars, `null` for no limit, or `'default'`. */
+  setAiLimit: (ws: string, limitUsd: number | null | 'default') => req<AiBudgetRow>('PUT', `/api/ai-budget/${encodeURIComponent(ws)}`, { limitUsd }),
   /** The Owner's invitation link is returned only here. */
   approveBeta: (id: string, workspace: { id: string; name?: string }) => req<{ enrollment: BetaEnrollment; invitation: Invitation & { link: string } }>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/approve`, { workspace }),
   rejectBeta: (id: string, note: string) => req<BetaEnrollment>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/reject`, note.trim() ? { note: note.trim() } : {}),

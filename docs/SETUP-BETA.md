@@ -25,6 +25,9 @@ Sekrety (oznaczone 🔒) trzymaj tylko w zmiennych środowiskowych platformy alb
 | `CI_ALLOWED_HOSTS` | `<domena>` | nagłówek `Host` spoza `localhost` (ochrona przed DNS rebinding) |
 | `HOST` | `0.0.0.0` | nasłuch poza loopbackiem (w kontenerze) |
 | `CI_ADMIN_TOKEN` 🔒 | długi losowy ciąg | maszyny (CLI, MCP, pdi); z tokenem administratora też widać panel operatora przez API |
+| `CI_AI_PROVIDER`, `CI_AI_MODEL`, `CI_AI_REGION` | `bedrock`, id modelu z konsoli Bedrock, `eu-central-1` | AI platformy dla każdej przestrzeni; zespół nie wybiera dostawcy ([`AI-PLATFORM.md`](AI-PLATFORM.md)) |
+| `CI_AI_MONTHLY_LIMIT_USD` | `50` | domyślny limit AI na przestrzeń i miesiąc; operator zmienia go dla przestrzeni na `#/operator` |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` 🔒 | użytkownik IAM tylko z `bedrock:InvokeModel` | dostęp do Bedrocka |
 
 Opcjonalne:
 
@@ -44,14 +47,9 @@ z linkiem) — wtedy link zaproszenia przekazujesz sam z panelu operatora.
 
 ## 2. Kolejność pierwszego uruchomienia
 
-1. Aplikacja w Atlassian Developer Console z zakresem `read:me` i *Callback URL*
-   `https://<domena>/api/connections/atlassian/callback` ([`CONNECT-ATLASSIAN.md`](CONNECT-ATLASSIAN.md), krok 1).
-2. Domena nadawcy zweryfikowana w Resend, klucz API utworzony (uprawnienie *Sending access*).
-3. Zmienne z §1 ustawione, serwer uruchomiony (`npm start` albo obraz z `Dockerfile`).
-4. Zaloguj się kontem z `CI_BOOTSTRAP_EMAIL` — zostajesz Ownerem pierwszej organizacji (przestrzeń `default`).
-5. W menu pojawia się *Beta operator* (Twój e-mail jest w `CI_OPERATOR_EMAILS`).
-6. Wyślij zespołom adres formularza: `https://<domena>/#/beta`.
-7. Zgłoszenia zatwierdzasz na `#/operator` (*Approve* zakłada organizację, przestrzeń i wysyła zaproszenie Ownera).
+Na Render: krok po kroku w [`DEPLOYMENT.md`](DEPLOYMENT.md) §2 (konta, Blueprint, domena, pierwsze logowanie, AI,
+kopie). Na innym serwerze ta sama kolejność: aplikacja Atlassian, domena nadawcy w Resend, zmienne z §1, start
+(`npm start` albo obraz z `Dockerfile`), logowanie kontem z `CI_BOOTSTRAP_EMAIL`.
 
 ## 3. Sprawdzenie po wdrożeniu
 

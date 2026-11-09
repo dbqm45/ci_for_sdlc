@@ -50,6 +50,14 @@ describe('render.yaml', () => {
     }
   });
 
+  it("RB-07: the platform's AI is Claude on Bedrock in the EU, with a monthly limit per workspace (T4)", () => {
+    assert.equal(env.CI_AI_PROVIDER.value, 'bedrock');
+    assert.match(env.CI_AI_REGION.value, /^eu-/);
+    assert.equal(env.CI_AI_MODEL.sync, false);
+    assert.ok(Number(env.CI_AI_MONTHLY_LIMIT_USD.value) > 0);
+    for (const k of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) assert.equal(env[k].sync, false, k);
+  });
+
   it('RB-06: the daily backup (T5) runs in the EU from the same image, on the same database, after the checks pass', () => {
     assert.equal(backup.type, 'cron');
     assert.equal(backup.name, 'quorum-backup');

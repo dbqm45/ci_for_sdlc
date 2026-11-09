@@ -29,6 +29,7 @@ import {
   type SemanticOutput,
   type TestCase,
 } from '@ci/core';
+import { BUDGET_PREFIX, budgeted, effectiveAi, type AiBudget, type AiPlatformConfig } from './ai-budget.js';
 import { proposalEvent, recordAutoClose, type AutoCloseSink } from './auto-close.js';
 import type { AtlassianConnection } from './connections.js';
 import type { Principal } from './http.js';
@@ -73,6 +74,11 @@ export class Engine extends EventEmitter {
   private aiCache?: Map<string, SemanticOutput>;
   /** A2b: where the automat's decisions go besides the log (pdi's registry); set by buildApp. */
   autoCloseSink?: AutoCloseSink;
+  /**
+   * The platform's AI and this workspace's monthly limit (T4, ai-budget.ts); set by buildApp. Without it the
+   * workspace's own AI settings are used as they are, without a limit.
+   */
+  aiPlatform?: { config?: AiPlatformConfig; budget?: AiBudget; workspace: string };
 
   /** `atlassian`: set in CI_CONNECT_MODE=oauth; Jira and Confluence then use its token instead of JIRA_API_TOKEN. */
   constructor(
@@ -170,12 +176,16 @@ export class Engine extends EventEmitter {
       const [context, stored, approvals, previous] = await Promise.all([this.loadContext(settings), this.store.decisions().then(activeDecisions), this.store.approvals(), this.store.snapshot()]);
       const decisions = withRepoDecisions(stored, context);
 
-      const analyzer = createSemanticAnalyzer(settings.ai, {
+      const platform = this.aiPlatform;
+      const aiConfig = effectiveAi(settings.ai, platform?.config);
+      const prices = platform?.config?.prices ?? {};
+      const own = createSemanticAnalyzer(aiConfig, {
         anthropicApiKey: process.env.ANTHROPIC_API_KEY,
         openaiApiKey: process.env.OPENAI_API_KEY,
         azureOpenaiApiKey: process.env.AZURE_OPENAI_API_KEY,
         customApiKey: process.env.CUSTOM_AI_API_KEY,
       });
+      const analyzer = own && platform?.budget ? budgeted(own, platform.budget, platform.workspace, prices) : own;
       this.aiCache ??= await this.store.aiCache();
       const cacheSize = this.aiCache.size;
       const audits: Promise<void>[] = [];
@@ -196,9 +206,11 @@ export class Engine extends EventEmitter {
               maxCharsPerSource: settings.security.maxCharsPerSource,
               redactPersonalData: settings.security.redactPersonalData,
               cacheOnly: settings.ai.runOn === 'on_demand',
+              prices,
               onlyKeys: new Set(opts.aiKeys ?? []),
               onAudit: (rec) => {
-                if (settings.security.auditAiDecisions && !rec.cached) {
+                // A call the limit refused never reached the model: one note in the result, not one audit entry per item.
+                if (settings.security.auditAiDecisions && !rec.cached && !rec.error?.startsWith(BUDGET_PREFIX)) {
                   audits.push(
                     this.store.audit({
                       at: rec.at,
@@ -238,6 +250,7 @@ export class Engine extends EventEmitter {
         ({ result, snapshot, graph } = await runAnalysis(withRepoDecisions(await this.store.decisions().then(activeDecisions), context)));
       }
       await Promise.all(audits);
+      result = withBudgetNote(result);
       if (this.aiCache.size !== cacheSize) await this.store.saveAiCache(this.aiCache);
 
       if (result.invalidatedApprovals?.length) {
@@ -317,6 +330,14 @@ export class Engine extends EventEmitter {
   stop() {
     if (this.timer) clearInterval(this.timer);
   }
+}
+
+/** The refusals of the AI limit, one per item, as a single note. */
+function withBudgetNote(result: AnalysisResult): AnalysisResult {
+  const refused = result.ai.errors.filter((e) => e.includes(BUDGET_PREFIX));
+  if (!refused.length) return result;
+  const note = refused[0]!.slice(refused[0]!.indexOf(BUDGET_PREFIX));
+  return { ...result, ai: { ...result.ai, errors: [...result.ai.errors.filter((e) => !e.includes(BUDGET_PREFIX)), note] } };
 }
 
 const usageNote = (rec: AiAuditRecord) =>

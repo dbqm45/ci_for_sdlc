@@ -11,6 +11,7 @@ import { betaMails, runBetaJob } from './beta-job.js';
 import { PAUSE_AFTER_DAYS } from './beta-lifecycle.js';
 import { mailerFromEnv, type Mailer } from './mailer.js';
 import { checkRlsRole, securityHeaders, trustProxyFrom } from './production.js';
+import { AiBudget, aiPlatformFrom, type AiPlatformConfig } from './ai-budget.js';
 import { LOCAL_PEOPLE, MemoryMailer, localBetaMode, shiftedClock } from './beta-local.js';
 import { PostHogSink, Usage, triggerOf, usageReport, type UsageEventName, type UsageSink } from './usage.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
@@ -51,6 +52,8 @@ export interface AppOptions {
   bootstrapEmail?: string;
   /** Defaults to CI_OPERATOR_EMAILS (comma-separated): who may open organizations (docs/ORGANIZATIONS-PLAN.md). */
   operatorEmails?: string[];
+  /** The platform's AI and its limits (T4); defaults to CI_AI_PROVIDER and friends; `false` = none. */
+  aiPlatform?: AiPlatformConfig | false;
   /** Closed beta (docs/BETA-ENROLLMENT-PLAN.md): its length, default CI_BETA_WEEKS or 8. */
   betaWeeks?: number;
   /** Whether teams may apply; default true unless CI_BETA_APPLICATIONS=closed. */
@@ -123,7 +126,12 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   let settle: () => Promise<void> = async () => undefined;
   /** Usage measurement after each analysis (T8); set once the beta and the accounts are known. */
   let afterAnalysis: ((w: Workspace) => Promise<void>) | undefined;
+  // The platform's AI and the monthly limit per workspace (T4, docs/AI-PLATFORM.md); none = each workspace's own AI.
+  const aiPlatform = opts.aiPlatform !== undefined ? opts.aiPlatform || undefined : aiPlatformFrom(process.env);
+  const aiBudget = aiPlatform ? new AiBudget(storage.backend('_platform'), aiPlatform.defaultLimitUsd) : undefined;
+  await aiBudget?.init();
   const workspaces = new Workspaces(storage, connect, async (w) => {
+    if (aiPlatform) w.engine.aiPlatform = { config: aiPlatform, budget: aiBudget, workspace: w.id };
     /** A2b: decided A2a steps go to pdi's registry as decision.recorded, with the item's CHG from its `change:` label. */
     w.sink = async (steps) => {
       if (!pdi.enabled) return;
@@ -636,6 +644,61 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       invitations: accounts.openInvitations(o.id).length,
     }));
   });
+
+  // ------------------------------------------------------------------ the platform's AI and its limits (T4)
+  /**
+   * With accounts, an operator (CI_OPERATOR_EMAILS) or the admin token. Without them the installation is one
+   * organization: whoever may read sees the limits, and a change needs the admin token (or this machine without one).
+   */
+  const requireAiOperator = (req: FastifyRequest, change = false) => {
+    if (accounts.enabled ? req.principal === 'admin_token' || req.account?.operator : !change || req.principal === 'admin_token' || req.principal === 'loopback') return;
+    throw httpError(403, 'Only an operator of this installation (CI_OPERATOR_EMAILS) may do this.');
+  };
+  const noPlatformAi = () => httpError(404, 'Workspaces choose their own AI here: set CI_AI_PROVIDER for the platform\'s AI and its limits (docs/AI-PLATFORM.md).');
+
+  app.get('/api/ai-budget', { schema: { summary: "The platform's AI and every workspace's spend this month against its limit (operator)", response: errors(403, 404) } }, async (req) => {
+    requireAiOperator(req);
+    if (!aiPlatform || !aiBudget) throw noPlatformAi();
+    const ws = new Map(workspaces.all().map((w) => [w.id, w]));
+    return {
+      provider: aiPlatform.provider.provider,
+      model: aiPlatform.provider.model,
+      ...(aiPlatform.defaultLimitUsd !== undefined && { defaultLimitUsd: aiPlatform.defaultLimitUsd }),
+      workspaces: aiBudget.all([...ws.keys()]).map((b) => {
+        const w = ws.get(b.workspace);
+        const org = w && orgOf(w);
+        return { ...b, name: w?.name ?? b.workspace, ...(org && { orgId: org, orgName: accounts.allOrgs().find((o) => o.id === org)?.name }), ...(!w && { removed: true }) };
+      }),
+    };
+  });
+
+  const aiLimitBody = {
+    type: 'object',
+    required: ['limitUsd'],
+    additionalProperties: false,
+    properties: {
+      // A number of dollars; null = no limit; "default" = back to CI_AI_MONTHLY_LIMIT_USD.
+      limitUsd: { anyOf: [{ type: 'number', minimum: 0, maximum: 100000 }, { type: 'null' }, { type: 'string', enum: ['default'] }] },
+    },
+  } as const;
+
+  app.put<{ Params: { ws: string }; Body: { limitUsd: number | null | 'default' } }>(
+    '/api/ai-budget/:ws',
+    { schema: { summary: "Change a workspace's monthly AI limit; it applies to the next call (operator)", params: workspaceParams, body: aiLimitBody, response: errors(403, 404, 422), ...MUTATION } },
+    async (req) => {
+      requireAiOperator(req, true);
+      if (!aiPlatform || !aiBudget) throw noPlatformAi();
+      const w = workspaces.get(req.params.ws);
+      if (!w) throw httpError(404, `No workspace ${req.params.ws}`);
+      const before = aiBudget.status(w.id);
+      const limit = req.body.limitUsd === 'default' ? undefined : req.body.limitUsd;
+      await aiBudget.setLimit(w.id, limit);
+      const after = aiBudget.status(w.id);
+      const shown = (s: typeof after) => (s.limitUsd === undefined ? 'no limit' : `$${s.limitUsd.toFixed(2)}`);
+      await w.store.audit({ at: new Date().toISOString(), kind: 'settings', ...who(req), summary: `Monthly AI limit changed by the operator: ${shown(before)} → ${shown(after)}${after.custom ? '' : ' (the default)'}` });
+      return after;
+    },
+  );
 
   const orgBody = {
     type: 'object',
