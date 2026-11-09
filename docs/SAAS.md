@@ -185,6 +185,9 @@ Każdy krok zachowuje działanie trybu self-hosted.
 
 Kroki 1–4 dają działający, bezpieczny SaaS do testów z pierwszymi klientami. Kroki 5–7 dają produkt, za który można pobierać opłaty.
 
+Przed krokami 6–7: zamknięta beta z 3–5 zespołami ([`BETA-PLAN.md`](BETA-PLAN.md)) — sprawdza użycie, trafność
+ustaleń i gotowość do zapłaty, zanim powstaną rozliczenia.
+
 ---
 
 ## 8. Otwarte decyzje
