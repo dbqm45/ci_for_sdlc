@@ -3,6 +3,7 @@
 Stan: 2026-11-09, zrobione w trzech PR (opis niżej w „Zrobione”). Decyzje właściciela z 09.11: wstrzymanie po 7 dniach, automatycznie, maile przez Resend. Zadanie T10 z [`BETA-PLAN.md`](BETA-PLAN.md) §4. Cel: zespół zapisuje się sam, dostaje
 betę na określony czas, a wypełnianie ankiet ([`BETA-SURVEYS.md`](BETA-SURVEYS.md)) i koniec bety pilnuje serwer,
 nie właściciel w kalendarzu.
+Uruchomienie na serwerze (zmienne, kolejność, sprawdzenie): [`SETUP-BETA.md`](SETUP-BETA.md).
 
 ## Jak to robią inni
 Zamknięte bety produktów dla firm zwykle wyglądają tak: lista chętnych (formularz), ręczny wybór kilku zespołów,
