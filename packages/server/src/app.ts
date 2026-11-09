@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { APPROVE_GATE, RULES, changeKeyOf, changeReadiness, mergeChangeReadiness, parseGateDecided, workspacePath, type AnalysisResult, type ChangeReadiness } from '@ci/core';
 import { Accounts, SESSION_COOKIE, LOGIN_COOKIE, type InvitedRole } from './accounts.js';
 import { ROLES, type Role } from './roles.js';
+import { BETA_REAL_DATA, BETA_REFERENCE, BETA_SOURCES, BetaEnrollments, applicationLimiter, betaView, type BetaApplication } from './beta.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
@@ -43,6 +44,10 @@ export interface AppOptions {
   bootstrapEmail?: string;
   /** Defaults to CI_OPERATOR_EMAILS (comma-separated): who may open organizations (docs/ORGANIZATIONS-PLAN.md). */
   operatorEmails?: string[];
+  /** Closed beta (docs/BETA-ENROLLMENT-PLAN.md): its length, default CI_BETA_WEEKS or 8. */
+  betaWeeks?: number;
+  /** Whether teams may apply; default true unless CI_BETA_APPLICATIONS=closed. */
+  betaApplicationsOpen?: boolean;
 }
 
 /** A workspace's part of the pdi changes: its analysis and the changes of its stories. */
@@ -113,6 +118,13 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     operatorEmails: opts.operatorEmails ?? (process.env.CI_OPERATOR_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean),
   });
   if (accounts.enabled) await accounts.init();
+
+  // The closed beta's applications and enrollments, beside the accounts (docs/BETA-ENROLLMENT-PLAN.md).
+  const beta = new BetaEnrollments(storage.backend('_platform'), {
+    weeks: opts.betaWeeks ?? (Number(process.env.CI_BETA_WEEKS) || 8),
+    open: opts.betaApplicationsOpen ?? process.env.CI_BETA_APPLICATIONS !== 'closed',
+  });
+  if (accounts.enabled) await beta.init();
 
   // ------------------------------------------------------------------ organizations (docs/ORGANIZATIONS-PLAN.md)
   /** The organization a workspace belongs to; one without its own belongs to the first. Undefined in token mode. */
@@ -274,6 +286,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       org: org ? { id: org.id, name: org.name } : null,
       // Where the app opens: `default` when the person sees it, else their organization's first workspace.
       home: mine.some((w) => w.id === DEFAULT_WORKSPACE) ? DEFAULT_WORKSPACE : (mine[0]?.id ?? null),
+      beta: (() => {
+        const e = beta.forOrg(a.orgId);
+        return e ? betaView(e, Date.now()) : null;
+      })(),
     };
   });
 
@@ -341,7 +357,13 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     reply.header('set-cookie', accounts.loginCookie('', 0));
     try {
       const { id, joined } = await accounts.complete({ ...req.query, cookieState: cookieValue(req.headers.cookie, LOGIN_COOKIE) });
-      if (joined) await auditOf(joined.orgId).audit({ at: new Date().toISOString(), kind: 'member', actor: joined.name, via: 'session', summary: `${joined.name} joined as ${joined.role}` });
+      if (joined) {
+        const at = new Date().toISOString();
+        await auditOf(joined.orgId).audit({ at, kind: 'member', actor: joined.name, via: 'session', summary: `${joined.name} joined as ${joined.role}` });
+        // The Owner of an invited beta team joined: the beta starts now.
+        const started = joined.role === 'owner' ? await beta.joined(joined.orgId, joined.name, at) : undefined;
+        if (started) await auditOf(joined.orgId).audit({ at, kind: 'member', actor: joined.name, via: 'session', summary: `Beta started; it ends on ${started.endsAt!.slice(0, 10)}` });
+      }
       reply.header('set-cookie', accounts.sessionCookie(id));
       return reply.redirect('/');
     } catch (e) {
@@ -401,16 +423,141 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     { schema: { summary: 'Open an organization: its first workspace and an invitation for its Owner (operator)', body: orgBody, response: errors(403, 404, 409, 422), ...MUTATION } },
     async (req, reply) => {
       requireOperator(req);
+      return reply.code(201).send(await openOrg(req, req.body));
+    },
+  );
+
+  /** Opens an organization with its first workspace and an Owner invitation; audited there and in the first organization. */
+  async function openOrg(req: FastifyRequest, o: { name: string; workspace: { id: string; name?: string }; ownerEmail: string }) {
+    const { actor, via } = who(req, null);
+    if (workspaces.get(o.workspace.id)) throw httpError(409, `Workspace ${o.workspace.id} already exists`);
+    const org = await accounts.createOrg(o.name);
+    const at = new Date().toISOString();
+    const w = await workspaces.create(o.workspace.id, o.workspace.name ?? o.name, at, org.id);
+    const invitation = await accounts.invite(actor ?? 'operator', 'owner', o.ownerEmail, org.id);
+    const summary = `Organization ${org.name} opened with workspace ${w.id}; Owner invitation for ${invitation.email}`;
+    await w.store.audit({ at, kind: 'member', actor, via, summary });
+    await main.store.audit({ at, kind: 'member', actor, via, summary });
+    return { org, workspace: { id: w.id, name: w.name }, invitation };
+  }
+
+  // ------------------------------------------------------------------ closed beta (docs/BETA-ENROLLMENT-PLAN.md)
+  const betaOff = () => httpError(404, 'The beta needs people to log in (CI_AUTH_MODE=accounts).');
+  app.get('/api/beta', { schema: { summary: 'Whether teams may apply for the beta, and for how long it runs (public)' } }, async () => {
+    if (!accounts.enabled) throw betaOff();
+    return { open: beta.cfg.open, weeks: beta.cfg.weeks };
+  });
+
+  const text = (max: number) => ({ type: 'string', minLength: 1, maxLength: max, pattern: '\\S' }) as const;
+  const applicationBody = {
+    type: 'object',
+    required: ['org', 'team', 'contactName', 'contactEmail', 'writers', 'builders', 'sources', 'realData', 'consents'],
+    additionalProperties: false,
+    properties: {
+      org: text(100),
+      team: text(100),
+      contactName: text(100),
+      contactEmail: { type: 'string', maxLength: 200, pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$' },
+      contactRole: { type: 'string', maxLength: 100 },
+      writers: { type: 'integer', minimum: 0, maximum: 1000 },
+      builders: { type: 'integer', minimum: 0, maximum: 1000 },
+      sources: { type: 'array', minItems: 1, maxItems: BETA_SOURCES.length, uniqueItems: true, items: { type: 'string', enum: BETA_SOURCES } },
+      realData: { type: 'string', enum: BETA_REAL_DATA },
+      reference: { type: 'string', enum: BETA_REFERENCE },
+      consents: {
+        type: 'object',
+        required: ['terms', 'measurement', 'surveys'],
+        additionalProperties: false,
+        properties: { terms: { const: true }, measurement: { const: true }, surveys: { const: true } },
+      },
+      // Left empty by people; a bot that fills every field is answered the same and nothing is stored.
+      website: { type: 'string', maxLength: 200 },
+    },
+  } as const;
+  const allowApplication = applicationLimiter();
+
+  /** The public application form. The answer is the same whether or not something was stored. */
+  app.post<{ Body: BetaApplication & { consents: object; website?: string } }>(
+    '/api/beta/apply',
+    { schema: { summary: 'Apply for the closed beta (public; all three consents required)', body: applicationBody, response: errors(404, 410, 422, 429, 503) } },
+    async (req, reply) => {
+      if (!accounts.enabled) throw betaOff();
+      if (!beta.cfg.open) throw httpError(410, 'Applications for the beta are closed.');
+      if (!allowApplication(req.ip, Date.now())) throw httpError(429, 'Too many applications from this address. Please try again in an hour.', { 'retry-after': '3600' });
+      const { consents: _c, website, ...application } = req.body;
+      if (!website) {
+        const r = await beta.apply({ ...application, sources: [...application.sources] }, new Date().toISOString());
+        if (r.enrollment) await main.store.audit({ at: r.enrollment.appliedAt, kind: 'member', actor: 'beta form', summary: `Beta application from ${application.org} (${application.team})` });
+      }
+      return reply.code(202).send({ received: true });
+    },
+  );
+
+  app.get('/api/beta/enrollments', { schema: { summary: 'Beta applications and enrollments, newest first (operator)' } }, async (req) => {
+    requireOperator(req);
+    const now = Date.now();
+    return beta.enrollments().map((e) => ({ ...e, ...betaView(e, now) }));
+  });
+
+  const enrollmentParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 100 } } } as const;
+  const approveBody = {
+    type: 'object',
+    required: ['workspace'],
+    additionalProperties: false,
+    properties: { workspace: orgBody.properties.workspace, orgName: { type: 'string', minLength: 1, maxLength: 100 } },
+  } as const;
+
+  /** Approving opens the team's organization and workspace and returns the Owner's invitation link (shown once). */
+  app.post<{ Params: { id: string }; Body: { workspace: { id: string; name?: string }; orgName?: string } }>(
+    '/api/beta/enrollments/:id/approve',
+    { schema: { summary: "Approve an application: the team's organization, workspace and Owner invitation (operator)", params: enrollmentParams, body: approveBody, response: errors(403, 404, 409, 422), ...MUTATION } },
+    async (req, reply) => {
+      requireOperator(req);
+      const e = beta.check(req.params.id, ['applied']);
+      const opened = await openOrg(req, { name: req.body.orgName ?? e.application.org, workspace: { id: req.body.workspace.id, name: req.body.workspace.name ?? e.application.team }, ownerEmail: e.application.contactEmail });
       const { actor, via } = who(req, null);
-      if (workspaces.get(req.body.workspace.id)) throw httpError(409, `Workspace ${req.body.workspace.id} already exists`);
-      const org = await accounts.createOrg(req.body.name);
       const at = new Date().toISOString();
-      const w = await workspaces.create(req.body.workspace.id, req.body.workspace.name ?? req.body.name, at, org.id);
-      const invitation = await accounts.invite(actor ?? 'operator', 'owner', req.body.ownerEmail, org.id);
-      const summary = `Organization ${org.name} opened with workspace ${w.id}; Owner invitation for ${invitation.email}`;
-      await w.store.audit({ at, kind: 'member', actor, via, summary });
-      await main.store.audit({ at, kind: 'member', actor, via, summary });
-      return reply.code(201).send({ org, workspace: { id: w.id, name: w.name }, invitation });
+      const enrollment = await beta.approve(e.id, { orgId: opened.org.id, workspace: opened.workspace.id, invitationId: opened.invitation.id, by: actor ?? 'operator', at });
+      await main.store.audit({ at, kind: 'member', actor, via, summary: `Beta application from ${e.application.org} approved` });
+      return reply.code(201).send({ enrollment, ...opened });
+    },
+  );
+
+  app.post<{ Params: { id: string }; Body: { note?: string } | null }>(
+    '/api/beta/enrollments/:id/reject',
+    {
+      schema: {
+        summary: 'Reject an application (operator); the note stays with it, the team is not told here',
+        params: enrollmentParams,
+        body: { type: ['object', 'null'], additionalProperties: false, properties: { note: { type: 'string', maxLength: 500 } } },
+        response: errors(403, 404, 409, 422),
+        ...MUTATION,
+      },
+    },
+    async (req) => {
+      requireOperator(req);
+      const { actor, via } = who(req, null);
+      const at = new Date().toISOString();
+      const e = await beta.reject(req.params.id, { by: actor ?? 'operator', at, note: req.body?.note?.trim() || undefined });
+      await main.store.audit({ at, kind: 'member', actor, via, summary: `Beta application from ${e.application.org} rejected` });
+      return e;
+    },
+  );
+
+  /** A new Owner invitation for a team that has not joined yet; the old link stops working. */
+  app.post<{ Params: { id: string } }>(
+    '/api/beta/enrollments/:id/reinvite',
+    { schema: { summary: 'Send the Owner invitation again; the previous link stops working (operator)', params: enrollmentParams, response: errors(403, 404, 409), ...MUTATION } },
+    async (req) => {
+      requireOperator(req);
+      const e = beta.check(req.params.id, ['invited']);
+      const { actor, via } = who(req, null);
+      await accounts.revoke(e.invitationId!, e.orgId).catch(() => undefined);
+      const invitation = await accounts.invite(actor ?? 'operator', 'owner', e.application.contactEmail, e.orgId);
+      const at = new Date().toISOString();
+      const enrollment = await beta.reinvite(e.id, { invitationId: invitation.id, by: actor ?? 'operator', at });
+      await main.store.audit({ at, kind: 'member', actor, via, summary: `Beta invitation for ${e.application.org} sent again` });
+      return { enrollment, invitation };
     },
   );
 

@@ -53,7 +53,9 @@ const bearerOf = (req: FastifyRequest) => {
   return auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
 };
 /** Reads reachable without the read token: liveness for monitors, and the OAuth redirect a browser follows without headers. */
-const OPEN_READS = new Set(['/api/health', '/api/connections/atlassian/callback', '/api/auth/me']);
+const OPEN_READS = new Set(['/api/health', '/api/connections/atlassian/callback', '/api/auth/me', '/api/beta']);
+/** Changes anyone may send: the beta application form (validated, rate limited and stored for an operator only). */
+const PUBLIC_WRITES = new Set(['/api/beta/apply']);
 /** Accounts mode: reachable without a session, so a browser can log in. */
 const LOGIN_READS = new Set([...OPEN_READS, '/api/auth/login']);
 
@@ -115,6 +117,7 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
     const host = (req.headers.host ?? '').toLowerCase();
     const hostOk = hosts.has(host) || hosts.has(hostnameOf(host)) || isLoopbackName(hostnameOf(host)) || (!hosts.size && (accounts || !!(cfg.adminToken || cfg.readToken)));
     if (!hostOk) throw httpError(403, `Host "${host}" is not allowed. Add it to CI_ALLOWED_HOSTS.`);
+    if (req.method === 'POST' && PUBLIC_WRITES.has(req.url.split('?')[0]!)) return checkOrigin(req, host);
     if (accounts) return accountsGuard(req, host);
     if (!MUTATING.has(req.method)) {
       if (!cfg.readToken || OPEN_READS.has(req.url.split('?')[0]!)) return;

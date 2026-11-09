@@ -1,6 +1,6 @@
 # Zapisy i uczestnictwo w becie (T10)
 
-Stan: 2026-11-09, plan. Zadanie T10 z [`BETA-PLAN.md`](BETA-PLAN.md) §4. Cel: zespół zapisuje się sam, dostaje
+Stan: 2026-11-09, PR 1 zrobiony (zgłoszenia i zaproszenia, opis niżej w „Zrobione”), PR 2–3 w planie. Zadanie T10 z [`BETA-PLAN.md`](BETA-PLAN.md) §4. Cel: zespół zapisuje się sam, dostaje
 betę na określony czas, a wypełnianie ankiet ([`BETA-SURVEYS.md`](BETA-SURVEYS.md)) i koniec bety pilnuje serwer,
 nie właściciel w kalendarzu.
 
@@ -89,6 +89,30 @@ w zmiennej środowiskowej. Bez skonfigurowanego dostawcy maile trafiają do logu
    terminy ankiet dwutygodniowych.
 3. **Zadanie codzienne i maile:** `judgeEnrollment()`, przypomnienia, `overdue`/`paused`/`ended`, blokada analiz,
    powiadomienia operatora, akcje przedłużenia.
+
+## Zrobione: PR 1 (2026-11-09)
+Warunek: wiele organizacji na jednej instalacji (`docs/ORGANIZATIONS-PLAN.md`, osobny PR przed tym).
+- `packages/server/src/beta.ts`: `BetaEnrollments` w `_platform` (`beta-enrollments.json`), statusy `applied`,
+  `rejected`, `invited`, `active`, `ended`; `statusAt()` i `daysLeft()` (czyste, liczone od `now`).
+- **Formularz** `#/beta` (bez logowania) → `POST /api/beta/apply`: trzy zgody wymagane (`const: true`, inaczej 422),
+  pole-pułapka `website`, 5 zgłoszeń na adres IP na godzinę (429 z `Retry-After`), najwyżej 200 czekających (503),
+  ten sam e-mail z otwartym zgłoszeniem nic nie zapisuje; odpowiedź zawsze `202 { received: true }`. Strażnik
+  przepuszcza tę jedną trasę bez sesji i tokenu (z kontrolą `Origin`). `GET /api/beta` (publiczne): `{ open, weeks }`.
+  `CI_BETA_APPLICATIONS=closed` zamyka zgłoszenia (410), `CI_BETA_WEEKS` (domyślnie 8) ustala długość bety.
+  Działa tylko w trybie `accounts`.
+- **Operator** (`CI_OPERATOR_EMAILS` albo token administratora), strona `#/operator` (*Beta operator* w menu):
+  `GET /api/beta/enrollments`; `POST …/:id/approve { workspace: { id, name? }, orgName? }` otwiera organizację
+  z przestrzenią i zaproszeniem Ownera na e-mail z formularza (link pokazany raz); `POST …/:id/reject { note? }`;
+  `POST …/:id/reinvite` (nowy link, stary przestaje działać). Każda akcja w audycie pierwszej organizacji.
+- **Start bety:** gdy zaproszony Owner dołącza, status `active`, `startedAt` = teraz, `endsAt` = + `CI_BETA_WEEKS`
+  tygodni; wpis w audycie przestrzeni zespołu. `GET /api/auth/me` → `beta: { status, startedAt, endsAt, daysLeft }`,
+  a w nagłówku aplikacji znaczek „Beta: N days left” / „Beta ended”. Po `endsAt` status to `ended` od razu w odczycie;
+  zapisze go zadanie codzienne (PR 3).
+- Różnice wobec planu wyżej: `active` zaczyna się już przy dołączeniu Ownera (ankieta wejściowa przyjdzie w PR 2
+  i wtedy zablokuje analizę do jej wypełnienia); maili jeszcze nie ma, operator przekazuje link sam.
+- Ograniczenie: limit na adres IP bierze `req.ip`; za proxy bez `trustProxy` (do ustawienia przy hostingu, T1) jest
+  to adres proxy, więc limit 5/h działa wtedy na całą instalację.
+- Testy: `packages/server/test/beta.test.ts` (BETA-01–14), `packages/web/test/beta.test.ts` (BUI-01–04).
 
 ## Testy (najpierw czerwone)
 - `judgeEnrollment()`: tabela przypadków na granicach (termin dziś, dzień 6/7 po terminie, dwie zaległe, przedłużenie,

@@ -1,3 +1,4 @@
+import type { BetaView } from './beta';
 /** Roles in the organization (docs/ACCOUNTS-PLAN.md), strongest first. */
 export type Role = 'owner' | 'admin' | 'member' | 'viewer';
 export const ROLES: readonly Role[] = ['owner', 'admin', 'member', 'viewer'];
@@ -22,6 +23,8 @@ export interface Me {
   org?: { id: string; name: string } | null;
   /** The workspace the app opens on: `default` when the person sees it, else their organization's first. */
   home?: string | null;
+  /** The organization's closed beta, if it takes part (docs/BETA-ENROLLMENT-PLAN.md). */
+  beta?: BetaView | null;
 }
 
 /**

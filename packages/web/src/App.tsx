@@ -32,6 +32,9 @@ import { Drift } from './pages/Drift';
 import { Impact } from './pages/Impact';
 import { Settings } from './pages/Settings';
 import { Audit } from './pages/Audit';
+import { BetaApply } from './pages/BetaApply';
+import { Operator } from './pages/Operator';
+import { betaLabel } from './lib/beta';
 
 type Analysis = AnalysisResult & { running?: boolean; lastReason?: string };
 
@@ -320,9 +323,11 @@ export function App() {
   );
   const analyzeBlocked = disabledReason(me, 'member');
 
+  const [section, param, focus] = path.split('/').filter(Boolean);
+  // The beta application form is public: no login, no workspace (docs/BETA-ENROLLMENT-PLAN.md).
+  if (section === 'beta') return <BetaApply />;
   if (showLogin(me)) return <LoginScreen />;
 
-  const [section, param, focus] = path.split('/').filter(Boolean);
   let page;
   if (!analysis && !error) page = <div className="empty"><Spinner /> Discovering context and analyzing…</div>;
   else if (!analysis) page = <div className="empty">Could not load analysis: {error}</div>;
@@ -333,6 +338,7 @@ export function App() {
   else if (section === 'impact') page = <Impact />;
   else if (section === 'settings') page = <Settings />;
   else if (section === 'audit') page = <Audit />;
+  else if (section === 'operator' && me?.user?.operator) page = <Operator />;
   else page = <Overview />;
 
   const debt = analysis ? analysis.metrics.decisionDebt.critical + analysis.metrics.decisionDebt.important : 0;
@@ -396,6 +402,7 @@ export function App() {
       )}
       <div className="nav-section">Administration</div>
       {ADMIN.map((n) => navLink(n))}
+      {me?.user?.operator && navLink({ path: '/operator', label: 'Beta operator', Icon: UserIcon })}
       <div className="sidebar-divider sources-divider" />
       <div className="nav-section sources-group-label">Sources</div>
       <div className="sources-group col">
@@ -472,6 +479,7 @@ export function App() {
           </div>
           <header className="topbar">
             <WorkspaceSelect ws={ws} toast={toast} />
+            {betaLabel(me?.beta) && <span className={`badge ${me?.beta?.status === 'ended' ? 'bad' : 'accent'}`}>{betaLabel(me?.beta)}</span>}
             <div className="topbar-project">
               Project: <strong>{analysis?.project.name ?? '…'}</strong>
             </div>

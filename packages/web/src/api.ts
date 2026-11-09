@@ -3,6 +3,7 @@ import type { Me, Role } from './lib/account';
 import { authStep } from './lib/auth';
 import type { ChangeState } from './lib/changes';
 import { DEFAULT_WORKSPACE, apiUrl } from './lib/workspace';
+import type { applicationBody, BetaStatus, BetaView } from './lib/beta';
 
 let workspace = DEFAULT_WORKSPACE;
 /** The workspace this page shows (F5); every request of a workspace goes to its routes. */
@@ -260,7 +261,37 @@ export const api = {
   /** The link is returned only here; only a hash of its token is kept on the server. */
   invite: (role: Role, email: string) => req<Invitation & { link: string }>('POST', '/api/invitations', { role, ...(email.trim() && { email: email.trim() }) }),
   revokeInvitation: (id: string) => send('DELETE', `/api/invitations/${encodeURIComponent(id)}`).then(() => undefined),
+  /** Closed beta (docs/BETA-ENROLLMENT-PLAN.md): public, whether teams may apply. */
+  betaInfo: () => req<{ open: boolean; weeks: number }>('GET', '/api/beta'),
+  applyForBeta: (body: ReturnType<typeof applicationBody>) => req<{ received: true }>('POST', '/api/beta/apply', body),
+  /** Operator only. */
+  betaEnrollments: () => req<BetaEnrollment[]>('GET', '/api/beta/enrollments'),
+  /** The Owner's invitation link is returned only here. */
+  approveBeta: (id: string, workspace: { id: string; name?: string }) => req<{ enrollment: BetaEnrollment; invitation: Invitation & { link: string } }>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/approve`, { workspace }),
+  rejectBeta: (id: string, note: string) => req<BetaEnrollment>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/reject`, note.trim() ? { note: note.trim() } : {}),
+  reinviteBeta: (id: string) => req<{ enrollment: BetaEnrollment; invitation: Invitation & { link: string } }>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/reinvite`),
 };
+
+/** A beta application and what became of it (operator panel). */
+export interface BetaEnrollment extends BetaView {
+  id: string;
+  application: {
+    org: string;
+    team: string;
+    contactName: string;
+    contactEmail: string;
+    contactRole?: string;
+    writers: number;
+    builders: number;
+    sources: string[];
+    realData: string;
+    reference?: string;
+  };
+  appliedAt: string;
+  workspace?: string;
+  invitedAt?: string;
+  history: { at: string; status: BetaStatus; by: string; note?: string }[];
+}
 
 /** Where the browser goes to log in; an invitation token rides along. */
 export const loginUrl = (invite?: string) => `/api/auth/login${invite ? `?invite=${encodeURIComponent(invite)}` : ''}`;

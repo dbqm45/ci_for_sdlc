@@ -39,6 +39,11 @@ const ROUTE_ROLES: Record<string, Role> = {
   'DELETE /invitations/:id': 'admin',
   // An operator of the installation (checked by the route itself: CI_OPERATOR_EMAILS, not a role).
   'POST /orgs': 'viewer',
+  'POST /beta/enrollments/:id/approve': 'viewer',
+  'POST /beta/enrollments/:id/reject': 'viewer',
+  'POST /beta/enrollments/:id/reinvite': 'viewer',
+  // Public: the beta application form (the guard lets it through without a session or token, see http.ts).
+  'POST /beta/apply': 'viewer',
   // Anyone logged in.
   'POST /auth/logout': 'viewer',
 };
