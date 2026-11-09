@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.45] - 2026-11-09
+
+### Nowe
+
+- pause, end and remind beta teams, with mail through Resend (#117)
+
 ## [0.1.44] - 2026-11-09
 
 ### Nowe
