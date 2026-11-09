@@ -3,7 +3,7 @@ import type { Me, Role } from './lib/account';
 import { authStep } from './lib/auth';
 import type { ChangeState } from './lib/changes';
 import { DEFAULT_WORKSPACE, apiUrl } from './lib/workspace';
-import type { applicationBody, BetaStatus, BetaView, SurveyState } from './lib/beta';
+import type { applicationBody, BetaStatus, BetaView, SurveyState, UsageReport } from './lib/beta';
 
 let workspace = DEFAULT_WORKSPACE;
 /** The workspace this page shows (F5); every request of a workspace goes to its routes. */
@@ -278,6 +278,10 @@ export const api = {
   extendBeta: (id: string, days: number, reason: string) => req<BetaEnrollment>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/extend`, { days, ...(reason.trim() && { reason: reason.trim() }) }),
   /** Operator: hold off a team's pause (a paused team resumes at once). */
   graceBeta: (id: string, days: number, reason: string) => req<BetaEnrollment>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/grace`, { days, ...(reason.trim() && { reason: reason.trim() }) }),
+  /** Operator: a team's usage measures (T8). */
+  betaUsage: (id: string) => req<{ measurement: boolean; report: UsageReport | null }>('GET', `/api/beta/enrollments/${encodeURIComponent(id)}/usage`),
+  /** The team's Admin: usage measurement on or off. */
+  setBetaMeasurement: (on: boolean) => req<{ measurement: boolean }>('PUT', '/api/beta/measurement', { on }),
   reinviteBeta: (id: string) => req<{ enrollment: BetaEnrollment; invitation: Invitation & { link: string } }>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/reinvite`),
 };
 

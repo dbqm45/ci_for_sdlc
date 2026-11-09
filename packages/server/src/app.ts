@@ -5,11 +5,12 @@ import { existsSync } from 'node:fs';
 import { APPROVE_GATE, RULES, changeKeyOf, changeReadiness, mergeChangeReadiness, parseGateDecided, workspacePath, type AnalysisResult, type ChangeReadiness } from '@ci/core';
 import { Accounts, SESSION_COOKIE, LOGIN_COOKIE, type InvitedRole } from './accounts.js';
 import { ROLES, type Role } from './roles.js';
-import { BETA_REAL_DATA, BETA_REFERENCE, BETA_SOURCES, BetaEnrollments, applicationLimiter, betaView, entrySurveyPending, statusAt, surveyStates, type BetaApplication } from './beta.js';
+import { BETA_REAL_DATA, BETA_REFERENCE, BETA_SOURCES, BetaEnrollments, applicationLimiter, betaView, entrySurveyPending, measured, statusAt, surveyStates, type BetaApplication } from './beta.js';
 import { SURVEYS } from './beta-surveys.js';
 import { betaMails, runBetaJob } from './beta-job.js';
 import { PAUSE_AFTER_DAYS } from './beta-lifecycle.js';
 import { mailerFromEnv, type Mailer } from './mailer.js';
+import { PostHogSink, Usage, triggerOf, usageReport, type UsageEventName, type UsageSink } from './usage.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
@@ -56,6 +57,8 @@ export interface AppOptions {
   betaPauseAfterDays?: number;
   /** Where the beta's mails go; default Resend with RESEND_API_KEY and CI_MAIL_FROM, else the log. */
   mailer?: Mailer;
+  /** Where usage events go besides our own log (T8); default PostHog with POSTHOG_API_KEY, else none. */
+  usageSink?: UsageSink;
 }
 
 /** A workspace's part of the pdi changes: its analysis and the changes of its stories. */
@@ -69,7 +72,7 @@ interface ChangePart {
  * The server. `engine` and `store` are those of the `default` workspace (F5, docs/WORKSPACES-F5-PLAN.md); the others
  * are in `workspaces`.
  */
-export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts; betaJob: (now?: number) => Promise<void> }> {
+export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts; betaJob: (now?: number) => Promise<void>; usage: Usage }> {
   const authMode = opts.authMode ?? process.env.CI_AUTH_MODE ?? 'token';
   if (authMode !== 'token' && authMode !== 'accounts') throw new Error(`CI_AUTH_MODE must be "token" or "accounts", not "${authMode}".`);
   const connect = opts.connect ?? connectConfigFromEnv();
@@ -91,6 +94,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const pool = databaseUrl ? new pg.Pool({ connectionString: databaseUrl, max: 10 }) : undefined;
   if (pool) await migrate(pool);
   const storage = pool ? new PgStorage(pool) : new FileStorage(opts.dataDir);
+  /** Usage measurement after each analysis (T8); set once the beta and the accounts are known. */
+  let afterAnalysis: ((w: Workspace) => Promise<void>) | undefined;
   const workspaces = new Workspaces(storage, connect, async (w) => {
     /** A2b: decided A2a steps go to pdi's registry as decision.recorded, with the item's CHG from its `change:` label. */
     w.sink = async (steps) => {
@@ -102,6 +107,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     };
     w.engine.autoCloseSink = w.sink;
     // After every analysis: readiness of the labelled changes across all workspaces to pdi, then whatever is due (F4).
+    w.engine.on('analysis', () => {
+      const work = afterAnalysis?.(w);
+      if (work) void usage.watch(work).catch((e) => app.log.warn({ err: String(e) }, 'usage after analysis failed'));
+    });
     w.engine.on('analysis', () => {
       if (!pdi.enabled || !w.engine.state.result) return;
       pdi.schedule(async () => pdi.enqueue(mergeChangeReadiness((await changeParts()).map((p) => p.changes))));
@@ -134,6 +143,17 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     pauseAfterDays: opts.betaPauseAfterDays ?? (Number(process.env.CI_BETA_PAUSE_AFTER_DAYS) || PAUSE_AFTER_DAYS),
   });
   const pauseAfterDays = beta.cfg.pauseAfterDays!;
+
+  // ------------------------------------------------------------------ usage measurement (T8, docs/BETA-PLAN.md §8)
+  const usage = new Usage(storage.backend('_platform'), {
+    enabled: authMode === 'accounts' && process.env.CI_USAGE !== 'off',
+    sink: opts.usageSink ?? (process.env.POSTHOG_API_KEY ? new PostHogSink(process.env.POSTHOG_API_KEY, process.env.POSTHOG_HOST || undefined) : undefined),
+    secret: process.env.CI_USAGE_SECRET || undefined,
+    log: (o, msg) => app.log.warn(o, msg),
+  });
+  if (usage.cfg.enabled) await usage.init();
+  const usageTimer = usage.cfg.sink ? setInterval(() => void usage.flush(), 30_000) : undefined;
+  usageTimer?.unref();
   const mailer = opts.mailer ?? mailerFromEnv((o, msg) => app.log.info(o, msg));
   const operatorEmails = opts.operatorEmails ?? (process.env.CI_OPERATOR_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean);
   /** A beta mail that must not fail the request: a failure is logged (the job retries its own mails). */
@@ -158,6 +178,93 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const requirePdiVisible = (req: FastifyRequest) => {
     if (!pdiVisible(req)) throw httpError(404, `No API route ${req.method} ${req.url.split('?')[0]}`);
   };
+
+  /** Records a usage event of a workspace whose organization takes part in the beta and measures (T8). */
+  const track = <E extends UsageEventName>(w: Workspace, event: E, props: Parameters<Usage['track']>[2] & object, userId?: string, at?: string) => {
+    const orgId = orgOf(w);
+    if (!orgId || !usage.cfg.enabled || !measured(beta.forOrg(orgId))) return Promise.resolve();
+    return usage.track(event, { orgId, workspace: w.id, userId, at }, props as never);
+  };
+  /** When each finding and drift event was first seen, per workspace (for `finding_shown` once and `age_hours`). */
+  const seenDoc = (w: Workspace) => `usage-seen-${w.id}.json`;
+  const platform = storage.backend('_platform');
+  const seenOf = async (w: Workspace) => ((await platform.read(seenDoc(w))) as Record<string, string> | undefined) ?? {};
+  afterAnalysis = async (w) => {
+    const orgId = orgOf(w);
+    const result = w.engine.state.result;
+    if (!orgId || !result || !usage.cfg.enabled || !measured(beta.forOrg(orgId))) return;
+    const findings = result.items.flatMap((i) => i.findings);
+    const from = Date.parse(result.analyzedAt) - result.durationMs - 1000;
+    const aiCalls = (await w.store.auditLog(500)).filter((e) => e.kind === 'ai_call' && Date.parse(e.at) >= from && Date.parse(e.at) <= Date.parse(result.analyzedAt) + 1000);
+    const cost = aiCalls.reduce((sum, e) => sum + (typeof (e.details as { costUsd?: unknown } | undefined)?.costUsd === 'number' ? ((e.details as { costUsd: number }).costUsd) : 0), 0);
+    await track(w, 'analysis_completed', { trigger: triggerOf(w.engine.state.lastReason), items: result.items.length, findings_open: findings.filter((f) => f.status === 'open').length, durationMs: result.durationMs, ai: result.ai.enabled, ai_calls: aiCalls.length, ai_cost_usd: cost }, undefined, result.analyzedAt);
+    const seen = await seenOf(w);
+    let changed = false;
+    for (const f of findings) {
+      if (seen[f.id]) continue;
+      seen[f.id] = result.analyzedAt;
+      changed = true;
+      await track(w, 'finding_shown', { rule: f.ruleId, severity: f.severity, origin: f.origin }, undefined, result.analyzedAt);
+    }
+    for (const d of result.drift) {
+      if (seen[`drift:${d.id}`]) continue;
+      seen[`drift:${d.id}`] = result.analyzedAt;
+      changed = true;
+      await track(w, 'drift_detected', { kind: d.kind }, undefined, result.analyzedAt);
+    }
+    if (changed) await platform.write(seenDoc(w), seen);
+  };
+
+  /** Events from what people do, read from successful requests (the routes stay unaware of measurement). */
+  const WS_PATH = /^\/api(?:\/w\/([^/]+))?\/(items\/([^/]+)(?:\/(approve|answers\/[^/]+))?|decisions)$/;
+  app.addHook('onResponse', async (req, reply) => {
+    if (!req.account || reply.statusCode >= 300 || !usage.cfg.enabled) return;
+    await usage.watch(usageFromRequest(req));
+  });
+  async function usageFromRequest(req: FastifyRequest) {
+    if (!req.account) return;
+    const path = req.url.split('?')[0]!;
+    try {
+      if (req.method === 'POST' && /^\/api\/beta\/surveys\/[^/]+\/answers$/.test(path)) {
+        const ws = workspaces.all().find((w) => orgOf(w) === req.account!.orgId);
+        if (ws) await track(ws, 'survey_answered', { survey: path.split('/')[4]!.replace(/-\d+$/, '') }, req.account.userId);
+        return;
+      }
+      const m = WS_PATH.exec(path);
+      if (!m) return;
+      const w = workspaces.get(m[1] ? decodeURIComponent(m[1]) : DEFAULT_WORKSPACE);
+      if (!w) return;
+      const items = w.engine.state.result?.items ?? [];
+      const key = m[3] && decodeURIComponent(m[3]);
+      const item = key ? items.find((i) => i.key === key) : undefined;
+      const user = req.account.userId;
+      if (req.method === 'GET' && key && !m[4]) return void (await track(w, 'item_viewed', { type: item?.type ?? 'unknown' }, user));
+      if (req.method === 'POST' && m[4] === 'approve') {
+        const body = (req.body ?? {}) as { force?: boolean };
+        return void (await track(w, 'item_approved', { forced: !!body.force, blocking_findings: item?.findings.filter((f) => f.blocks).length ?? 0 }, user));
+      }
+      if (req.method === 'POST' && m[4]?.startsWith('answers/')) {
+        const proposal = decodeURIComponent(m[4].slice('answers/'.length));
+        const f = item?.findings.find((x) => x.answer?.id === proposal);
+        return void (await track(w, 'answer_proposal_judged', { outcome: String((req.body as { action?: string } | undefined)?.action ?? ''), rule: f?.ruleId ?? 'unknown' }, user));
+      }
+      if (req.method === 'POST' && m[2] === 'decisions') {
+        const b = (req.body ?? {}) as { findingId?: string; questionId?: string; itemKey?: string; effect?: string };
+        const findingId = b.findingId ?? b.questionId ?? '';
+        const f = items.find((i) => i.key === b.itemKey)?.findings.find((x) => x.id === findingId);
+        const firstSeen = (await seenOf(w))[findingId];
+        await track(w, 'finding_decided', {
+          rule: f?.ruleId ?? findingId.split(':')[0] ?? 'unknown',
+          severity: f?.severity ?? 'unknown',
+          origin: f?.origin ?? 'unknown',
+          effect: b.effect ?? 'resolve',
+          ...(firstSeen && { age_hours: (Date.now() - Date.parse(firstSeen)) / 3_600_000 }),
+        }, user);
+      }
+    } catch (err) {
+      req.log.warn({ err: String(err) }, 'usage event failed');
+    }
+  }
 
   const env = guardConfigFromEnv();
   const guard: GuardConfig = { adminToken: opts.adminToken ?? env.adminToken, readToken: opts.readToken ?? env.readToken, allowedHosts: opts.allowedHosts ?? env.allowedHosts, allowedOrigins: opts.allowedOrigins ?? env.allowedOrigins,
@@ -411,6 +518,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     try {
       const { site, actor } = await w.atlassian.complete({ ...req.query, cookieState: cookieValue(req.headers.cookie, STATE_COOKIE) });
       await w.store.audit({ at: new Date().toISOString(), kind: 'connection', actor, summary: `Atlassian connected (${site?.name ?? 'no site'})` });
+      await track(w, 'source_connected', { source: 'atlassian' }, req.account?.userId).catch(() => undefined);
       return back({ connected: 'atlassian' });
     } catch (e) {
       if (!(e instanceof ConnectError)) req.log.error(e);
@@ -706,7 +814,35 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   if (betaTimer) void betaJob().catch((e) => app.log.error(e));
   app.addHook('onClose', async () => {
     if (betaTimer) clearInterval(betaTimer);
+    if (usageTimer) clearInterval(usageTimer);
+    await usage.idle();
   });
+
+  // ------------------------------------------------------------------ usage of the beta teams (T8)
+  app.get<{ Params: { id: string } }>(
+    '/api/beta/enrollments/:id/usage',
+    { schema: { summary: "A beta team's usage measures, week by week (operator)", params: enrollmentParams, response: errors(403, 404) } },
+    async (req) => {
+      requireOperator(req);
+      const e = beta.enrollments().find((x) => x.id === req.params.id);
+      if (!e) throw httpError(404, 'No such application.');
+      if (!e.startedAt || !e.orgId) return { measurement: false, report: null };
+      return { measurement: e.measurement !== false, report: usageReport(await usage.eventsOf(e.orgId), e.startedAt, Date.now()) };
+    },
+  );
+
+  /** The team's Admin switches usage measurement off or on again; the consent from the form starts it on. */
+  app.put<{ Body: { on: boolean } }>(
+    '/api/beta/measurement',
+    { schema: { summary: "Switch your beta team's usage measurement on or off (Admin)", body: { type: 'object', required: ['on'], additionalProperties: false, properties: { on: { type: 'boolean' } } }, response: errors(403, 404, 422), ...MUTATION } },
+    async (req) => {
+      if (!req.account) throw httpError(404, 'Your organization does not take part in the beta.');
+      const at = new Date().toISOString();
+      const e = await beta.setMeasurement(req.account.orgId, req.body.on, { by: req.account.name, at });
+      await auditOf(e.orgId).audit({ at, kind: 'settings', actor: req.account.name, via: 'session', summary: `Beta usage measurement switched ${req.body.on ? 'on' : 'off'}` });
+      return { measurement: e.measurement !== false };
+    },
+  );
 
   // ------------------------------------------------------------------ pdi (F4, docs/PDI-F4-PLAN.md), across workspaces
   app.get('/api/pdi', async (req) => (requirePdiVisible(req), pdi.status()));
@@ -823,7 +959,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     app.addHook('onClose', async () => {
       for (const w of workspaces.all()) w.engine.stop();
       await pdi.deliver().catch(() => undefined);
+      await usage.idle().catch(() => undefined);
       await pool.end();
     });
-  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts, betaJob };
+  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts, betaJob, usage };
 }

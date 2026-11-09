@@ -53,6 +53,8 @@ export interface BetaEnrollment {
   /** startedAt + the beta's length. */
   endsAt?: string;
   history: BetaHistoryEntry[];
+  /** Usage measurement (T8): on by the consent in the form; the team's Admin may switch it off. */
+  measurement?: boolean;
   /** The operator's grace: no pause before this time. */
   graceUntil?: string;
   /** Mails already sent (or skipped), by key, with when. */
@@ -96,6 +98,8 @@ export interface BetaView {
   pauseOn?: string;
   /** Why analyses are paused (status `paused`). */
   pausedReason?: string;
+  /** Whether usage is measured (T8). */
+  measurement?: boolean;
 }
 
 /** The surveys of an enrollment as of `now`; `userId` marks the ones this person answered. */
@@ -124,12 +128,16 @@ export function daysLeft(e: Pick<BetaEnrollment, 'endsAt'>, now: number): number
   return Math.max(0, Math.ceil((Date.parse(e.endsAt) - now) / DAY_MS));
 }
 
+/** Whether a team's usage is measured: it started the beta and did not switch measurement off. */
+export const measured = (e: BetaEnrollment | undefined) => !!e?.startedAt && e.measurement !== false;
+
 export function betaView(e: BetaEnrollment, now: number, pauseAfterDays = PAUSE_AFTER_DAYS): BetaView {
   const states = surveyStates(e, now);
   const j = judgeEnrollment(e, states, now, pauseAfterDays);
   const due = j.status === 'ended' ? states.find((x) => x.state === 'open' && x.kind === 'exit') : states.find((x) => x.state === 'open');
   return {
     status: j.status,
+    ...(e.startedAt && { measurement: e.measurement !== false }),
     ...(j.pauseOn && { pauseOn: j.pauseOn }),
     ...(j.reason && { pausedReason: j.reason }),
     ...(e.startedAt && { startedAt: e.startedAt, entrySurveyDone: !!e.surveys?.entry, surveyDue: due ? { id: due.id, kind: due.kind, dueAt: due.dueAt } : null }),
@@ -267,6 +275,16 @@ export class BetaEnrollments {
       record.by.push(who.userId);
       await this.save();
       return entry;
+    });
+  }
+
+  /** The team switches usage measurement on or off (BETA-PLAN.md §8: "wyłącznik"). */
+  async setMeasurement(orgId: string, on: boolean, o: { by: string; at: string }) {
+    const e = this.all.find((x) => x.orgId === orgId && x.startedAt);
+    if (!e) throw httpError(404, 'Your organization does not take part in the beta.');
+    return this.change(e.id, ['active', 'overdue', 'paused', 'ended'], (x) => {
+      x.measurement = on;
+      x.history.push({ at: o.at, status: x.status, by: o.by, note: `usage measurement ${on ? 'on' : 'off'}` });
     });
   }
 

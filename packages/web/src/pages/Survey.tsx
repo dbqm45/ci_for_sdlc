@@ -9,7 +9,17 @@ import { answersBody, unanswered, type AnswerDraft, type Question, type SurveySt
  * checks every answer; this page only stops a send with a required question left empty.
  */
 export function Survey({ id }: { id?: string }) {
-  const { navigate, toast, refreshMe } = useApp();
+  const { navigate, toast, refreshMe, me } = useApp();
+  const mayMeasure = me?.user && (me.user.role === 'owner' || me.user.role === 'admin');
+  const toggleMeasurement = async () => {
+    try {
+      const r = await api.setBetaMeasurement(!(me?.beta?.measurement ?? true));
+      toast(r.measurement ? 'Usage measurement is on' : 'Usage measurement is off');
+      await refreshMe();
+    } catch (err) {
+      toast(errMsg(err));
+    }
+  };
   const [list, setList] = useState<SurveyState[]>();
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<AnswerDraft>({});
@@ -52,6 +62,19 @@ export function Survey({ id }: { id?: string }) {
               ))}
             </tbody>
           </table>
+        </Card>
+        <Card title="Usage measurement">
+          <p className="small">
+            {me?.beta?.measurement === false
+              ? 'Off: nothing about how your team uses Quorum is recorded.'
+              : 'On: Quorum records what happens (an analysis ran, a finding was decided) — never the content of your stories, never names or e-mails.'}{' '}
+            You agreed to it in the application; an Admin can switch it off.
+          </p>
+          {mayMeasure && (
+            <button className="btn sm" onClick={() => void toggleMeasurement()}>
+              {me?.beta?.measurement === false ? 'Switch measurement on' : 'Switch measurement off'}
+            </button>
+          )}
         </Card>
       </div>
     );
