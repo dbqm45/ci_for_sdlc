@@ -491,7 +491,7 @@ export function App() {
           </div>
           <header className="topbar">
             <WorkspaceSelect ws={ws} toast={toast} />
-            {betaLabel(me?.beta) && <span className={`badge ${me?.beta?.status === 'ended' ? 'bad' : 'accent'}`}>{betaLabel(me?.beta)}</span>}
+            {betaLabel(me?.beta) && <span className={`badge ${me?.beta?.status === 'ended' || me?.beta?.status === 'paused' ? 'bad' : me?.beta?.status === 'overdue' ? 'warn' : 'accent'}`}>{betaLabel(me?.beta)}</span>}
             <div className="topbar-project">
               Project: <strong>{analysis?.project.name ?? '…'}</strong>
             </div>
@@ -511,9 +511,9 @@ export function App() {
           </header>
           <main className="content" key={ws}>
             {surveyDueText(me?.beta) && section !== 'survey' && (
-              <div className="survey-banner" role="status">
+              <div className={`survey-banner ${me?.beta?.status === 'paused' ? 'is-paused' : ''}`} role="status">
                 <span>
-                  {surveyDueText(me?.beta)} {me?.beta?.surveyDue?.kind === 'entry' && 'Analyses start once it is in.'}
+                  {surveyDueText(me?.beta)} {me?.beta?.surveyDue?.kind === 'entry' && me.beta.status === 'active' && 'Analyses start once it is in.'}
                 </span>
                 <a className="btn sm primary" href={`#/survey/${me!.beta!.surveyDue!.id}`}>
                   Fill in

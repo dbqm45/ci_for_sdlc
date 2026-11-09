@@ -298,6 +298,12 @@ export class Engine extends EventEmitter {
     await this.store.saveDemoContext(null);
   }
 
+  /**
+   * Why analyses that nobody asked for (the schedule, source webhooks) wait, e.g. a paused beta team
+   * (docs/BETA-ENROLLMENT-PLAN.md); undefined = they run. Requests are held at the HTTP layer.
+   */
+  hold?: string;
+
   /** (Re)configure the scheduler from settings. */
   async reschedule() {
     if (this.timer) clearInterval(this.timer);
@@ -305,7 +311,7 @@ export class Engine extends EventEmitter {
     if (process.env.CI_DISABLE_SCHEDULE === 'true') return;
     const s = await this.store.settings();
     const minutes = s.schedule.mode === 'continuous' ? 5 : s.schedule.mode === 'interval' ? Math.max(1, s.schedule.intervalMinutes) : 0;
-    if (minutes) this.timer = setInterval(() => void this.analyze(`scheduled (${minutes} min)`).catch(() => undefined), minutes * 60_000);
+    if (minutes) this.timer = setInterval(() => void (this.hold ? undefined : this.analyze(`scheduled (${minutes} min)`).catch(() => undefined)), minutes * 60_000);
   }
 
   stop() {

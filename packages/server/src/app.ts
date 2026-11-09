@@ -5,8 +5,11 @@ import { existsSync } from 'node:fs';
 import { APPROVE_GATE, RULES, changeKeyOf, changeReadiness, mergeChangeReadiness, parseGateDecided, workspacePath, type AnalysisResult, type ChangeReadiness } from '@ci/core';
 import { Accounts, SESSION_COOKIE, LOGIN_COOKIE, type InvitedRole } from './accounts.js';
 import { ROLES, type Role } from './roles.js';
-import { BETA_REAL_DATA, BETA_REFERENCE, BETA_SOURCES, BetaEnrollments, applicationLimiter, betaView, entrySurveyPending, surveyStates, type BetaApplication } from './beta.js';
+import { BETA_REAL_DATA, BETA_REFERENCE, BETA_SOURCES, BetaEnrollments, applicationLimiter, betaView, entrySurveyPending, statusAt, surveyStates, type BetaApplication } from './beta.js';
 import { SURVEYS } from './beta-surveys.js';
+import { betaMails, runBetaJob } from './beta-job.js';
+import { PAUSE_AFTER_DAYS } from './beta-lifecycle.js';
+import { mailerFromEnv, type Mailer } from './mailer.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
@@ -49,6 +52,10 @@ export interface AppOptions {
   betaWeeks?: number;
   /** Whether teams may apply; default true unless CI_BETA_APPLICATIONS=closed. */
   betaApplicationsOpen?: boolean;
+  /** Days a survey may be past due before analyses pause; default CI_BETA_PAUSE_AFTER_DAYS or 7. */
+  betaPauseAfterDays?: number;
+  /** Where the beta's mails go; default Resend with RESEND_API_KEY and CI_MAIL_FROM, else the log. */
+  mailer?: Mailer;
 }
 
 /** A workspace's part of the pdi changes: its analysis and the changes of its stories. */
@@ -62,7 +69,7 @@ interface ChangePart {
  * The server. `engine` and `store` are those of the `default` workspace (F5, docs/WORKSPACES-F5-PLAN.md); the others
  * are in `workspaces`.
  */
-export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts }> {
+export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts; betaJob: (now?: number) => Promise<void> }> {
   const authMode = opts.authMode ?? process.env.CI_AUTH_MODE ?? 'token';
   if (authMode !== 'token' && authMode !== 'accounts') throw new Error(`CI_AUTH_MODE must be "token" or "accounts", not "${authMode}".`);
   const connect = opts.connect ?? connectConfigFromEnv();
@@ -124,7 +131,13 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const beta = new BetaEnrollments(storage.backend('_platform'), {
     weeks: opts.betaWeeks ?? (Number(process.env.CI_BETA_WEEKS) || 8),
     open: opts.betaApplicationsOpen ?? process.env.CI_BETA_APPLICATIONS !== 'closed',
+    pauseAfterDays: opts.betaPauseAfterDays ?? (Number(process.env.CI_BETA_PAUSE_AFTER_DAYS) || PAUSE_AFTER_DAYS),
   });
+  const pauseAfterDays = beta.cfg.pauseAfterDays!;
+  const mailer = opts.mailer ?? mailerFromEnv((o, msg) => app.log.info(o, msg));
+  const operatorEmails = opts.operatorEmails ?? (process.env.CI_OPERATOR_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean);
+  /** A beta mail that must not fail the request: a failure is logged (the job retries its own mails). */
+  const mailNow = (m: Parameters<Mailer['send']>[0]) => void mailer.send(m).catch((err) => app.log.warn({ err: String(err), subject: m.subject }, 'beta mail failed'));
   if (accounts.enabled) await beta.init();
 
   // ------------------------------------------------------------------ organizations (docs/ORGANIZATIONS-PLAN.md)
@@ -171,10 +184,18 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
 
   /** A beta team analyses and connects Atlassian only after its entry survey, the baseline (docs/BETA-ENROLLMENT-PLAN.md). */
   const ENTRY_SURVEY_GATED = /^\/api(?:\/w\/[^/]+)?\/(?:analyze|items\/[^/]+\/ai-review|connections\/atlassian\/start)$/;
+  /** A paused or ended beta team reads and answers surveys, nothing else changes (docs/BETA-ENROLLMENT-PLAN.md). */
+  const STILL_ALLOWED = /^\/api\/(?:beta|auth)\//;
   app.addHook('preHandler', async (req) => {
-    if (req.method !== 'POST' || !req.account || !ENTRY_SURVEY_GATED.test(req.url.split('?')[0]!)) return;
+    if (!req.account || req.method === 'GET' || req.method === 'HEAD') return;
+    const path = req.url.split('?')[0]!;
     const e = beta.forOrg(req.account.orgId);
-    if (e && entrySurveyPending(e)) throw httpError(403, `Fill in the entry survey first: it takes about ${SURVEYS.entry.minutes} minutes and gives the beta its starting point.`);
+    if (!e?.startedAt || STILL_ALLOWED.test(path)) return;
+    const status = statusAt(e, Date.now(), pauseAfterDays);
+    if (status === 'paused') throw httpError(403, `Analyses and changes are paused in the beta until the overdue survey is answered (Beta surveys). Your data stays.`);
+    if (status === 'ended') throw httpError(403, 'The beta has ended: Quorum is read-only for your team now.');
+    if (req.method === 'POST' && ENTRY_SURVEY_GATED.test(path) && entrySurveyPending(e))
+      throw httpError(403, `Fill in the entry survey first: it takes about ${SURVEYS.entry.minutes} minutes and gives the beta its starting point.`);
   });
 
   const pdiTimer = pdi.enabled ? setInterval(() => void pdi.deliver().catch(() => undefined), 60_000) : undefined;
@@ -297,7 +318,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       home: mine.some((w) => w.id === DEFAULT_WORKSPACE) ? DEFAULT_WORKSPACE : (mine[0]?.id ?? null),
       beta: (() => {
         const e = beta.forOrg(a.orgId);
-        return e ? betaView(e, Date.now()) : null;
+        return e ? betaView(e, Date.now(), pauseAfterDays) : null;
       })(),
     };
   });
@@ -496,7 +517,11 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       const { consents: _c, website, ...application } = req.body;
       if (!website) {
         const r = await beta.apply({ ...application, sources: [...application.sources] }, new Date().toISOString());
-        if (r.enrollment) await main.store.audit({ at: r.enrollment.appliedAt, kind: 'member', actor: 'beta form', summary: `Beta application from ${application.org} (${application.team})` });
+        if (r.enrollment) {
+          await main.store.audit({ at: r.enrollment.appliedAt, kind: 'member', actor: 'beta form', summary: `Beta application from ${application.org} (${application.team})` });
+          mailNow(betaMails.applied(r.enrollment));
+          if (operatorEmails.length) mailNow(betaMails.newApplication(r.enrollment, operatorEmails, connect.publicUrl));
+        }
       }
       return reply.code(202).send({ received: true });
     },
@@ -505,7 +530,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   app.get('/api/beta/enrollments', { schema: { summary: 'Beta applications and enrollments with their surveys, newest first (operator)' } }, async (req) => {
     requireOperator(req);
     const now = Date.now();
-    return beta.enrollments().map((e) => ({ ...e, ...betaView(e, now), surveySlots: surveyStates(e, now) }));
+    return beta.enrollments().map((e) => ({ ...e, ...betaView(e, now, pauseAfterDays), surveySlots: surveyStates(e, now) }));
   });
 
   // ------------------------------------------------------------------ beta surveys (docs/BETA-SURVEYS.md)
@@ -549,7 +574,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       const at = new Date().toISOString();
       const saved = await beta.answer(e.id, req.params.id, { userId: req.account!.userId, name: req.account!.name }, req.body.answers, at);
       await auditOf(e.orgId).audit({ at, kind: 'member', actor: req.account!.name, via: 'session', summary: `${SURVEYS[saved.kind].title} answered (${saved.survey})` });
-      return reply.code(201).send({ survey: saved.survey, at: saved.at, beta: betaView(beta.forOrg(e.orgId!)!, Date.now()) });
+      return reply.code(201).send({ survey: saved.survey, at: saved.at, beta: betaView(beta.forOrg(e.orgId!)!, Date.now(), pauseAfterDays) });
     },
   );
 
@@ -582,6 +607,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       const at = new Date().toISOString();
       const enrollment = await beta.approve(e.id, { orgId: opened.org.id, workspace: opened.workspace.id, invitationId: opened.invitation.id, by: actor ?? 'operator', at });
       await main.store.audit({ at, kind: 'member', actor, via, summary: `Beta application from ${e.application.org} approved` });
+      mailNow(betaMails.invited(enrollment, opened.invitation.link, beta.cfg.weeks));
       return reply.code(201).send({ enrollment, ...opened });
     },
   );
@@ -620,9 +646,67 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       const at = new Date().toISOString();
       const enrollment = await beta.reinvite(e.id, { invitationId: invitation.id, by: actor ?? 'operator', at });
       await main.store.audit({ at, kind: 'member', actor, via, summary: `Beta invitation for ${e.application.org} sent again` });
+      mailNow(betaMails.invited(enrollment, invitation.link, beta.cfg.weeks));
       return { enrollment, invitation };
     },
   );
+
+  const daysBody = (max: number) =>
+    ({ type: 'object', required: ['days'], additionalProperties: false, properties: { days: { type: 'integer', minimum: 1, maximum: max }, reason: { type: 'string', maxLength: 300 } } }) as const;
+
+  /** Moves the end of a team's beta; a team that ended comes back while the new end is ahead. */
+  app.post<{ Params: { id: string }; Body: { days: number; reason?: string } }>(
+    '/api/beta/enrollments/:id/extend',
+    { schema: { summary: "Move the end of a team's beta by some days (operator)", params: enrollmentParams, body: daysBody(60), response: errors(403, 404, 409, 422), ...MUTATION } },
+    async (req) => {
+      requireOperator(req);
+      const { actor, via } = who(req, null);
+      const at = new Date().toISOString();
+      const e = await beta.extend(req.params.id, { days: req.body.days, by: actor ?? 'operator', at, reason: req.body.reason?.trim() || undefined });
+      await main.store.audit({ at, kind: 'member', actor, via, summary: `Beta of ${e.application.org} extended to ${e.endsAt!.slice(0, 10)}` });
+      await betaJob();
+      return { ...beta.forOrg(e.orgId!)!, ...betaView(beta.forOrg(e.orgId!)!, Date.now(), pauseAfterDays) };
+    },
+  );
+
+  /** Holds off the pause for some days (holiday, a change in the team); a paused team resumes at once. */
+  app.post<{ Params: { id: string }; Body: { days: number; reason?: string } }>(
+    '/api/beta/enrollments/:id/grace',
+    { schema: { summary: 'Hold off the pause of a team for some days (operator)', params: enrollmentParams, body: daysBody(30), response: errors(403, 404, 409, 422), ...MUTATION } },
+    async (req) => {
+      requireOperator(req);
+      const { actor, via } = who(req, null);
+      const at = new Date().toISOString();
+      const e = await beta.grace(req.params.id, { days: req.body.days, by: actor ?? 'operator', at, reason: req.body.reason?.trim() || undefined });
+      await main.store.audit({ at, kind: 'member', actor, via, summary: `Beta of ${e.application.org}: no pause before ${e.graceUntil!.slice(0, 10)}` });
+      await betaJob();
+      return { ...beta.forOrg(e.orgId!)!, ...betaView(beta.forOrg(e.orgId!)!, Date.now(), pauseAfterDays) };
+    },
+  );
+
+  /** The beta's job (docs/BETA-ENROLLMENT-PLAN.md): every hour, and right after an operator's change. */
+  const betaJob = (now = Date.now()) =>
+    accounts.enabled
+      ? runBetaJob(
+          {
+            beta,
+            mailer,
+            operatorEmails,
+            publicUrl: connect.publicUrl,
+            pauseAfterDays,
+            workspacesOf: (orgId) => workspaces.all().filter((w) => orgOf(w) === orgId),
+            audit: async (orgId, summary, at) => auditOf(orgId).audit({ at, kind: 'member', actor: 'beta job', summary }),
+            log: (o, msg) => app.log.warn(o, msg),
+          },
+          now,
+        )
+      : Promise.resolve();
+  const betaTimer = accounts.enabled && process.env.CI_BETA_JOB !== 'off' && process.env.CI_DISABLE_SCHEDULE !== 'true' ? setInterval(() => void betaJob().catch((e) => app.log.error(e)), 3_600_000) : undefined;
+  betaTimer?.unref();
+  if (betaTimer) void betaJob().catch((e) => app.log.error(e));
+  app.addHook('onClose', async () => {
+    if (betaTimer) clearInterval(betaTimer);
+  });
 
   // ------------------------------------------------------------------ pdi (F4, docs/PDI-F4-PLAN.md), across workspaces
   app.get('/api/pdi', async (req) => (requirePdiVisible(req), pdi.status()));
@@ -741,5 +825,5 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       await pdi.deliver().catch(() => undefined);
       await pool.end();
     });
-  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts };
+  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts, betaJob };
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Backend } from './backend.js';
 import { httpError } from './http.js';
+import { PAUSE_AFTER_DAYS, judgeEnrollment } from './beta-lifecycle.js';
 import { SURVEYS, answerProblems, cleanAnswers, surveySchedule, type AnswerValue, type SurveyKind, type SurveySlot } from './beta-surveys.js';
 
 /**
@@ -9,7 +10,8 @@ import { SURVEYS, answerProblems, cleanAnswers, surveySchedule, type AnswerValue
  * time from the moment the Owner joins. Kept in the reserved `_platform` space as `beta-enrollments.json`.
  * Surveys and the daily job (reminders, pause, end) come in the next PRs.
  */
-export type BetaStatus = 'applied' | 'rejected' | 'invited' | 'active' | 'ended';
+/** `overdue`: a survey is past due; `paused`: analyses wait until the team answers (docs/BETA-ENROLLMENT-PLAN.md). */
+export type BetaStatus = 'applied' | 'rejected' | 'invited' | 'active' | 'overdue' | 'paused' | 'ended';
 export const BETA_SOURCES = ['jira', 'confluence', 'figma', 'repo', 'other'] as const;
 export const BETA_REAL_DATA = ['yes', 'one_project', 'test_only'] as const;
 export const BETA_REFERENCE = ['yes', 'ask_first', 'no'] as const;
@@ -51,6 +53,10 @@ export interface BetaEnrollment {
   /** startedAt + the beta's length. */
   endsAt?: string;
   history: BetaHistoryEntry[];
+  /** The operator's grace: no pause before this time. */
+  graceUntil?: string;
+  /** Mails already sent (or skipped), by key, with when. */
+  reminders?: Record<string, string>;
   /** Answered surveys by slot id (`entry`, `biweekly-1`, …, `exit`): first answer and who answered. */
   surveys?: Record<string, { answeredAt: string; by: string[] }>;
 }
@@ -86,6 +92,10 @@ export interface BetaView {
   entrySurveyDone?: boolean;
   /** The survey to answer now, the earliest due first; none when nothing is open. */
   surveyDue?: { id: string; kind: SurveyKind; dueAt: string } | null;
+  /** When analyses pause unless the overdue survey is answered (status `overdue`). */
+  pauseOn?: string;
+  /** Why analyses are paused (status `paused`). */
+  pausedReason?: string;
 }
 
 /** The surveys of an enrollment as of `now`; `userId` marks the ones this person answered. */
@@ -99,13 +109,13 @@ export function surveyStates(e: BetaEnrollment, now: number, userId?: string): S
 }
 
 /** Whether a team must still answer the entry survey before analysing (an active beta without it). */
-export const entrySurveyPending = (e: BetaEnrollment) => e.status === 'active' && !!e.startedAt && !e.surveys?.entry;
+export const entrySurveyPending = (e: BetaEnrollment) => ['active', 'overdue', 'paused'].includes(e.status) && !!e.startedAt && !e.surveys?.entry;
 
 const DAY_MS = 24 * 3_600_000;
 
-/** The status as of `now`: an active beta past its end has ended, even before the daily job records it. */
-export function statusAt(e: Pick<BetaEnrollment, 'status' | 'endsAt'>, now: number): BetaStatus {
-  return e.status === 'active' && e.endsAt && Date.parse(e.endsAt) <= now ? 'ended' : e.status;
+/** The status as of `now` (judged from the surveys and dates, before the daily job records it). */
+export function statusAt(e: BetaEnrollment, now: number, pauseAfterDays = PAUSE_AFTER_DAYS): BetaStatus {
+  return judgeEnrollment(e, surveyStates(e, now), now, pauseAfterDays).status;
 }
 
 /** Whole days until the end, rounded up (the last day counts as 1); 0 once it ended; undefined before it started. */
@@ -114,24 +124,29 @@ export function daysLeft(e: Pick<BetaEnrollment, 'endsAt'>, now: number): number
   return Math.max(0, Math.ceil((Date.parse(e.endsAt) - now) / DAY_MS));
 }
 
-export function betaView(e: BetaEnrollment, now: number): BetaView {
-  const status = statusAt(e, now);
-  const due = surveyStates(e, now).find((x) => x.state === 'open');
+export function betaView(e: BetaEnrollment, now: number, pauseAfterDays = PAUSE_AFTER_DAYS): BetaView {
+  const states = surveyStates(e, now);
+  const j = judgeEnrollment(e, states, now, pauseAfterDays);
+  const due = j.status === 'ended' ? states.find((x) => x.state === 'open' && x.kind === 'exit') : states.find((x) => x.state === 'open');
   return {
-    status,
+    status: j.status,
+    ...(j.pauseOn && { pauseOn: j.pauseOn }),
+    ...(j.reason && { pausedReason: j.reason }),
     ...(e.startedAt && { startedAt: e.startedAt, entrySurveyDone: !!e.surveys?.entry, surveyDue: due ? { id: due.id, kind: due.kind, dueAt: due.dueAt } : null }),
     ...(e.endsAt && { endsAt: e.endsAt, daysLeft: daysLeft(e, now) }),
   };
 }
 
 /** Statuses in which the same contact e-mail may not apply again (the answer stays the same, nothing is stored). */
-const OPEN: readonly BetaStatus[] = ['applied', 'invited', 'active'];
+const OPEN: readonly BetaStatus[] = ['applied', 'invited', 'active', 'overdue', 'paused'];
 
 export interface BetaConfig {
   /** CI_BETA_WEEKS, default 8. */
   weeks: number;
   /** CI_BETA_APPLICATIONS=closed stops new applications. */
   open: boolean;
+  /** CI_BETA_PAUSE_AFTER_DAYS, default 7: how long a survey may be past due before analyses pause. */
+  pauseAfterDays?: number;
   /** At most this many applications wait for a decision; more are refused (503). */
   maxPending?: number;
 }
@@ -237,7 +252,7 @@ export class BetaEnrollments {
    */
   async answer(enrollmentId: string, surveyId: string, who: { userId: string; name: string }, answers: Record<string, unknown>, at: string): Promise<SurveyAnswer> {
     return this.serial(async () => {
-      const e = this.find(enrollmentId, ['active', 'ended']);
+      const e = this.find(enrollmentId, ['active', 'overdue', 'paused', 'ended']);
       const slot = surveyStates(e, Date.parse(at), who.userId).find((x) => x.id === surveyId);
       if (!slot) throw httpError(404, `No survey ${surveyId} in this beta.`);
       if (slot.state === 'upcoming') throw httpError(409, `The survey opens on ${slot.opensAt.slice(0, 10)}.`);
@@ -252,6 +267,44 @@ export class BetaEnrollments {
       record.by.push(who.userId);
       await this.save();
       return entry;
+    });
+  }
+
+  /** Records the judged status when it changed (the daily job); returns the enrollment, or undefined when unchanged. */
+  async record(id: string, status: BetaStatus, at: string, note?: string): Promise<BetaEnrollment | undefined> {
+    return this.serial(async () => {
+      const e = this.find(id, ['active', 'overdue', 'paused', 'ended']);
+      if (e.status === status) return undefined;
+      e.status = status;
+      e.history.push({ at, status, by: 'beta job', ...(note && { note }) });
+      await this.save();
+      return structuredClone(e);
+    });
+  }
+
+  /** Marks mails as sent or skipped. */
+  async markReminders(id: string, keys: string[], at: string) {
+    if (!keys.length) return;
+    await this.serial(async () => {
+      const e = this.find(id, ['active', 'overdue', 'paused', 'ended']);
+      e.reminders = { ...e.reminders, ...Object.fromEntries(keys.map((k) => [k, at])) };
+      await this.save();
+    });
+  }
+
+  /** The operator moves the end of the beta by `days` (a team that ended comes back while the new end is ahead). */
+  async extend(id: string, o: { days: number; by: string; at: string; reason?: string }) {
+    return this.change(id, ['active', 'overdue', 'paused', 'ended'], (e) => {
+      e.endsAt = new Date(Date.parse(e.endsAt!) + o.days * DAY_MS).toISOString();
+      e.history.push({ at: o.at, status: e.status, by: o.by, note: `beta extended by ${o.days} days to ${e.endsAt.slice(0, 10)}${o.reason ? `: ${o.reason}` : ''}` });
+    });
+  }
+
+  /** The operator holds off the pause for `days` from now (holiday, a change in the team); a paused team resumes. */
+  async grace(id: string, o: { days: number; by: string; at: string; reason?: string }) {
+    return this.change(id, ['active', 'overdue', 'paused'], (e) => {
+      e.graceUntil = new Date(Date.parse(o.at) + o.days * DAY_MS).toISOString();
+      e.history.push({ at: o.at, status: e.status, by: o.by, note: `no pause before ${e.graceUntil.slice(0, 10)}${o.reason ? `: ${o.reason}` : ''}` });
     });
   }
 

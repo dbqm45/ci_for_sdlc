@@ -274,6 +274,10 @@ export const api = {
   answerSurvey: (id: string, answers: Record<string, string | number | string[]>) => req<{ survey: string; at: string; beta: BetaView }>('POST', `/api/beta/surveys/${encodeURIComponent(id)}/answers`, { answers }),
   /** Operator only: every answer of one team. */
   betaAnswers: (enrollmentId: string) => req<unknown[]>('GET', `/api/beta/enrollments/${encodeURIComponent(enrollmentId)}/answers`),
+  /** Operator: move the end of a team's beta. */
+  extendBeta: (id: string, days: number, reason: string) => req<BetaEnrollment>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/extend`, { days, ...(reason.trim() && { reason: reason.trim() }) }),
+  /** Operator: hold off a team's pause (a paused team resumes at once). */
+  graceBeta: (id: string, days: number, reason: string) => req<BetaEnrollment>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/grace`, { days, ...(reason.trim() && { reason: reason.trim() }) }),
   reinviteBeta: (id: string) => req<{ enrollment: BetaEnrollment; invitation: Invitation & { link: string } }>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/reinvite`),
 };
 

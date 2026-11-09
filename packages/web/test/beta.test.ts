@@ -92,10 +92,10 @@ describe('surveys in the UI', () => {
     expect(surveyDueText(beta, NOW)).toBe(text);
   });
 
-  it('BUI-07: analysing waits only for an active beta without its entry survey', () => {
+  it('BUI-07: analysing waits for a running beta without its entry survey', () => {
     expect(betaBlockReason({ status: 'active', entrySurveyDone: false })).toBe('Fill in the entry survey first');
     expect(betaBlockReason({ status: 'active', entrySurveyDone: true })).toBeUndefined();
-    expect(betaBlockReason({ status: 'ended', entrySurveyDone: false })).toBeUndefined();
+    expect(betaBlockReason({ status: 'invited' })).toBeUndefined();
     expect(betaBlockReason(null)).toBeUndefined();
   });
 
@@ -109,5 +109,22 @@ describe('surveys in the UI', () => {
     expect(surveysSummary({ surveySlots: slots }, NOW)).toBe('1/3 answered, 1 overdue');
     expect(surveysSummary({ surveySlots: [slots[3]!] }, NOW)).toBe('—');
     expect(surveysSummary({}, NOW)).toBe('—');
+  });
+});
+
+describe('overdue, paused and ended in the UI', () => {
+  const NOW = Date.parse('2026-11-20T12:00:00Z');
+  const due = { id: 'entry', kind: 'entry' as const, dueAt: '2026-11-13T09:00:00Z' };
+  it('BUI-09: the banner says when analyses pause, and why they are paused', () => {
+    expect(surveyDueText({ status: 'overdue', surveyDue: due, pauseOn: '2026-11-20T09:00:00Z' }, NOW)).toBe('The entry survey was due on 2026-11-13. Analyses pause on 2026-11-20 without it.');
+    expect(surveyDueText({ status: 'paused', surveyDue: due, pausedReason: 'Entry survey is 7 days past due' }, NOW)).toBe('Analyses are paused: Entry survey is 7 days past due. The entry survey resumes them at once.');
+  });
+
+  it('BUI-10: labels and the analyse block follow the status', () => {
+    expect(betaLabel({ status: 'paused', daysLeft: 30 })).toBe('Beta paused');
+    expect(betaLabel({ status: 'overdue', daysLeft: 30 })).toBe('Beta: 30 days left');
+    expect(betaBlockReason({ status: 'paused', entrySurveyDone: true })).toBe('Paused until the overdue survey is answered');
+    expect(betaBlockReason({ status: 'ended', entrySurveyDone: true })).toBe('The beta has ended');
+    expect(betaBlockReason({ status: 'overdue', entrySurveyDone: false })).toBe('Fill in the entry survey first');
   });
 });

@@ -1,6 +1,6 @@
 # Zapisy i uczestnictwo w becie (T10)
 
-Stan: 2026-11-09, PR 1–2 zrobione (zgłoszenia i zaproszenia, ankiety; opis niżej w „Zrobione”), PR 3 w planie. Zadanie T10 z [`BETA-PLAN.md`](BETA-PLAN.md) §4. Cel: zespół zapisuje się sam, dostaje
+Stan: 2026-11-09, zrobione w trzech PR (opis niżej w „Zrobione”). Decyzje właściciela z 09.11: wstrzymanie po 7 dniach, automatycznie, maile przez Resend. Zadanie T10 z [`BETA-PLAN.md`](BETA-PLAN.md) §4. Cel: zespół zapisuje się sam, dostaje
 betę na określony czas, a wypełnianie ankiet ([`BETA-SURVEYS.md`](BETA-SURVEYS.md)) i koniec bety pilnuje serwer,
 nie właściciel w kalendarzu.
 
@@ -134,6 +134,31 @@ Warunek: wiele organizacji na jednej instalacji (`docs/ORGANIZATIONS-PLAN.md`, o
 - Operator: `GET /api/beta/enrollments` z `surveySlots`, kolumna „Surveys” (odpowiedziane z otwartych, zaległe)
   i *Answers (JSON)* (`GET /api/beta/enrollments/:id/answers`).
 - Testy: `packages/server/test/beta-surveys.test.ts` (SV-01–09), `packages/web/test/beta.test.ts` (BUI-05–08).
+
+## Zrobione: PR 3 (2026-11-09) — zadanie, wstrzymanie, koniec bety i maile
+- Reguły (czyste, `packages/server/src/beta-lifecycle.ts`): `judgeEnrollment()` daje `active`, `overdue` (ankieta po
+  terminie; `pauseOn`), `paused` (ankieta `CI_BETA_PAUSE_AFTER_DAYS` = 7 dni po terminie albo dwie po terminie, po
+  ewentualnej łasce operatora; `reason`) i `ended` (od `endsAt`). Każdy odczyt ocenia tak samo jak zadanie, więc zespół
+  widzi stan od razu. `dueReminders()`: przypomnienia przy otwarciu ankiety, w dniu przed terminem, 3 dni po terminie
+  i dzień przed wstrzymaniem; najwyżej jedno na ankietę, a po spóźnionym przebiegu tylko najnowsze (wcześniejsze
+  oznaczone jako pominięte).
+- Zadanie (`beta-job.ts`, `runBetaJob()`): co godzinę (oraz od razu po zmianie operatora), wyłączane
+  `CI_BETA_JOB=off`. Zapisuje zmianę statusu w historii i audycie przestrzeni zespołu, wstrzymuje analizy z harmonogramu
+  i webhooków źródeł (`engine.hold`) zespołu `paused` lub `ended`, wysyła maile; nieudany mail próbuje ponownie przy
+  następnym przebiegu, zmiana statusu zapisuje się mimo to.
+- **Wstrzymanie:** zespół `paused` i `ended` czyta wszystko, odpowiada na ankiety i się wylogowuje; każda inna zmiana
+  (analiza, decyzje, ustawienia, zaproszenia) dostaje 403 z wyjaśnieniem. Odpowiedź na zaległą ankietę wznawia od razu.
+- **Operator:** `POST /api/beta/enrollments/:id/grace { days ≤ 30, reason? }` (*No pause for…*: bez wstrzymania do
+  daty; wstrzymany zespół wraca od razu) i `…/extend { days ≤ 60, reason? }` (*Extend…*: przesuwa koniec bety;
+  zakończona wraca, póki nowy koniec jest przed nami). Obie w historii i audycie.
+- **Maile** (`mailer.ts`): Resend z `RESEND_API_KEY` i `CI_MAIL_FROM`, `Idempotency-Key` z kluczem przypomnienia; bez
+  klucza tylko wpis w logu (kto i temat, nigdy treść z linkiem). Wysyłane: potwierdzenie zgłoszenia (zespół)
+  i nowe zgłoszenie (operator), zaproszenie z linkiem (też po *New invitation link*), przypomnienia, ostrzeżenie przed
+  wstrzymaniem (zespół i operator), wstrzymanie (zespół i operator), wznowienie, koniec bety z ankietą końcową. Maile
+  do zespołu idą na e-mail kontaktowy z formularza; treść po angielsku, jak aplikacja.
+- UI: baner mówi, kiedy analizy się wstrzymają albo dlaczego są wstrzymane (czerwony), znaczek „Beta paused”, przycisk
+  analizy wyłączony z powodem; panel operatora pokazuje datę i powód wstrzymania oraz *No pause for…* i *Extend…*.
+- Testy: `packages/server/test/beta-lifecycle.test.ts` (LC-01–10), `packages/web/test/beta.test.ts` (BUI-09–10).
 
 ## Testy (najpierw czerwone)
 - `judgeEnrollment()`: tabela przypadków na granicach (termin dziś, dzień 6/7 po terminie, dwie zaległe, przedłużenie,

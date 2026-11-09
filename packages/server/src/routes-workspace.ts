@@ -439,7 +439,7 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
       const fileKey = (req.body as { file_key?: unknown } | undefined)?.file_key;
       clearFigmaCache(typeof fileKey === 'string' && fileKey !== '' ? fileKey : undefined);
     }
-    if (enabled) void engine.analyze(`${req.params.source} change`).catch(() => undefined);
+    if (enabled && !engine.hold) void engine.analyze(`${req.params.source} change`).catch(() => undefined);
     return reply.status(202).send({ accepted: enabled });
   });
 
