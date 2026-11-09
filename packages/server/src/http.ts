@@ -21,6 +21,8 @@ export interface GuardConfig {
   mode?: 'token' | 'accounts';
   /** Accounts mode: the account behind the request's session cookie. */
   session?: (req: FastifyRequest) => Promise<Account | undefined>;
+  /** The local beta walkthrough (CI_BETA_LOCAL=1, loopback only): `/api/dev/*` is open, like a login page. */
+  devOpen?: boolean;
 }
 
 declare module 'fastify' {
@@ -118,6 +120,12 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
     const hostOk = hosts.has(host) || hosts.has(hostnameOf(host)) || isLoopbackName(hostnameOf(host)) || (!hosts.size && (accounts || !!(cfg.adminToken || cfg.readToken)));
     if (!hostOk) throw httpError(403, `Host "${host}" is not allowed. Add it to CI_ALLOWED_HOSTS.`);
     if (req.method === 'POST' && PUBLIC_WRITES.has(req.url.split('?')[0]!)) return checkOrigin(req, host);
+    if (cfg.devOpen && req.url.startsWith('/api/dev/')) {
+      if (MUTATING.has(req.method)) checkOrigin(req, host);
+      // A session, if any, still says who is asking (the local login replaces it).
+      if (accounts) req.account = (await cfg.session?.(req)) ?? null;
+      return;
+    }
     if (accounts) return accountsGuard(req, host);
     if (!MUTATING.has(req.method)) {
       if (!cfg.readToken || OPEN_READS.has(req.url.split('?')[0]!)) return;

@@ -149,18 +149,20 @@ describe('the job and the app', () => {
   const ENTRY = { readiness_today: ['refinement'], who_decides: 'po', stories: 5, returned: 1, hours: '2-5', quality: 3, pain: 'Edge cases.' };
 
   it('LC-06: the application, the invitation and every reminder go out, each once', async () => {
+    // The entry survey's mail goes out as soon as the Owner joins, not at the next hourly run.
+    await app.settle();
     expect(subjects()).toEqual([
       'bea@beta.example: Quorum beta: we have your application',
       'ada@example.com: Quorum beta: new application from Beta Corp',
       'bea@beta.example: Quorum beta: your invitation',
+      'bea@beta.example: Quorum beta: the entry survey is open',
     ]);
     expect(mails[2]!.text).toMatch(/\/api\/auth\/login\?invite=/);
+    expect(mails[3]!.text).toContain('http://localhost:4317/#/w/beta-payments/survey/entry');
     mails = [];
     await runAt(at(0, 1));
     await runAt(at(0, 2));
-    expect(subjects()).toEqual(['bea@beta.example: Quorum beta: the entry survey is open']);
-    expect(mails[0]!.text).toContain('http://localhost:4317/#/w/beta-payments/survey/entry');
-    mails = [];
+    expect(subjects()).toEqual([]);
     await runAt(at(2, 10));
     await runAt(at(6, 10));
     await runAt(at(9, 10));
@@ -229,15 +231,17 @@ describe('the job and the app', () => {
   });
 
   it('LC-10: a failed mail is tried again on the next run; the status change is recorded anyway', async () => {
+    const bea = await as(BEA);
+    expect((await app.app.inject({ method: 'POST', url: '/api/beta/surveys/entry/answers', headers: browser(bea), payload: { answers: ENTRY } })).statusCode).toBe(201);
     mails = [];
     failing = true;
-    await runAt(at(0, 1));
-    expect((await enrollmentNow()).reminders ?? {}).toEqual({});
+    await runAt(at(14, 1));
+    expect(Object.keys((await enrollmentNow()).reminders ?? {})).not.toContain('biweekly-1:open');
     failing = false;
-    await runAt(at(0, 2));
-    expect(subjects()).toEqual(['bea@beta.example: Quorum beta: the entry survey is open']);
+    await runAt(at(14, 2));
+    expect(subjects()).toEqual(['bea@beta.example: Quorum beta: the two-week survey is open']);
     failing = true;
-    await runAt(at(10, 1));
+    await runAt(at(26, 1));
     expect((await enrollmentNow()).status).toBe('paused');
   });
 });

@@ -2062,3 +2062,18 @@ dialog.modal::backdrop {
 .survey-q.is-missing label > span {
   color: var(--bad);
 }
+
+/* Local beta walkthrough (CI_BETA_LOCAL=1, docs/BETA-LOCAL.md): never shown on a real server */
+.local-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 16px;
+  background: var(--warn-soft);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}

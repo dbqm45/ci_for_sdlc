@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../App';
 import { api, errMsg, type BetaEnrollment } from '../api';
 import { Card, DateTime } from '../components/ui';
+import { betaNow } from '../lib/localBeta';
 import { STATUS_LABEL, surveysSummary, usageLines, workspaceIdFrom, type UsageReport } from '../lib/beta';
 
 /**
@@ -9,7 +10,7 @@ import { STATUS_LABEL, surveysSummary, usageLines, workspaceIdFrom, type UsageRe
  * the teams in the beta. Approving opens the team's organization and shows the Owner's invitation link once.
  */
 export function Operator() {
-  const { toast } = useApp();
+  const { toast, me } = useApp();
   const [list, setList] = useState<BetaEnrollment[]>();
   const [ids, setIds] = useState<Record<string, string>>({});
   const [link, setLink] = useState<{ org: string; link: string }>();
@@ -242,7 +243,7 @@ export function Operator() {
                       e.history.at(-1)?.note
                     )}
                   </td>
-                  <td className="small">{surveysSummary(e)}</td>
+                  <td className="small">{surveysSummary(e, betaNow(me?.local))}</td>
                   <td>
                     {e.startedAt && (
                       <div className="row wrap" style={{ gap: 6 }}>

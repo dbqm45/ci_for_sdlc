@@ -58,6 +58,9 @@ jobs:
       # Live mode: the real connectors against local Jira, Confluence and Figma mocks, with dummy tokens only.
       - name: E2E live on API mocks
         run: npm run test:e2e:live-mock
+      # The closed beta's whole flow on the local walkthrough mode (fake login, in-app mailbox, movable clock).
+      - name: E2E beta flow (local mode)
+        run: npm run test:e2e:beta-local
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -65,4 +68,5 @@ jobs:
           path: |
             playwright-report/
             playwright-report-live-mock/
+            playwright-report-beta-local/
           retention-days: 7

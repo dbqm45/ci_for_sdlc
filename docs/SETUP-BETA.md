@@ -4,6 +4,7 @@ Stan: 2026-11-09. Co ustawić, żeby zapisy, ankiety, wstrzymanie i maile bety d
 Jak beta działa: [`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md) (T10) i [`ORGANIZATIONS-PLAN.md`](ORGANIZATIONS-PLAN.md);
 po co jest i co mierzymy: [`BETA-PLAN.md`](BETA-PLAN.md); pytania ankiet: [`BETA-SURVEYS.md`](BETA-SURVEYS.md).
 Pozostałe prace przed pierwszym zespołem (hosting, kopie, monitoring…) to T1–T9 w `BETA-PLAN.md` §4.
+Przed wdrożeniem przejdź betę lokalnie: [`BETA-LOCAL.md`](BETA-LOCAL.md) (`npm run local -- --beta`).
 
 ## 1. Zmienne środowiskowe
 

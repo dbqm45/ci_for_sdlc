@@ -32,6 +32,8 @@ export const USAGE = `Użycie: npm run local -- [opcje]
   --oauth              przycisk "Connect Atlassian" zamiast JIRA_API_TOKEN (CI_CONNECT_MODE=oauth)
   --token              połączenie tokenem API (domyślnie, chyba że CI_CONNECT_MODE=oauth)
   --accounts           logowanie kontem Atlassian i role (CI_AUTH_MODE=accounts); łączy się z --oauth i --token
+  --beta               lokalny przebieg zamkniętej bety bez Atlassiana i Resend: logowanie dowolną osobą, skrzynka
+                       maili w aplikacji, przesuwany zegar, osobne dane w .ci-data-beta-local (docs/BETA-LOCAL.md)
   --dev                tryb programisty: Vite z przeładowaniem na http://localhost:${VITE_PORT}
   --port <numer>       port serwera (domyślnie ${DEFAULT_PORT})
   --env-file <plik>    plik z odwołaniami 1Password (op://…), domyślnie ${DEFAULT_ENV_FILE}
@@ -43,7 +45,7 @@ Skrypt nigdy nie zapisuje ich do pliku.`;
 
 /**
  * @param {string[]} argv
- * @returns {{ mode?: 'token' | 'oauth', accounts?: boolean, dev: boolean, port?: number, envFile?: string, prompt: boolean, help: boolean, error?: string }}
+ * @returns {{ mode?: 'token' | 'oauth', accounts?: boolean, beta?: boolean, dev: boolean, port?: number, envFile?: string, prompt: boolean, help: boolean, error?: string }}
  */
 export function parseArgs(argv) {
   const out = { dev: false, prompt: true, help: false };
@@ -54,6 +56,7 @@ export function parseArgs(argv) {
       if (out.mode && out.mode !== mode) return { ...out, error: 'Wybierz jedno: --oauth albo --token.' };
       out.mode = mode;
     } else if (a === '--accounts') out.accounts = true;
+    else if (a === '--beta') out.beta = true;
     else if (a === '--dev') out.dev = true;
     else if (a === '--no-prompt') out.prompt = false;
     else if (a === '--help' || a === '-h') out.help = true;
@@ -86,7 +89,10 @@ export const modeOf = (args, env) => (args.mode ?? (env.CI_CONNECT_MODE?.trim() 
  * @param {{ accounts?: boolean }} args
  * @param {Record<string, string | undefined>} env
  */
-export const accountsOf = (args, env) => !!args.accounts || env.CI_AUTH_MODE?.trim() === 'accounts';
+export const accountsOf = (args, env) => !!args.accounts || !!args.beta || env.CI_AUTH_MODE?.trim() === 'accounts';
+
+/** The people of the local beta walkthrough: the operator logs in first and becomes the first Owner. */
+export const LOCAL_BETA_OPERATOR = 'operator@quorum.local';
 
 /**
  * Whether to re-run under `op run --env-file`: only with the 1Password CLI, a references file, and not already inside.
@@ -102,7 +108,7 @@ export const needsInstall = (s) => s.installedMtimeMs === undefined || (s.lockMt
 
 /**
  * What to start and with which extra variables. Variables already set win over the defaults (e.g. CI_PUBLIC_URL).
- * @param {{ mode: 'token' | 'oauth', dev: boolean, port?: number, accounts?: boolean }} o
+ * @param {{ mode: 'token' | 'oauth', dev: boolean, port?: number, accounts?: boolean, beta?: boolean }} o
  * @param {Record<string, string | undefined>} env
  */
 export function plan(o, env) {
@@ -114,6 +120,19 @@ export function plan(o, env) {
     HOST: env.HOST || '127.0.0.1',
     CI_PUBLIC_URL: env.CI_PUBLIC_URL || appUrl,
     ...(o.accounts ? { CI_AUTH_MODE: 'accounts' } : {}),
+    // The local beta walkthrough (docs/BETA-LOCAL.md): loopback only, no Atlassian, the operator is the first Owner.
+    ...(o.beta
+      ? {
+          CI_BETA_LOCAL: '1',
+          CI_AUTH_MODE: 'accounts',
+          HOST: '127.0.0.1',
+          CI_PUBLIC_URL: appUrl,
+          CI_BOOTSTRAP_EMAIL: LOCAL_BETA_OPERATOR,
+          CI_OPERATOR_EMAILS: LOCAL_BETA_OPERATOR,
+          ATLASSIAN_CLIENT_ID: env.ATLASSIAN_CLIENT_ID || 'local-beta-not-used',
+          ATLASSIAN_CLIENT_SECRET: env.ATLASSIAN_CLIENT_SECRET || 'local-beta-not-used',
+        }
+      : {}),
   };
   return {
     npmScript: o.dev ? 'dev' : 'start',

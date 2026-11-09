@@ -113,6 +113,8 @@ export interface AccountsConfig {
   bootstrapEmail?: string;
   /** CI_OPERATOR_EMAILS: Atlassian e-mails of the people who run the installation and open organizations. */
   operatorEmails?: string[];
+  /** The local beta walkthrough moves the clock by days: sessions then do not expire (docs/BETA-LOCAL.md). */
+  sessionsNeverExpire?: boolean;
 }
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
@@ -201,6 +203,19 @@ export class Accounts {
       throw new ConnectError('login_failed', 'Atlassian did not accept the login. Please log in again.');
     });
     const me = await this.fetchMe(tokens.accessToken);
+    return this.finish(me, p);
+  }
+
+  /**
+   * The local beta walkthrough only (docs/BETA-LOCAL.md): logs in as any person without Atlassian, with the same
+   * rules as a real login (an invitation, the first Owner, a known person). The server refuses to offer it unless it
+   * runs on loopback outside production.
+   */
+  async devLogin(me: Identity, opts: { invite?: string } = {}) {
+    return this.finish(me, { expiresAt: Date.now() + LOGIN_TTL_MS, ...(opts.invite && { invite: opts.invite }) });
+  }
+
+  private async finish(me: Identity, p: Pending): Promise<{ id: string; joined?: { name: string; role: Role; orgId: string } }> {
     return this.serial(async () => {
       const now = new Date().toISOString();
       let joined: { name: string; role: Role; orgId: string } | undefined;
@@ -341,7 +356,8 @@ export class Accounts {
     const now = Date.now();
     const membership = this.memberships.find((m) => m.userId === s.userId);
     const user = this.users.find((u) => u.id === s.userId);
-    if (!membership || !user || now - Date.parse(s.lastSeenAt) > IDLE_MS || now - Date.parse(s.createdAt) > MAX_AGE_MS) {
+    const expired = !this.cfg.sessionsNeverExpire && (now - Date.parse(s.lastSeenAt) > IDLE_MS || now - Date.parse(s.createdAt) > MAX_AGE_MS);
+    if (!membership || !user || expired) {
       await this.serial(() => this.dropSessions((x) => x === s));
       return undefined;
     }

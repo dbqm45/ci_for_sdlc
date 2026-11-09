@@ -2,6 +2,7 @@ node_modules/
 dist/
 tools/
 .ci-data/
+.ci-data-beta-local/
 *.log
 .env
 .DS_Store
@@ -13,6 +14,7 @@ coverage/
 test-results/
 playwright-report/
 playwright-report-live-mock/
+playwright-report-beta-local/
 .stryker-tmp/
 reports/
 /fetch-env.sh

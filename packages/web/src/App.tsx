@@ -35,6 +35,8 @@ import { Audit } from './pages/Audit';
 import { BetaApply } from './pages/BetaApply';
 import { Operator } from './pages/Operator';
 import { Survey } from './pages/Survey';
+import { LocalBar, LocalLogin, LocalMailbox } from './pages/LocalBeta';
+import { betaNow, localPage } from './lib/localBeta';
 import { betaBlockReason, betaLabel, surveyDueText } from './lib/beta';
 
 type Analysis = AnalysisResult & { running?: boolean; lastReason?: string };
@@ -336,7 +338,10 @@ export function App() {
   const [section, param, focus] = path.split('/').filter(Boolean);
   // The beta application form is public: no login, no workspace (docs/BETA-ENROLLMENT-PLAN.md).
   if (section === 'beta') return <BetaApply />;
-  if (showLogin(me)) return <LoginScreen />;
+  // The local walkthrough's own pages, and its login instead of Atlassian's (docs/BETA-LOCAL.md).
+  if (me?.local && localPage(location.hash) === 'login') return <LocalLogin />;
+  if (me?.local && localPage(location.hash) === 'mail') return <LocalMailbox />;
+  if (showLogin(me)) return me?.local ? <LocalLogin /> : <LoginScreen />;
 
   let page;
   if (!analysis && !error) page = <div className="empty"><Spinner /> Discovering context and analyzing…</div>;
@@ -509,11 +514,21 @@ export function App() {
             </button>
             <AccountMenu navigate={navigate} me={me} />
           </header>
+          {me?.local && (
+            <LocalBar
+              offsetDays={me.local.offsetDays}
+              now={me.local.now}
+              onMoved={() => {
+                void refreshMe();
+                void refresh();
+              }}
+            />
+          )}
           <main className="content" key={ws}>
-            {surveyDueText(me?.beta) && section !== 'survey' && (
+            {surveyDueText(me?.beta, betaNow(me?.local)) && section !== 'survey' && (
               <div className={`survey-banner ${me?.beta?.status === 'paused' ? 'is-paused' : ''}`} role="status">
                 <span>
-                  {surveyDueText(me?.beta)} {me?.beta?.surveyDue?.kind === 'entry' && me.beta.status === 'active' && 'Analyses start once it is in.'}
+                  {surveyDueText(me?.beta, betaNow(me?.local))} {me?.beta?.surveyDue?.kind === 'entry' && me.beta.status === 'active' && 'Analyses start once it is in.'}
                 </span>
                 <a className="btn sm primary" href={`#/survey/${me!.beta!.surveyDue!.id}`}>
                   Fill in

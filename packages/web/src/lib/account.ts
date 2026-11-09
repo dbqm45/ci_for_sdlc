@@ -25,6 +25,8 @@ export interface Me {
   home?: string | null;
   /** The organization's closed beta, if it takes part (docs/BETA-ENROLLMENT-PLAN.md). */
   beta?: BetaView | null;
+  /** The local beta walkthrough (CI_BETA_LOCAL=1, docs/BETA-LOCAL.md): how far the clock was moved. */
+  local?: { offsetDays: number; now: string };
 }
 
 /**

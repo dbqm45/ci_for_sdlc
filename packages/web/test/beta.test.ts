@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { betaNow, inviteFromHash, localPage } from '../src/lib/localBeta';
 import { EMPTY_FORM, usageLines, answersBody, applicationBody, betaBlockReason, betaLabel, formProblems, surveyDueText, surveysSummary, unanswered, workspaceIdFrom, type ApplicationForm, type Question } from '../src/lib/beta';
 
 // The closed beta in the UI (docs/BETA-ENROLLMENT-PLAN.md): the application form, workspace ids and days left.
@@ -160,5 +161,31 @@ describe('usage in the operator panel', () => {
       'AI cost': '$0.25',
       'Surveys answered': '1',
     });
+  });
+});
+
+describe('the local walkthrough pages', () => {
+  it.each([
+    ['#/dev/login', 'login'],
+    ['#/dev/login?invite=abc', 'login'],
+    ['#/dev/mail', 'mail'],
+    ['#/w/payments/dev/mail', 'mail'],
+    ['#/w/payments/dev/login?invite=x', 'login'],
+    ['#/devices', undefined],
+    ['#/overview', undefined],
+  ])('BUI-12: %s → %s', (hash, page) => {
+    expect(localPage(hash)).toBe(page);
+  });
+
+  it('BUI-13: the invitation rides along in the local login address', () => {
+    expect(inviteFromHash('#/dev/login?invite=tok_1-2')).toBe('tok_1-2');
+    expect(inviteFromHash('#/dev/login')).toBeUndefined();
+  });
+});
+
+describe("the beta's clock in the local walkthrough", () => {
+  it("BUI-14: the server's moved clock wins over the browser's", () => {
+    expect(betaNow({ now: '2026-12-05T14:00:00.000Z' })).toBe(Date.parse('2026-12-05T14:00:00.000Z'));
+    expect(Math.abs(betaNow(undefined) - Date.now())).toBeLessThan(1000);
   });
 });
