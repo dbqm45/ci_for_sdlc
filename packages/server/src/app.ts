@@ -10,7 +10,7 @@ import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
 import { guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { ensure, who, workspaceRoutes } from './routes-workspace.js';
-import { MUTATION, approvalRequestBody, changeParams, errors, oauthCallbackQuery, problem, workspaceBody, workspaceDeleteBody, workspaceParams, workspaceRenameBody } from './schemas.js';
+import { MUTATION, WORKSPACE_ID_PATTERN, approvalRequestBody, changeParams, errors, oauthCallbackQuery, problem, workspaceBody, workspaceDeleteBody, workspaceParams, workspaceRenameBody } from './schemas.js';
 import type { Store } from './store.js';
 import { APP_VERSION } from './version.js';
 import pg from 'pg';
@@ -41,6 +41,8 @@ export interface AppOptions {
   authMode?: 'token' | 'accounts';
   /** Defaults to CI_BOOTSTRAP_EMAIL: the Atlassian e-mail of the first Owner. */
   bootstrapEmail?: string;
+  /** Defaults to CI_OPERATOR_EMAILS (comma-separated): who may open organizations (docs/ORGANIZATIONS-PLAN.md). */
+  operatorEmails?: string[];
 }
 
 /** A workspace's part of the pdi changes: its analysis and the changes of its stories. */
@@ -65,7 +67,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   /** The pdi changes with the stories of every workspace (F5): each workspace is analysed first. */
   const changeParts = async (): Promise<ChangePart[]> =>
     Promise.all(
-      workspaces.all().map(async (w) => {
+      pdiWorkspaces().map(async (w) => {
         const result = await ensure(w.engine);
         const prefix = (await w.store.settings()).integrations.jira.changeLabelPrefix || undefined;
         return { w, result, changes: changeReadiness(result.items, w.engine.state.context?.requirements ?? [], prefix) };
@@ -108,8 +110,28 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     clientId: connect.atlassian.clientId,
     clientSecret: connect.atlassian.clientSecret,
     bootstrapEmail: opts.bootstrapEmail ?? (process.env.CI_BOOTSTRAP_EMAIL || undefined),
+    operatorEmails: opts.operatorEmails ?? (process.env.CI_OPERATOR_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean),
   });
   if (accounts.enabled) await accounts.init();
+
+  // ------------------------------------------------------------------ organizations (docs/ORGANIZATIONS-PLAN.md)
+  /** The organization a workspace belongs to; one without its own belongs to the first. Undefined in token mode. */
+  const orgOf = (w: Workspace) => (accounts.enabled ? (w.orgId ?? accounts.homeOrgId) : undefined);
+  /** The organization a request acts for: the person's, or the first one for a machine with a token. */
+  const orgOfReq = (req: FastifyRequest) => req.account?.orgId ?? accounts.homeOrgId;
+  /** Whether the request may see the workspace: machines and token mode see all, people only their organization's. */
+  const visible = (req: FastifyRequest, w: Workspace) => !accounts.enabled || !req.account || orgOf(w) === req.account.orgId;
+  /** The workspaces pdi's changes are made of: those of the first organization (the pdi link is the installation's). */
+  function pdiWorkspaces() {
+    return workspaces.all().filter((w) => orgOf(w) === (accounts.enabled ? accounts.homeOrgId : undefined));
+  }
+  /** Where the organization's own events (members, invitations, workspaces) are audited: its first workspace. */
+  const auditOf = (orgId: string | undefined) => (accounts.enabled && orgId !== accounts.homeOrgId ? workspaces.all().find((w) => orgOf(w) === orgId)?.store : undefined) ?? main.store;
+  /** pdi belongs to the first organization: a person of another one does not see it. */
+  const pdiVisible = (req: FastifyRequest) => !accounts.enabled || !req.account || req.account.orgId === accounts.homeOrgId;
+  const requirePdiVisible = (req: FastifyRequest) => {
+    if (!pdiVisible(req)) throw httpError(404, `No API route ${req.method} ${req.url.split('?')[0]}`);
+  };
 
   const env = guardConfigFromEnv();
   const guard: GuardConfig = { adminToken: opts.adminToken ?? env.adminToken, readToken: opts.readToken ?? env.readToken, allowedHosts: opts.allowedHosts ?? env.allowedHosts, allowedOrigins: opts.allowedOrigins ?? env.allowedOrigins,
@@ -146,15 +168,21 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   app.get('/api/rules', async () => RULES.map(({ id, name, description, appliesTo }) => ({ id, name, description, appliesTo })));
 
   // ------------------------------------------------------------------ workspaces (F5, docs/WORKSPACES-F5-PLAN.md)
-  app.get('/api/workspaces', async () => workspaces.list());
+  app.get('/api/workspaces', async (req) => workspaces.all().filter((w) => visible(req, w)).map(({ id, name }) => ({ id, name })));
+  const visibleWorkspace = (req: FastifyRequest, id: string) => {
+    const w = workspaces.get(id);
+    if (!w || !visible(req, w)) throw httpError(404, `No workspace ${id}`);
+    return w;
+  };
   app.post<{ Body: { id: string; name?: string; by?: string } }>(
     '/api/workspaces',
     { schema: { summary: 'Create a workspace with its own sources, analysis and decisions', body: workspaceBody, response: errors(409, 422), ...MUTATION } },
     async (req, reply) => {
       const at = new Date().toISOString();
       try {
-        const w = await workspaces.create(req.body.id, req.body.name ?? req.body.id, at);
-        await main.store.audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${w.id} (${w.name}) created` });
+        const orgId = orgOfReq(req);
+        const w = await workspaces.create(req.body.id, req.body.name ?? req.body.id, at, accounts.enabled ? orgId : undefined);
+        await auditOf(orgId).audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${w.id} (${w.name}) created` });
         return reply.status(201).send({ id: w.id, name: w.name });
       } catch (e) {
         if (e instanceof WorkspaceExistsError) throw httpError(409, e.message);
@@ -167,11 +195,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     '/api/workspaces/:ws',
     { schema: { summary: 'Rename a workspace (its id and addresses stay)', params: workspaceParams, body: workspaceRenameBody, response: errors(404, 422), ...MUTATION } },
     async (req) => {
-      if (!workspaces.get(req.params.ws)) throw httpError(404, `No workspace ${req.params.ws}`);
+      const before = visibleWorkspace(req, req.params.ws).name;
       const at = new Date().toISOString();
-      const before = workspaces.get(req.params.ws)!.name;
       const w = await workspaces.rename(req.params.ws, req.body.name.slice(0, 100), at);
-      await main.store.audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${w.id} renamed from ${before} to ${w.name}` });
+      await auditOf(orgOfReq(req)).audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${w.id} renamed from ${before} to ${w.name}` });
       return { id: w.id, name: w.name };
     },
   );
@@ -182,13 +209,13 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     { schema: { summary: 'Delete a workspace: it stops and its data moves to workspaces-deleted/ in the data directory', params: workspaceParams, body: workspaceDeleteBody, response: errors(400, 404, 409, 422), ...MUTATION } },
     async (req) => {
       const id = req.params.ws;
-      if (!workspaces.get(id)) throw httpError(404, `No workspace ${id}`);
+      visibleWorkspace(req, id);
       if (id === DEFAULT_WORKSPACE) throw httpError(409, 'The default workspace cannot be deleted.');
       if (req.body.confirm !== id) throw httpError(400, `Type the workspace id (${id}) in confirm to delete it.`);
       const at = new Date().toISOString();
       try {
         const { archivedTo } = await workspaces.remove(id, at);
-        await main.store.audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${id} deleted; its data moved to ${archivedTo}` });
+        await auditOf(orgOfReq(req)).audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${id} deleted; its data moved to ${archivedTo}` });
         return { deleted: id, archivedTo };
       } catch (e) {
         if (e instanceof WorkspaceRefusedError) throw httpError(409, e.message);
@@ -198,7 +225,16 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   );
 
   // ------------------------------------------------------------------ the routes of a workspace
-  await app.register(async (scope) => workspaceRoutes(scope, { of: () => main, connect }), { prefix: '/api' });
+  await app.register(
+    async (scope) => {
+      // `default` belongs to the first organization: for a person of another one it does not exist.
+      scope.addHook('preHandler', async (req) => {
+        if (!visible(req, main)) throw httpError(404, `No workspace ${DEFAULT_WORKSPACE}`);
+      });
+      await workspaceRoutes(scope, { of: () => main, connect });
+    },
+    { prefix: '/api' },
+  );
   await app.register(
     async (scope) => {
       // Every route here also takes the workspace id; an unknown one is a 404 before the handler runs.
@@ -210,7 +246,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       });
       scope.addHook('preHandler', async (req) => {
         const id = (req.params as { ws?: string }).ws ?? '';
-        if (!workspaces.get(id)) throw httpError(404, `No workspace ${id}`);
+        const w = workspaces.get(id);
+        if (!w || !visible(req, w)) throw httpError(404, `No workspace ${id}`);
       });
       await workspaceRoutes(scope, { of: (req: FastifyRequest) => workspaces.get((req.params as { ws: string }).ws)!, connect });
     },
@@ -226,10 +263,19 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     return reply.redirect(url);
   });
 
-  app.get('/api/auth/me', { schema: { summary: 'The auth mode and the logged-in person, if any' } }, async (req) => ({
-    mode: authMode,
-    user: req.account ? { id: req.account.userId, name: req.account.name, email: req.account.email, role: req.account.role } : null,
-  }));
+  app.get('/api/auth/me', { schema: { summary: 'The auth mode and the logged-in person with their organization, if any' } }, async (req) => {
+    const a = req.account;
+    if (!a) return { mode: authMode, user: null };
+    const org = accounts.org(a.orgId);
+    const mine = workspaces.all().filter((w) => visible(req, w));
+    return {
+      mode: authMode,
+      user: { id: a.userId, name: a.name, email: a.email, role: a.role, operator: a.operator },
+      org: org ? { id: org.id, name: org.name } : null,
+      // Where the app opens: `default` when the person sees it, else their organization's first workspace.
+      home: mine.some((w) => w.id === DEFAULT_WORKSPACE) ? DEFAULT_WORKSPACE : (mine[0]?.id ?? null),
+    };
+  });
 
   app.post('/api/auth/logout', { schema: { summary: 'End this session', ...MUTATION } }, async (req, reply) => {
     await accounts.logout(cookieValue(req.headers.cookie, SESSION_COOKIE));
@@ -241,21 +287,23 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const actorRole = (req: FastifyRequest): Role => req.account?.role ?? 'owner';
   const memberParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 100 } } } as const;
 
-  app.get('/api/members', { schema: { summary: 'The people of the organization with their roles (Admin)' } }, async () => accounts.members());
+  app.get('/api/members', { schema: { summary: 'The people of the organization with their roles (Admin)' } }, async (req) => accounts.members(orgOfReq(req)));
 
   app.patch<{ Params: { id: string }; Body: { role: Role } }>(
     '/api/members/:id',
     { schema: { summary: "Change a person's role (Admin; only an Owner gives or takes Owner)", params: memberParams, body: { type: 'object', required: ['role'], additionalProperties: false, properties: { role: { type: 'string', enum: ROLES } } }, response: errors(403, 404, 409, 422), ...MUTATION } },
     async (req) => {
-      const name = await accounts.setRole(actorRole(req), req.params.id, req.body.role);
-      await main.store.audit({ at: new Date().toISOString(), kind: 'member', ...who(req, null), summary: `${name} is now ${req.body.role}` });
-      return accounts.members().find((m) => m.id === req.params.id);
+      const orgId = orgOfReq(req);
+      const name = await accounts.setRole(actorRole(req), req.params.id, req.body.role, orgId);
+      await auditOf(orgId).audit({ at: new Date().toISOString(), kind: 'member', ...who(req, null), summary: `${name} is now ${req.body.role}` });
+      return accounts.members(orgId).find((m) => m.id === req.params.id);
     },
   );
 
   app.delete<{ Params: { id: string } }>('/api/members/:id', { schema: { summary: 'Remove a person and end their sessions (Admin)', params: memberParams, response: errors(403, 404, 409), ...MUTATION } }, async (req, reply) => {
-    const name = await accounts.remove(actorRole(req), req.params.id);
-    await main.store.audit({ at: new Date().toISOString(), kind: 'member', ...who(req, null), summary: `${name} removed from the organization` });
+    const orgId = orgOfReq(req);
+    const name = await accounts.remove(actorRole(req), req.params.id, orgId);
+    await auditOf(orgId).audit({ at: new Date().toISOString(), kind: 'member', ...who(req, null), summary: `${name} removed from the organization` });
     return reply.code(204).send();
   });
 
@@ -267,22 +315,24 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   } as const;
   const invitationSummary = (inv: { role: string; email: string }) => `Invitation as ${inv.role}${inv.email ? ` for ${inv.email}` : ''}`;
 
-  app.get('/api/invitations', { schema: { summary: 'Invitations that can still be used (Admin); never their links' } }, async () => accounts.openInvitations());
+  app.get('/api/invitations', { schema: { summary: 'Invitations that can still be used (Admin); never their links' } }, async (req) => accounts.openInvitations(orgOfReq(req)));
 
   app.post<{ Body: { role: InvitedRole; email?: string } }>(
     '/api/invitations',
     { schema: { summary: 'Create a one-time invitation link, valid 7 days (Admin)', body: invitationBody, response: errors(403, 422), ...MUTATION } },
     async (req, reply) => {
       const { actor, via } = who(req, null);
-      const inv = await accounts.invite(actor ?? 'admin', req.body.role, req.body.email);
-      await main.store.audit({ at: new Date().toISOString(), kind: 'member', actor, via, summary: `${invitationSummary(inv)} created` });
+      const orgId = orgOfReq(req);
+      const inv = await accounts.invite(actor ?? 'admin', req.body.role, req.body.email, orgId);
+      await auditOf(orgId).audit({ at: new Date().toISOString(), kind: 'member', actor, via, summary: `${invitationSummary(inv)} created` });
       return reply.code(201).send(inv);
     },
   );
 
   app.delete<{ Params: { id: string } }>('/api/invitations/:id', { schema: { summary: 'Revoke an invitation (Admin)', params: memberParams, response: errors(403, 404), ...MUTATION } }, async (req, reply) => {
-    const inv = await accounts.revoke(req.params.id);
-    await main.store.audit({ at: new Date().toISOString(), kind: 'member', ...who(req, null), summary: `${invitationSummary(inv)} revoked` });
+    const orgId = orgOfReq(req);
+    const inv = await accounts.revoke(req.params.id, orgId);
+    await auditOf(orgId).audit({ at: new Date().toISOString(), kind: 'member', ...who(req, null), summary: `${invitationSummary(inv)} revoked` });
     return reply.code(204).send();
   });
 
@@ -291,7 +341,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     reply.header('set-cookie', accounts.loginCookie('', 0));
     try {
       const { id, joined } = await accounts.complete({ ...req.query, cookieState: cookieValue(req.headers.cookie, LOGIN_COOKIE) });
-      if (joined) await main.store.audit({ at: new Date().toISOString(), kind: 'member', actor: joined.name, via: 'session', summary: `${joined.name} joined as ${joined.role}` });
+      if (joined) await auditOf(joined.orgId).audit({ at: new Date().toISOString(), kind: 'member', actor: joined.name, via: 'session', summary: `${joined.name} joined as ${joined.role}` });
       reply.header('set-cookie', accounts.sessionCookie(id));
       return reply.redirect('/');
     } catch (e) {
@@ -316,11 +366,60 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     }
   });
 
+  // ------------------------------------------------------------------ organizations, for the operator
+  /** Only an operator of the installation (CI_OPERATOR_EMAILS) or a machine with the admin token. */
+  const requireOperator = (req: FastifyRequest) => {
+    if (!accounts.enabled) throw httpError(404, 'Organizations exist only when people log in (CI_AUTH_MODE=accounts).');
+    if (req.principal !== 'admin_token' && !req.account?.operator) throw httpError(403, 'Only an operator of this installation (CI_OPERATOR_EMAILS) may do this.');
+  };
+
+  app.get('/api/orgs', { schema: { summary: 'Every organization with its workspaces and people (operator)' } }, async (req) => {
+    requireOperator(req);
+    return accounts.allOrgs().map((o) => ({
+      ...o,
+      home: o.id === accounts.homeOrgId,
+      workspaces: workspaces.all().filter((w) => orgOf(w) === o.id).map(({ id, name }) => ({ id, name })),
+      members: accounts.members(o.id).length,
+      invitations: accounts.openInvitations(o.id).length,
+    }));
+  });
+
+  const orgBody = {
+    type: 'object',
+    required: ['name', 'workspace', 'ownerEmail'],
+    additionalProperties: false,
+    properties: {
+      name: { type: 'string', minLength: 1, maxLength: 100 },
+      workspace: { type: 'object', required: ['id'], additionalProperties: false, properties: { id: { type: 'string', pattern: WORKSPACE_ID_PATTERN }, name: { type: 'string', maxLength: 100 } } },
+      ownerEmail: { type: 'string', maxLength: 200, pattern: '^[^\\s@]+@[^\\s@]+$' },
+    },
+  } as const;
+
+  /** A new organization with its first workspace and a one-time invitation for its Owner (the link is shown once). */
+  app.post<{ Body: { name: string; workspace: { id: string; name?: string }; ownerEmail: string } }>(
+    '/api/orgs',
+    { schema: { summary: 'Open an organization: its first workspace and an invitation for its Owner (operator)', body: orgBody, response: errors(403, 404, 409, 422), ...MUTATION } },
+    async (req, reply) => {
+      requireOperator(req);
+      const { actor, via } = who(req, null);
+      if (workspaces.get(req.body.workspace.id)) throw httpError(409, `Workspace ${req.body.workspace.id} already exists`);
+      const org = await accounts.createOrg(req.body.name);
+      const at = new Date().toISOString();
+      const w = await workspaces.create(req.body.workspace.id, req.body.workspace.name ?? req.body.name, at, org.id);
+      const invitation = await accounts.invite(actor ?? 'operator', 'owner', req.body.ownerEmail, org.id);
+      const summary = `Organization ${org.name} opened with workspace ${w.id}; Owner invitation for ${invitation.email}`;
+      await w.store.audit({ at, kind: 'member', actor, via, summary });
+      await main.store.audit({ at, kind: 'member', actor, via, summary });
+      return reply.code(201).send({ org, workspace: { id: w.id, name: w.name }, invitation });
+    },
+  );
+
   // ------------------------------------------------------------------ pdi (F4, docs/PDI-F4-PLAN.md), across workspaces
-  app.get('/api/pdi', async () => pdi.status());
+  app.get('/api/pdi', async (req) => (requirePdiVisible(req), pdi.status()));
 
   /** The pdi changes (stories labelled `change:CHG-n`) of all workspaces with their readiness and the last request for approval. */
-  app.get('/api/changes', async () => {
+  app.get('/api/changes', async (req) => {
+    requirePdiVisible(req);
     const [parts, state] = await Promise.all([changeParts(), main.store.pdiState()]);
     /** Where each story of a change is: the workspace whose part of the change lists it. */
     const workspacesOf = (change: string) => Object.fromEntries(parts.flatMap((p) => (p.changes.find((c) => c.change === change)?.items ?? []).map((k) => [k, p.w.id])));
@@ -335,6 +434,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     '/api/changes/:change/request-approval',
     { schema: { summary: 'Ask pdi to decide the approval of a change that is not ready', params: changeParams, body: approvalRequestBody, response: errors(404, 409, 422), ...MUTATION } },
     async (req) => {
+      requirePdiVisible(req);
       if (!pdi.enabled) throw httpError(409, 'The pdi link is not configured (PDI_EVENTS_URL and PDI_SIGNING_SECRET).');
       const parts = await changeParts();
       const change = mergeChangeReadiness(parts.map((p) => p.changes)).find((c) => c.change === req.params.change);

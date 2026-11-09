@@ -10,13 +10,26 @@ export interface User {
   name: string;
   email: string;
   role: Role;
+  /** An operator of the installation: may open organizations (docs/ORGANIZATIONS-PLAN.md). */
+  operator?: boolean;
 }
 
 /** GET /api/auth/me: how this server authorizes, and who is logged in (accounts mode). */
 export interface Me {
   mode: 'token' | 'accounts';
   user: User | null;
+  /** The person's organization (accounts mode). */
+  org?: { id: string; name: string } | null;
+  /** The workspace the app opens on: `default` when the person sees it, else their organization's first. */
+  home?: string | null;
 }
+
+/**
+ * The workspace to switch to once the person is known: their `home` when the address names none and the current one
+ * is not it (a person of another organization does not see `default`); undefined = stay.
+ */
+export const startWorkspace = (me: Me | undefined, addressWorkspace: string | undefined, current: string): string | undefined =>
+  me?.home && !addressWorkspace && me.home !== current ? me.home : undefined;
 
 export const roleLabel = (role: Role) => role[0]!.toUpperCase() + role.slice(1);
 

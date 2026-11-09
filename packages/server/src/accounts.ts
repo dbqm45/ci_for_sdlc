@@ -5,8 +5,11 @@ import { httpError } from './http.js';
 import { atLeast, type Role } from './roles.js';
 
 /**
- * People, the organization and sessions (docs/ACCOUNTS-PLAN.md), kept in the reserved `_platform` space.
- * Login with Atlassian asks only for `read:me`; the token is used once for `/me` and forgotten.
+ * People, organizations and sessions (docs/ACCOUNTS-PLAN.md, docs/ORGANIZATIONS-PLAN.md), kept in the reserved
+ * `_platform` space. Login with Atlassian asks only for `read:me`; the token is used once for `/me` and forgotten.
+ * The first organization (`homeOrgId`) holds the workspaces that have no organization of their own and the pdi link;
+ * an operator of the installation (CI_OPERATOR_EMAILS) opens further ones, each with an invitation for its Owner.
+ * A person belongs to one organization.
  */
 export const LOGIN_COOKIE = 'ci_oauth_login';
 export const SESSION_COOKIE = 'ci_session';
@@ -35,7 +38,7 @@ interface User extends Identity {
   createdAt: string;
   lastLoginAt: string;
 }
-interface Org {
+export interface Org {
   id: string;
   name: string;
   createdAt: string;
@@ -48,7 +51,9 @@ interface Membership {
 interface Invitation {
   id: string;
   hash: string;
-  role: InvitedRole;
+  role: Role;
+  /** The organization it lets into; none = the first one (invitations from before organizations). */
+  orgId?: string;
   email: string;
   invitedBy: string;
   createdAt: string;
@@ -67,6 +72,9 @@ export interface Account {
   name: string;
   email: string;
   role: Role;
+  orgId: string;
+  /** An operator of the installation (CI_OPERATOR_EMAILS): may open organizations. */
+  operator: boolean;
 }
 
 export interface Member {
@@ -82,7 +90,7 @@ export type InvitedRole = Exclude<Role, 'owner'>;
 /** An open invitation as the API shows it: never the token or its hash. */
 export interface InvitationView {
   id: string;
-  role: InvitedRole;
+  role: Role;
   email: string;
   invitedBy: string;
   createdAt: string;
@@ -103,6 +111,8 @@ export interface AccountsConfig {
   clientSecret: string;
   /** CI_BOOTSTRAP_EMAIL: the Atlassian e-mail of the first Owner. Without it the one-time link from the log is needed. */
   bootstrapEmail?: string;
+  /** CI_OPERATOR_EMAILS: Atlassian e-mails of the people who run the installation and open organizations. */
+  operatorEmails?: string[];
 }
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
@@ -182,7 +192,7 @@ export class Accounts {
    * Finishes a login; returns the new session id and, when an invitation let a new person in, who joined.
    * Errors are ConnectError with a message for the login screen.
    */
-  async complete(q: { code?: string; state?: string; error?: string; cookieState?: string }): Promise<{ id: string; joined?: { name: string; role: InvitedRole } }> {
+  async complete(q: { code?: string; state?: string; error?: string; cookieState?: string }): Promise<{ id: string; joined?: { name: string; role: Role; orgId: string } }> {
     const p = q.state ? this.pending.get(q.state) : undefined;
     if (q.state) this.pending.delete(q.state);
     if (!p || !q.cookieState || !same(q.cookieState, q.state!) || p.expiresAt < Date.now()) throw new ConnectError('login_expired', LOGIN_EXPIRED);
@@ -193,16 +203,17 @@ export class Accounts {
     const me = await this.fetchMe(tokens.accessToken);
     return this.serial(async () => {
       const now = new Date().toISOString();
-      let joined: { name: string; role: InvitedRole } | undefined;
+      let joined: { name: string; role: Role; orgId: string } | undefined;
       let user = this.users.find((u) => u.provider === 'atlassian' && u.subject === me.subject);
       if (user && this.memberships.some((m) => m.userId === user!.id)) {
         Object.assign(user, { name: me.name, email: me.email, lastLoginAt: now });
       } else if (p.invite && this.orgs.length) {
         const inv = this.redeem(p.invite, me);
+        const orgId = inv.orgId && this.orgs.some((o) => o.id === inv.orgId) ? inv.orgId : this.orgs[0]!.id;
         if (user) Object.assign(user, { name: me.name, email: me.email, lastLoginAt: now });
         else this.users.push((user = { id: randomUUID(), ...me, createdAt: now, lastLoginAt: now }));
-        this.memberships.push({ userId: user.id, orgId: this.orgs[0]!.id, role: inv.role });
-        joined = { name: user.name, role: inv.role };
+        this.memberships.push({ userId: user.id, orgId, role: inv.role });
+        joined = { name: user.name, role: inv.role, orgId };
         await this.backend.write('invitations.json', this.invitations);
         await this.backend.write('memberships.json', this.memberships);
       } else if (!this.users.length && this.mayBootstrap(me, p.bootstrap)) {
@@ -234,12 +245,47 @@ export class Accounts {
     return inv;
   }
 
-  /** A new one-time invitation; the link carries the only copy of its token. */
-  async invite(by: string, role: InvitedRole, email = ''): Promise<InvitationView & { link: string }> {
+  /** The first organization: the one of the installation's own workspaces and of the pdi link. */
+  get homeOrgId(): string | undefined {
+    return this.orgs[0]?.id;
+  }
+
+  /** Every organization, oldest first. */
+  allOrgs(): Org[] {
+    return this.orgs.map((o) => ({ ...o }));
+  }
+
+  org(id: string): Org | undefined {
+    const o = this.orgs.find((x) => x.id === id);
+    return o && { ...o };
+  }
+
+  /** A new, empty organization (an operator opens it; its Owner joins through an invitation). */
+  async createOrg(name: string): Promise<Org> {
+    return this.serial(async () => {
+      if (!this.orgs.length) throw httpError(409, 'Log in as the first Owner before opening more organizations.');
+      const org: Org = { id: randomUUID(), name: name.trim().slice(0, 100) || 'Organization', createdAt: new Date().toISOString() };
+      this.orgs.push(org);
+      await this.backend.write('orgs.json', this.orgs);
+      return { ...org };
+    });
+  }
+
+  /** A new one-time invitation into `orgId` (default: the first organization); the link carries the only copy of its token. */
+  async invite(by: string, role: Role, email = '', orgId?: string): Promise<InvitationView & { link: string }> {
     return this.serial(async () => {
       const now = Date.now();
       const secret = token();
-      const inv: Invitation = { id: randomUUID(), hash: sha256(secret), role, email: email.trim(), invitedBy: by, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + INVITE_TTL_MS).toISOString() };
+      const inv: Invitation = {
+        id: randomUUID(),
+        hash: sha256(secret),
+        role,
+        ...(orgId && orgId !== this.homeOrgId && { orgId }),
+        email: email.trim(),
+        invitedBy: by,
+        createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + INVITE_TTL_MS).toISOString(),
+      };
       this.invitations = this.invitations.filter((x) => Date.parse(x.expiresAt) >= now);
       this.invitations.push(inv);
       await this.backend.write('invitations.json', this.invitations);
@@ -247,19 +293,23 @@ export class Accounts {
     });
   }
 
-  /** Invitations that can still be used, newest first. */
-  openInvitations(): InvitationView[] {
+  private orgOfInvitation(inv: Invitation) {
+    return inv.orgId ?? this.homeOrgId;
+  }
+
+  /** Invitations into `orgId` (default: the first organization) that can still be used, newest first. */
+  openInvitations(orgId = this.homeOrgId): InvitationView[] {
     const now = Date.now();
     return this.invitations
-      .filter((x) => Date.parse(x.expiresAt) >= now)
+      .filter((x) => Date.parse(x.expiresAt) >= now && this.orgOfInvitation(x) === orgId)
       .map(view)
       .reverse();
   }
 
-  /** Revokes an invitation; returns it. */
-  async revoke(id: string): Promise<InvitationView> {
+  /** Revokes an invitation into `orgId` (default: the first organization); returns it. */
+  async revoke(id: string, orgId = this.homeOrgId): Promise<InvitationView> {
     return this.serial(async () => {
-      const inv = this.invitations.find((x) => x.id === id);
+      const inv = this.invitations.find((x) => x.id === id && this.orgOfInvitation(x) === orgId);
       if (!inv) throw httpError(404, 'No such invitation.');
       this.invitations = this.invitations.filter((x) => x !== inv);
       await this.backend.write('invitations.json', this.invitations);
@@ -299,7 +349,12 @@ export class Accounts {
       s.lastSeenAt = new Date(now).toISOString();
       await this.serial(() => this.backend.write('sessions.json', this.sessions));
     }
-    return { userId: user.id, name: user.name, email: user.email, role: membership.role };
+    return { userId: user.id, name: user.name, email: user.email, role: membership.role, orgId: membership.orgId, operator: this.isOperator(user.email) };
+  }
+
+  private isOperator(email: string) {
+    const e = email.trim().toLowerCase();
+    return !!e && (this.cfg.operatorEmails ?? []).some((x) => x.trim().toLowerCase() === e);
   }
 
   async logout(id: string | undefined) {
@@ -309,10 +364,9 @@ export class Accounts {
   }
 
   /** Adds a person with a role directly, without an invitation (used by tests). */
-  async admit(identity: Identity, role: Role) {
+  async admit(identity: Identity, role: Role, orgId = this.orgs[0]?.id ?? '') {
     return this.serial(async () => {
       const now = new Date().toISOString();
-      const orgId = this.orgs[0]?.id ?? '';
       let user = this.users.find((u) => u.provider === identity.provider && u.subject === identity.subject);
       if (!user) {
         user = { id: randomUUID(), ...identity, createdAt: now, lastLoginAt: '' };
@@ -326,27 +380,28 @@ export class Accounts {
     });
   }
 
-  members(): Member[] {
-    return this.memberships.flatMap((m) => {
+  /** The people of `orgId` (default: the first organization). */
+  members(orgId = this.homeOrgId): Member[] {
+    return this.memberships.filter((m) => m.orgId === orgId).flatMap((m) => {
       const u = this.users.find((x) => x.id === m.userId);
       return u ? [{ id: u.id, name: u.name, email: u.email, role: m.role, lastLoginAt: u.lastLoginAt }] : [];
     });
   }
 
-  /** Changes a role; returns the person's name. Admins never touch the Owner role; the last Owner stays. */
-  async setRole(actor: Role, id: string, role: Role) {
+  /** Changes a role in `orgId`; returns the person's name. Admins never touch the Owner role; the last Owner stays. */
+  async setRole(actor: Role, id: string, role: Role, orgId = this.homeOrgId) {
     return this.serial(async () => {
-      const m = this.checkChange(actor, id, role);
+      const m = this.checkChange(actor, id, orgId, role);
       m.role = role;
       await this.backend.write('memberships.json', this.memberships);
       return this.users.find((u) => u.id === id)!.name;
     });
   }
 
-  /** Removes a person and their sessions; returns their name. */
-  async remove(actor: Role, id: string) {
+  /** Removes a person of `orgId` and their sessions; returns their name. */
+  async remove(actor: Role, id: string, orgId = this.homeOrgId) {
     return this.serial(async () => {
-      this.checkChange(actor, id);
+      this.checkChange(actor, id, orgId);
       const name = this.users.find((u) => u.id === id)!.name;
       this.memberships = this.memberships.filter((m) => m.userId !== id);
       this.users = this.users.filter((u) => u.id !== id);
@@ -357,11 +412,11 @@ export class Accounts {
     });
   }
 
-  private checkChange(actor: Role, id: string, role?: Role) {
-    const m = this.memberships.find((x) => x.userId === id);
+  private checkChange(actor: Role, id: string, orgId: string | undefined, role?: Role) {
+    const m = this.memberships.find((x) => x.userId === id && x.orgId === orgId);
     if (!m || !this.users.some((u) => u.id === id)) throw httpError(404, 'No such member.');
     if (!atLeast(actor, 'owner') && (m.role === 'owner' || role === 'owner')) throw httpError(403, 'Only an Owner can give or take the Owner role.');
-    if (m.role === 'owner' && role !== 'owner' && this.memberships.filter((x) => x.role === 'owner').length === 1) throw httpError(409, 'The organization needs at least one Owner. Make someone else Owner first.');
+    if (m.role === 'owner' && role !== 'owner' && this.memberships.filter((x) => x.orgId === orgId && x.role === 'owner').length === 1) throw httpError(409, 'The organization needs at least one Owner. Make someone else Owner first.');
     return m;
   }
 
