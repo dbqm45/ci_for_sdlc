@@ -23,8 +23,14 @@ describe('render.yaml', () => {
     assert.equal(web.numInstances, 1);
     assert.equal(web.healthCheckPath, '/api/health');
     assert.equal(web.autoDeployTrigger, 'checksPass');
-    assert.notEqual(web.plan, 'free');
-    assert.notEqual(db.plan, 'free');
+  });
+
+  it('RB-05: current paid plans (Render\'s plan IDs, not legacy names or free) and a small database disk', () => {
+    // Current IDs look like 0.5c-512mb / 1c-2g; legacy names (starter, standard) and free are refused.
+    const plan = /^\d+(\.\d+)?c-\d+(mb|g)$/;
+    assert.match(web.plan, plan);
+    assert.match(db.plan, plan);
+    assert.equal(db.diskSizeGB, 5);
   });
 
   it('RB-03: production, accounts and OAuth; never the local walkthrough', () => {

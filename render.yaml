@@ -2,14 +2,16 @@
 # Postgres, both in Frankfurt (Render's only EU region), the database reachable only over Render's private network.
 # Values of secrets never live here: `sync: false` makes Render ask for them when the Blueprint is created, and
 # `generateValue: true` makes Render create a random one once. Field names follow Render's Blueprint spec
-# (render.com/docs/blueprint-spec); the plan slugs are the ones ShipScope runs on — confirm them in the dashboard
-# before applying (never a free plan: free Postgres on Render expires after 30 days).
+# (render.com/docs/blueprint-spec, checked 2026-11-09). Plans: the smallest paid ones, enough for the beta
+# (docs/DEPLOYMENT.md, "Plan i koszt"); never a free plan: a free web service sleeps (the beta's hourly job stops)
+# and free Postgres expires after 30 days, without point-in-time recovery.
 services:
   - type: web
     name: quorum
     runtime: docker
     region: frankfurt
-    plan: starter
+    # 0.5 CPU, 512 MB RAM. Move to 1c-2g when memory stays above ~400 MB (docs/DEPLOYMENT.md).
+    plan: 0.5c-512mb
     dockerfilePath: ./Dockerfile
     dockerContext: .
     # One instance only: the write queue and the beta's job run in the process (docs/WORKSPACES-F5-PLAN.md).
@@ -71,7 +73,9 @@ databases:
     databaseName: quorum
     user: quorum_app
     region: frankfurt
-    plan: starter
+    # 256 MB RAM, 100 connections; a disk can grow later but never shrink.
+    plan: 0.1c-256mb
+    diskSizeGB: 5
     postgresMajorVersion: "17"
     # No address on the internet: only services in this Render account reach it.
     ipAllowList: []

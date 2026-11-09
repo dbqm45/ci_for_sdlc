@@ -20,6 +20,9 @@ liczymy z pomiaru (§8), nie z deklaracji; ankieta je uzupełnia i sprawdza.
 ## 2. Kto
 - **3–5 zespołów** (design partners), nie więcej — każdy dostaje uwagę: ankietę co dwa tygodnie (§7) i odpowiedź
   na każde zgłoszenie w 1 dzień roboczy. Rozmowa tylko wtedy, gdy zespół jej chce albo ankieta tego wymaga.
+  **Najpierw jeden zespół:** betę zaczynamy od jednego zespołu, żeby sprawdzić przebieg (zapis, ankiety, pomiar,
+  hosting) na prawdziwych danych; kolejne dołączamy po decyzji właściciela. Wnioski z jednego zespołu mówią tylko, czy
+  Quorum sprawdza się u niego — progi z §1 oceniamy dopiero przy 3–5 zespołach.
 - **Profil:** zespół produktowy na Jira Cloud i Confluence (Figma mile widziana), 5–30 osób, z PO lub analitykiem,
   który pisze historyjki; najlepiej taki, który już narzeka na niejasne wymagania lub poprawki po review.
 - **Źródła kontaktów:** własna sieć, społeczności PO/QA, osoby z poprzednich projektów. Bez płatnej reklamy.
