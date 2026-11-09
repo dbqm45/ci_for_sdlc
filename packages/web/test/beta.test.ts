@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_FORM, answersBody, applicationBody, betaBlockReason, betaLabel, formProblems, surveyDueText, surveysSummary, unanswered, workspaceIdFrom, type ApplicationForm, type Question } from '../src/lib/beta';
+import { EMPTY_FORM, usageLines, answersBody, applicationBody, betaBlockReason, betaLabel, formProblems, surveyDueText, surveysSummary, unanswered, workspaceIdFrom, type ApplicationForm, type Question } from '../src/lib/beta';
 
 // The closed beta in the UI (docs/BETA-ENROLLMENT-PLAN.md): the application form, workspace ids and days left.
 const FILLED: ApplicationForm = {
@@ -126,5 +126,39 @@ describe('overdue, paused and ended in the UI', () => {
     expect(betaBlockReason({ status: 'paused', entrySurveyDone: true })).toBe('Paused until the overdue survey is answered');
     expect(betaBlockReason({ status: 'ended', entrySurveyDone: true })).toBe('The beta has ended');
     expect(betaBlockReason({ status: 'overdue', entrySurveyDone: false })).toBe('Fill in the entry survey first');
+  });
+});
+
+describe('usage in the operator panel', () => {
+  it('BUI-11: the measures read as label and value; missing values show a dash', () => {
+    const lines = usageLines({
+      weeks: [
+        { week: 1, from: '', analyses: 1, decisions: 1, active: true, aiCostUsd: 0.25 },
+        { week: 2, from: '', analyses: 0, decisions: 0, active: false, aiCostUsd: 0 },
+      ],
+      activeWeeks: 1,
+      decided: 3,
+      accuracy: 0.667,
+      falseAlarms: { ai: 0.5, rule: 0 },
+      unreacted: null,
+      hoursToFirstDecision: 72,
+      answerAcceptance: null,
+      forcedApprovals: 0.333,
+      aiCostUsd: 0.25,
+      surveysAnswered: 1,
+    });
+    expect(Object.fromEntries(lines)).toEqual({
+      'Active weeks': '1 of 2',
+      'Findings decided': '3',
+      'Accuracy (resolved or risk accepted)': '67%',
+      'False alarms (ai)': '50%',
+      'False alarms (rule)': '0%',
+      'Findings without a reaction after 14 days': '—',
+      'Time to the first decision': '3 days',
+      'Answers from sources accepted as they were': '—',
+      'Forced approvals': '33%',
+      'AI cost': '$0.25',
+      'Surveys answered': '1',
+    });
   });
 });

@@ -18,6 +18,8 @@ export interface BetaView {
   pauseOn?: string;
   /** Why analyses are paused (status `paused`). */
   pausedReason?: string;
+  /** Whether the team's usage is measured (T8). */
+  measurement?: boolean;
 }
 
 export type SurveyKind = 'entry' | 'biweekly' | 'exit';
@@ -196,4 +198,37 @@ export function surveysSummary(e: { surveySlots?: { state: 'upcoming' | 'open' |
   const answered = opened.filter((s) => s.state === 'answered').length;
   const overdue = opened.filter((s) => s.state === 'open' && Date.parse(s.dueAt) < now).length;
   return `${answered}/${opened.length} answered${overdue ? `, ${overdue} overdue` : ''}`;
+}
+
+/** A beta team's usage measures (GET /api/beta/enrollments/:id/usage, docs/BETA-PLAN.md §8). */
+export interface UsageReport {
+  weeks: { week: number; from: string; analyses: number; decisions: number; active: boolean; aiCostUsd: number }[];
+  activeWeeks: number;
+  decided: number;
+  accuracy: number | null;
+  falseAlarms: Record<string, number | null>;
+  unreacted: number | null;
+  hoursToFirstDecision: number | null;
+  answerAcceptance: number | null;
+  forcedApprovals: number | null;
+  aiCostUsd: number;
+  surveysAnswered: number;
+}
+
+const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`);
+
+/** The measures as label and value, in the order of BETA-PLAN.md §8. */
+export function usageLines(r: UsageReport): [string, string][] {
+  return [
+    ['Active weeks', `${r.activeWeeks} of ${r.weeks.length}`],
+    ['Findings decided', String(r.decided)],
+    ['Accuracy (resolved or risk accepted)', pct(r.accuracy)],
+    ...Object.entries(r.falseAlarms).map(([origin, v]): [string, string] => [`False alarms (${origin})`, pct(v)]),
+    ['Findings without a reaction after 14 days', pct(r.unreacted)],
+    ['Time to the first decision', r.hoursToFirstDecision === null ? '—' : r.hoursToFirstDecision < 48 ? `${r.hoursToFirstDecision} h` : `${Math.round(r.hoursToFirstDecision / 24)} days`],
+    ['Answers from sources accepted as they were', pct(r.answerAcceptance)],
+    ['Forced approvals', pct(r.forcedApprovals)],
+    ['AI cost', `$${r.aiCostUsd.toFixed(2)}`],
+    ['Surveys answered', String(r.surveysAnswered)],
+  ];
 }

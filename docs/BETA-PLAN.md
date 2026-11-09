@@ -48,7 +48,7 @@ Każda pozycja to osobny PR z testami; kolejność według zależności.
 | T5 | **Kopie i odtwarzanie:** dzienna kopia bazy poza dostawcą hostingu, próba odtworzenia przed startem i raz w becie | utrata decyzji klienta zabija zaufanie | brak |
 | T6 | **Monitoring i alerty:** `/api/health` w zewnętrznym monitorze, logi błędów z alertem, panel zużycia AI | dowiadujemy się o awarii przed klientem | health jest |
 | T7 | **Usunięcie danych klienta na żądanie:** usunięcie przestrzeni z kasowaniem (dziś archiwizacja) i odłączenie OAuth | wymóg RODO i DPA | archiwizacja jest, kasowania brak |
-| T8 | **Pomiar użycia (§8):** zdarzenia wysyłane przez serwer do narzędzia analityki (bez treści), wyłącznik per przestrzeń, ankiety w aplikacji; zapasowo raport z audytu per przestrzeń i tydzień | miary z §1 | audyt jest, wysyłki zdarzeń i ankiet brak |
+| T8 | **Pomiar użycia (§8):** zdarzenia wysyłane przez serwer (bez treści) do własnego logu i do PostHog, wyłącznik zespołu, ankiety w aplikacji, raport miar dla operatora | miary z §1 | zrobione (§8, „Zrobione”); ankiety w T10 |
 | T9 | **Przegląd bezpieczeństwa przed startem:** skan zależności, przegląd tras bez uwierzytelnienia, prosty test DAST (np. OWASP ZAP) na środowisku testowym | minimum przed prawdziwymi danymi | skan zależności w CI jest |
 | T10 | **Zapisy i uczestnictwo w becie ([`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md)):** formularz zgłoszenia, zatwierdzenie przez operatora, jednorazowe zaproszenie tworzące przestrzeń, okres bety z datą końca, ankiety w aplikacji z terminami, codzienne zadanie (przypomnienia, wstrzymanie, koniec bety), panel operatora | zapis, ankiety i czas bety bez ręcznego pilnowania | zaproszenia do istniejącej przestrzeni są (`accounts.ts`), reszty brak |
 
@@ -138,6 +138,29 @@ Zasady:
 | Akceptacja odpowiedzi ze źródeł | przyjęte bez zmian ÷ ocenione `answer_proposal_judged` | A2a, autonomia |
 | Koszt AI na zespół i analizę | suma `ai_cost_usd` per przestrzeń i tydzień; średnia na analizę | cena, T4 |
 | Wymuszone zatwierdzenia | `item_approved` z `forced` ÷ wszystkie | czy blokady są trafne |
+
+**Zrobione (2026-11-09, T8).** Decyzja właściciela: własny log zawsze, PostHog dodatkowo, gdy jest klucz.
+- `packages/server/src/usage.ts`: zamknięta lista zdarzeń i ich właściwości (`USAGE_EVENTS`, `cleanProps()` odrzuca
+  wszystko spoza listy), pseudonimy HMAC-SHA256 z sekretem instalacji (`CI_USAGE_SECRET` albo losowy, zapisany raz
+  w `_platform`), własny log `usage-events` w `_platform` (organizacja i przestrzeń jawnie, osoba jako pseudonim),
+  `PostHogSink` (API `/batch/`, region UE domyślnie, `POSTHOG_API_KEY`, `POSTHOG_HOST`): tylko pseudonimy, bez profili
+  osób dla zdarzeń bez osoby, `$geoip_disable`; wysyłka partiami co 30 s, nieudana partia czeka na następną próbę.
+- Mierzone są tylko zespoły bety, które zaczęły betę i nie wyłączyły pomiaru (zgoda z formularza). Pierwsza
+  organizacja i tryb `token` nie są mierzone; `CI_USAGE=off` wyłącza całość.
+- Źródła zdarzeń: po każdej analizie (`analysis_completed` z kosztem AI z audytu wywołań w oknie analizy,
+  `finding_shown` raz na ustalenie, `drift_detected` raz na zdarzenie dryfu; pamięć „widzianych” w
+  `usage-seen-<przestrzeń>.json`), z udanych żądań osób (`finding_decided` z `age_hours`, `answer_proposal_judged`,
+  `item_approved`, `item_viewed`, `survey_answered`) i z połączenia Atlassiana (`source_connected`). Trasy nie wiedzą
+  o pomiarze (hak `onResponse`).
+- Raport: `GET /api/beta/enrollments/:id/usage` (operator) liczy miary z tabeli wyżej (`usageReport()`): tygodnie
+  aktywne, trafność, fałszywe alarmy per pochodzenie, ustalenia bez reakcji po 14 dniach, czas do pierwszej decyzji,
+  akceptację odpowiedzi ze źródeł, wymuszone zatwierdzenia, koszt AI, ankiety. Panel operatora: *Usage*.
+- Wyłącznik: `PUT /api/beta/measurement { on }` (Admin zespołu), na stronie *Beta surveys*; `GET /api/auth/me` →
+  `beta.measurement`.
+- Różnice wobec planu: wyłącznik jest per zespół (organizacja), nie per przestrzeń; `mcp_tool_called` i `gate_run`
+  nie są jeszcze mierzone (MCP i CLI działają tokenem maszyny, bez osoby i organizacji); „ustalenie bez reakcji”
+  porównuje regułę w przestrzeni, nie pojedyncze ustalenie.
+- Testy: `packages/server/test/usage.test.ts` (U-01–11), `packages/web/test/beta.test.ts` (BUI-11).
 
 ## 9. Ryzyka
 

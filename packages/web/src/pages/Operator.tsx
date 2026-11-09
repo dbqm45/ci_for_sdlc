@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../App';
 import { api, errMsg, type BetaEnrollment } from '../api';
 import { Card, DateTime } from '../components/ui';
-import { STATUS_LABEL, surveysSummary, workspaceIdFrom } from '../lib/beta';
+import { STATUS_LABEL, surveysSummary, usageLines, workspaceIdFrom, type UsageReport } from '../lib/beta';
 
 /**
  * The operator's panel at `#/operator` (docs/BETA-ENROLLMENT-PLAN.md): beta applications to approve or reject, and
@@ -13,6 +13,14 @@ export function Operator() {
   const [list, setList] = useState<BetaEnrollment[]>();
   const [ids, setIds] = useState<Record<string, string>>({});
   const [link, setLink] = useState<{ org: string; link: string }>();
+  const [usage, setUsage] = useState<{ org: string; measurement: boolean; report: UsageReport | null }>();
+  const showUsage = async (e: BetaEnrollment) => {
+    try {
+      setUsage({ org: e.application.org, ...(await api.betaUsage(e.id)) });
+    } catch (err) {
+      toast(errMsg(err));
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -110,6 +118,51 @@ export function Operator() {
           <p className="small muted">Shown only now. It works once, for 7 days, and only for the contact's Atlassian e-mail. Send it to them.</p>
         </Card>
       )}
+      {usage && (
+        <Card title={`Usage of ${usage.org}`} actions={<button className="btn sm ghost" onClick={() => setUsage(undefined)}>Close</button>}>
+          {!usage.measurement && <p className="small muted">The team switched measurement off; nothing new is recorded.</p>}
+          {usage.report ? (
+            <div className="row wrap" style={{ gap: 24, alignItems: 'flex-start' }}>
+              <table className="table" style={{ width: 'auto' }}>
+                <tbody>
+                  {usageLines(usage.report).map(([k, v]) => (
+                    <tr key={k}>
+                      <td>{k}</td>
+                      <td>
+                        <strong>{v}</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <table className="table" style={{ width: 'auto' }}>
+                <thead>
+                  <tr>
+                    <th>Week</th>
+                    <th>Analyses</th>
+                    <th>Decisions</th>
+                    <th>Active</th>
+                    <th>AI cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usage.report.weeks.map((w) => (
+                    <tr key={w.week}>
+                      <td>W{w.week}</td>
+                      <td>{w.analyses}</td>
+                      <td>{w.decisions}</td>
+                      <td>{w.active ? 'yes' : '—'}</td>
+                      <td>${w.aiCostUsd.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">The team has not started yet.</p>
+          )}
+        </Card>
+      )}
       <Card title={`Waiting for a decision (${waiting.length})`} pad={false}>
         {!list ? (
           <p className="muted card-pad">Loading…</p>
@@ -193,6 +246,9 @@ export function Operator() {
                   <td>
                     {e.startedAt && (
                       <div className="row wrap" style={{ gap: 6 }}>
+                        <button className="btn sm" onClick={() => void showUsage(e)}>
+                          Usage
+                        </button>
                         <button className="btn sm" onClick={() => void download(e)}>
                           Answers (JSON)
                         </button>
