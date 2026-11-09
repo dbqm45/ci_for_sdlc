@@ -5,7 +5,8 @@ import { existsSync } from 'node:fs';
 import { APPROVE_GATE, RULES, changeKeyOf, changeReadiness, mergeChangeReadiness, parseGateDecided, workspacePath, type AnalysisResult, type ChangeReadiness } from '@ci/core';
 import { Accounts, SESSION_COOKIE, LOGIN_COOKIE, type InvitedRole } from './accounts.js';
 import { ROLES, type Role } from './roles.js';
-import { BETA_REAL_DATA, BETA_REFERENCE, BETA_SOURCES, BetaEnrollments, applicationLimiter, betaView, type BetaApplication } from './beta.js';
+import { BETA_REAL_DATA, BETA_REFERENCE, BETA_SOURCES, BetaEnrollments, applicationLimiter, betaView, entrySurveyPending, surveyStates, type BetaApplication } from './beta.js';
+import { SURVEYS } from './beta-surveys.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
@@ -167,6 +168,14 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   app.addSchema(problem);
   registerProblemHandler(app);
   registerGuards(app, guard);
+
+  /** A beta team analyses and connects Atlassian only after its entry survey, the baseline (docs/BETA-ENROLLMENT-PLAN.md). */
+  const ENTRY_SURVEY_GATED = /^\/api(?:\/w\/[^/]+)?\/(?:analyze|items\/[^/]+\/ai-review|connections\/atlassian\/start)$/;
+  app.addHook('preHandler', async (req) => {
+    if (req.method !== 'POST' || !req.account || !ENTRY_SURVEY_GATED.test(req.url.split('?')[0]!)) return;
+    const e = beta.forOrg(req.account.orgId);
+    if (e && entrySurveyPending(e)) throw httpError(403, `Fill in the entry survey first: it takes about ${SURVEYS.entry.minutes} minutes and gives the beta its starting point.`);
+  });
 
   const pdiTimer = pdi.enabled ? setInterval(() => void pdi.deliver().catch(() => undefined), 60_000) : undefined;
   pdiTimer?.unref();
@@ -493,13 +502,67 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     },
   );
 
-  app.get('/api/beta/enrollments', { schema: { summary: 'Beta applications and enrollments, newest first (operator)' } }, async (req) => {
+  app.get('/api/beta/enrollments', { schema: { summary: 'Beta applications and enrollments with their surveys, newest first (operator)' } }, async (req) => {
     requireOperator(req);
     const now = Date.now();
-    return beta.enrollments().map((e) => ({ ...e, ...betaView(e, now) }));
+    return beta.enrollments().map((e) => ({ ...e, ...betaView(e, now), surveySlots: surveyStates(e, now) }));
   });
 
+  // ------------------------------------------------------------------ beta surveys (docs/BETA-SURVEYS.md)
   const enrollmentParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', minLength: 1, maxLength: 100 } } } as const;
+  /** The beta of the person's organization, or 404: surveys are for the people of a beta team. */
+  const betaOfPerson = (req: FastifyRequest) => {
+    if (!accounts.enabled) throw betaOff();
+    const e = req.account && beta.forOrg(req.account.orgId);
+    if (!e || !e.startedAt) throw httpError(404, 'Your organization does not take part in the beta.');
+    return e;
+  };
+
+  app.get('/api/beta/surveys', { schema: { summary: "The surveys of the person's beta team; open ones with their questions" } }, async (req) => {
+    const e = betaOfPerson(req);
+    return surveyStates(e, Date.now(), req.account!.userId).map((x) => {
+      const def = SURVEYS[x.kind];
+      return { ...x, title: def.title, minutes: def.minutes, ...(x.state !== 'upcoming' && !x.mine && { version: def.version, questions: def.questions }) };
+    });
+  });
+
+  const surveyParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^(entry|exit|biweekly-[0-9]{1,2})$' } } } as const;
+  const answersBody = {
+    type: 'object',
+    required: ['answers'],
+    additionalProperties: false,
+    properties: {
+      answers: {
+        type: 'object',
+        maxProperties: 40,
+        additionalProperties: { anyOf: [{ type: 'string', maxLength: 2000 }, { type: 'number' }, { type: 'array', maxItems: 20, items: { type: 'string', maxLength: 100 } }] },
+      },
+    },
+  } as const;
+
+  /** One person's answers; the questions are checked against the survey's definition (422 lists every problem). */
+  app.post<{ Params: { id: string }; Body: { answers: Record<string, unknown> } }>(
+    '/api/beta/surveys/:id/answers',
+    { schema: { summary: 'Answer an open survey of your beta team (once per person)', params: surveyParams, body: answersBody, response: errors(404, 409, 422), ...MUTATION } },
+    async (req, reply) => {
+      const e = betaOfPerson(req);
+      const at = new Date().toISOString();
+      const saved = await beta.answer(e.id, req.params.id, { userId: req.account!.userId, name: req.account!.name }, req.body.answers, at);
+      await auditOf(e.orgId).audit({ at, kind: 'member', actor: req.account!.name, via: 'session', summary: `${SURVEYS[saved.kind].title} answered (${saved.survey})` });
+      return reply.code(201).send({ survey: saved.survey, at: saved.at, beta: betaView(beta.forOrg(e.orgId!)!, Date.now()) });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/api/beta/enrollments/:id/answers',
+    { schema: { summary: "Every survey answer of a beta team, oldest first (operator)", params: enrollmentParams, response: errors(403, 404) } },
+    async (req) => {
+      requireOperator(req);
+      if (!beta.enrollments().some((e) => e.id === req.params.id)) throw httpError(404, 'No such application.');
+      return beta.answersOf(req.params.id);
+    },
+  );
+
   const approveBody = {
     type: 'object',
     required: ['workspace'],

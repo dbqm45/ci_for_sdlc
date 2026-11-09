@@ -10,6 +10,65 @@ export interface BetaView {
   startedAt?: string;
   endsAt?: string;
   daysLeft?: number;
+  /** Until the entry survey is answered, analyses and connecting Atlassian wait. */
+  entrySurveyDone?: boolean;
+  /** The survey to answer now, if any. */
+  surveyDue?: { id: string; kind: SurveyKind; dueAt: string } | null;
+}
+
+export type SurveyKind = 'entry' | 'biweekly' | 'exit';
+
+interface QuestionBase {
+  id: string;
+  text: string;
+  required?: boolean;
+  help?: string;
+}
+/** A survey question as GET /api/beta/surveys sends it (the server checks the answers). */
+export type Question =
+  | (QuestionBase & { type: 'choice' | 'multi'; options: { value: string; label: string }[] })
+  | (QuestionBase & { type: 'scale'; min: number; max: number; minLabel: string; maxLabel: string })
+  | (QuestionBase & { type: 'number'; max: number; allowUnknown?: boolean })
+  | (QuestionBase & { type: 'text'; maxLength: number })
+  | (QuestionBase & { type: 'price' });
+
+/** A survey of the team: upcoming, open (with its questions, unless this person answered) or answered. */
+export interface SurveyState {
+  id: string;
+  kind: SurveyKind;
+  title: string;
+  minutes: number;
+  opensAt: string;
+  dueAt: string;
+  state: 'upcoming' | 'open' | 'answered';
+  mine: boolean;
+  answeredAt?: string;
+  questions?: Question[];
+}
+
+export type AnswerDraft = Record<string, string | number | string[] | undefined>;
+
+const blank = (v: AnswerDraft[string]) => v === undefined || v === '' || (Array.isArray(v) && !v.length);
+
+/** The required questions still without an answer (the server checks the rest and names every problem). */
+export const unanswered = (questions: Question[], draft: AnswerDraft) => questions.filter((q) => q.required && blank(draft[q.id])).map((q) => q.id);
+
+/** The draft as the API takes it: blank answers left out. */
+export const answersBody = (draft: AnswerDraft) => Object.fromEntries(Object.entries(draft).filter(([, v]) => !blank(v))) as Record<string, string | number | string[]>;
+
+/** Why analysing waits for a beta team; undefined when it does not. */
+export const betaBlockReason = (beta: BetaView | null | undefined) =>
+  beta?.status === 'active' && beta.entrySurveyDone === false ? 'Fill in the entry survey first' : undefined;
+
+/** The banner text for the survey due now; undefined when none is. */
+export function surveyDueText(beta: BetaView | null | undefined, now = Date.now()): string | undefined {
+  const due = beta?.surveyDue;
+  if (!due) return undefined;
+  const name = due.kind === 'entry' ? 'The entry survey' : due.kind === 'exit' ? 'The exit survey' : 'The two-week survey';
+  const left = Date.parse(due.dueAt) - now;
+  const days = Math.floor(left / 86_400_000);
+  const when = left < 0 ? `was due on ${due.dueAt.slice(0, 10)}` : days === 0 ? 'is due today' : days === 1 ? 'is due tomorrow' : `is due in ${days} days`;
+  return `${name} ${when}.`;
 }
 
 export const SOURCES = [
@@ -115,3 +174,13 @@ export function betaLabel(beta: BetaView | null | undefined): string | undefined
 }
 
 export const STATUS_LABEL: Record<BetaStatus, string> = { applied: 'Waiting', rejected: 'Rejected', invited: 'Invited', active: 'Active', ended: 'Ended' };
+
+/** The operator's line for a team's surveys: answered of those opened so far, and how many are overdue. */
+export function surveysSummary(e: { surveySlots?: { state: 'upcoming' | 'open' | 'answered'; dueAt: string }[] }, now = Date.now()): string {
+  const slots = e.surveySlots ?? [];
+  const opened = slots.filter((s) => s.state !== 'upcoming');
+  if (!opened.length) return '—';
+  const answered = opened.filter((s) => s.state === 'answered').length;
+  const overdue = opened.filter((s) => s.state === 'open' && Date.parse(s.dueAt) < now).length;
+  return `${answered}/${opened.length} answered${overdue ? `, ${overdue} overdue` : ''}`;
+}

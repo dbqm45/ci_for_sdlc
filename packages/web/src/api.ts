@@ -3,7 +3,7 @@ import type { Me, Role } from './lib/account';
 import { authStep } from './lib/auth';
 import type { ChangeState } from './lib/changes';
 import { DEFAULT_WORKSPACE, apiUrl } from './lib/workspace';
-import type { applicationBody, BetaStatus, BetaView } from './lib/beta';
+import type { applicationBody, BetaStatus, BetaView, SurveyState } from './lib/beta';
 
 let workspace = DEFAULT_WORKSPACE;
 /** The workspace this page shows (F5); every request of a workspace goes to its routes. */
@@ -269,6 +269,11 @@ export const api = {
   /** The Owner's invitation link is returned only here. */
   approveBeta: (id: string, workspace: { id: string; name?: string }) => req<{ enrollment: BetaEnrollment; invitation: Invitation & { link: string } }>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/approve`, { workspace }),
   rejectBeta: (id: string, note: string) => req<BetaEnrollment>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/reject`, note.trim() ? { note: note.trim() } : {}),
+  /** The surveys of the person's beta team; open ones carry their questions. */
+  betaSurveys: () => req<SurveyState[]>('GET', '/api/beta/surveys'),
+  answerSurvey: (id: string, answers: Record<string, string | number | string[]>) => req<{ survey: string; at: string; beta: BetaView }>('POST', `/api/beta/surveys/${encodeURIComponent(id)}/answers`, { answers }),
+  /** Operator only: every answer of one team. */
+  betaAnswers: (enrollmentId: string) => req<unknown[]>('GET', `/api/beta/enrollments/${encodeURIComponent(enrollmentId)}/answers`),
   reinviteBeta: (id: string) => req<{ enrollment: BetaEnrollment; invitation: Invitation & { link: string } }>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/reinvite`),
 };
 
@@ -291,6 +296,7 @@ export interface BetaEnrollment extends BetaView {
   workspace?: string;
   invitedAt?: string;
   history: { at: string; status: BetaStatus; by: string; note?: string }[];
+  surveySlots?: { id: string; state: 'upcoming' | 'open' | 'answered'; dueAt: string }[];
 }
 
 /** Where the browser goes to log in; an invitation token rides along. */

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Backend } from './backend.js';
 import { httpError } from './http.js';
+import { SURVEYS, answerProblems, cleanAnswers, surveySchedule, type AnswerValue, type SurveyKind, type SurveySlot } from './beta-surveys.js';
 
 /**
  * Closed beta enrollment (T10, docs/BETA-ENROLLMENT-PLAN.md, first PR): a team applies through a public form, an
@@ -50,6 +51,29 @@ export interface BetaEnrollment {
   /** startedAt + the beta's length. */
   endsAt?: string;
   history: BetaHistoryEntry[];
+  /** Answered surveys by slot id (`entry`, `biweekly-1`, …, `exit`): first answer and who answered. */
+  surveys?: Record<string, { answeredAt: string; by: string[] }>;
+}
+
+/** A survey slot as its team sees it. */
+export interface SurveyState extends SurveySlot {
+  state: 'upcoming' | 'open' | 'answered';
+  /** Whether this person already answered it (others in the team may still add theirs). */
+  mine: boolean;
+  answeredAt?: string;
+}
+
+/** One person's answers to one survey, as kept in the `beta-survey-answers` log. */
+export interface SurveyAnswer {
+  enrollmentId: string;
+  orgId: string;
+  survey: string;
+  kind: SurveyKind;
+  version: number;
+  userId: string;
+  name: string;
+  at: string;
+  answers: Record<string, AnswerValue>;
 }
 
 /** How the beta looks to its team (GET /api/auth/me). */
@@ -58,7 +82,24 @@ export interface BetaView {
   startedAt?: string;
   endsAt?: string;
   daysLeft?: number;
+  /** Whether the entry survey is answered: until then analyses and connecting Atlassian wait. */
+  entrySurveyDone?: boolean;
+  /** The survey to answer now, the earliest due first; none when nothing is open. */
+  surveyDue?: { id: string; kind: SurveyKind; dueAt: string } | null;
 }
+
+/** The surveys of an enrollment as of `now`; `userId` marks the ones this person answered. */
+export function surveyStates(e: BetaEnrollment, now: number, userId?: string): SurveyState[] {
+  if (!e.startedAt || !e.endsAt) return [];
+  return surveySchedule(e.startedAt, e.endsAt).map((slot) => {
+    const done = e.surveys?.[slot.id];
+    const state = done ? 'answered' : Date.parse(slot.opensAt) > now ? 'upcoming' : 'open';
+    return { ...slot, state, mine: !!userId && !!done?.by.includes(userId), ...(done && { answeredAt: done.answeredAt }) };
+  });
+}
+
+/** Whether a team must still answer the entry survey before analysing (an active beta without it). */
+export const entrySurveyPending = (e: BetaEnrollment) => e.status === 'active' && !!e.startedAt && !e.surveys?.entry;
 
 const DAY_MS = 24 * 3_600_000;
 
@@ -75,7 +116,12 @@ export function daysLeft(e: Pick<BetaEnrollment, 'endsAt'>, now: number): number
 
 export function betaView(e: BetaEnrollment, now: number): BetaView {
   const status = statusAt(e, now);
-  return { status, ...(e.startedAt && { startedAt: e.startedAt }), ...(e.endsAt && { endsAt: e.endsAt, daysLeft: daysLeft(e, now) }) };
+  const due = surveyStates(e, now).find((x) => x.state === 'open');
+  return {
+    status,
+    ...(e.startedAt && { startedAt: e.startedAt, entrySurveyDone: !!e.surveys?.entry, surveyDue: due ? { id: due.id, kind: due.kind, dueAt: due.dueAt } : null }),
+    ...(e.endsAt && { endsAt: e.endsAt, daysLeft: daysLeft(e, now) }),
+  };
 }
 
 /** Statuses in which the same contact e-mail may not apply again (the answer stays the same, nothing is stored). */
@@ -183,6 +229,35 @@ export class BetaEnrollments {
       Object.assign(x, { status: 'active', startedAt: at, endsAt: new Date(Date.parse(at) + this.cfg.weeks * 7 * DAY_MS).toISOString() });
       x.history.push({ at, status: 'active', by });
     });
+  }
+
+  /**
+   * One person's answers to an open survey of their team. 404 for an unknown survey, 409 before it opens or when this
+   * person already answered it, 422 with every problem for invalid answers.
+   */
+  async answer(enrollmentId: string, surveyId: string, who: { userId: string; name: string }, answers: Record<string, unknown>, at: string): Promise<SurveyAnswer> {
+    return this.serial(async () => {
+      const e = this.find(enrollmentId, ['active', 'ended']);
+      const slot = surveyStates(e, Date.parse(at), who.userId).find((x) => x.id === surveyId);
+      if (!slot) throw httpError(404, `No survey ${surveyId} in this beta.`);
+      if (slot.state === 'upcoming') throw httpError(409, `The survey opens on ${slot.opensAt.slice(0, 10)}.`);
+      if (slot.mine) throw httpError(409, 'You already answered this survey.');
+      const def = SURVEYS[slot.kind];
+      const problems = answerProblems(def, answers);
+      if (problems.length) throw Object.assign(httpError(422, `Some answers need attention: ${problems.join('; ')}`), { problems });
+      const entry: SurveyAnswer = { enrollmentId: e.id, orgId: e.orgId!, survey: slot.id, kind: slot.kind, version: def.version, userId: who.userId, name: who.name, at, answers: cleanAnswers(def, answers) };
+      await this.backend.append('beta-survey-answers', entry);
+      const done = (e.surveys ??= {});
+      const record = (done[slot.id] ??= { answeredAt: at, by: [] });
+      record.by.push(who.userId);
+      await this.save();
+      return entry;
+    });
+  }
+
+  /** Every answer of one enrollment, oldest first (the operator reads them). */
+  async answersOf(enrollmentId: string): Promise<SurveyAnswer[]> {
+    return ((await this.backend.tail('beta-survey-answers', 100_000)) as SurveyAnswer[]).filter((a) => a?.enrollmentId === enrollmentId);
   }
 
   private async change(id: string, allowed: readonly BetaStatus[], fn: (e: BetaEnrollment) => void): Promise<BetaEnrollment> {

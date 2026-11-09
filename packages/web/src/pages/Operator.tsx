@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../App';
 import { api, errMsg, type BetaEnrollment } from '../api';
 import { Card, DateTime } from '../components/ui';
-import { STATUS_LABEL, workspaceIdFrom } from '../lib/beta';
+import { STATUS_LABEL, surveysSummary, workspaceIdFrom } from '../lib/beta';
 
 /**
  * The operator's panel at `#/operator` (docs/BETA-ENROLLMENT-PLAN.md): beta applications to approve or reject, and
@@ -53,6 +53,18 @@ export function Operator() {
       toast(errMsg(err));
     }
     await load();
+  };
+  /** Every answer of one team as a JSON file, for reading them next to the measured usage. */
+  const download = async (e: BetaEnrollment) => {
+    try {
+      const answers = await api.betaAnswers(e.id);
+      const url = URL.createObjectURL(new Blob([JSON.stringify(answers, null, 2)], { type: 'application/json' }));
+      const a = Object.assign(document.createElement('a'), { href: url, download: `beta-answers-${e.workspace ?? e.id}.json` });
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast(errMsg(err));
+    }
   };
   const copy = async () => {
     try {
@@ -139,6 +151,7 @@ export function Operator() {
                 <th>Team</th>
                 <th>Status</th>
                 <th>Beta</th>
+                <th>Surveys</th>
                 <th />
               </tr>
             </thead>
@@ -161,7 +174,13 @@ export function Operator() {
                       e.history.at(-1)?.note
                     )}
                   </td>
+                  <td className="small">{surveysSummary(e)}</td>
                   <td>
+                    {e.startedAt && (
+                      <button className="btn sm" onClick={() => void download(e)}>
+                        Answers (JSON)
+                      </button>
+                    )}
                     {e.status === 'invited' && (
                       <button className="btn sm" onClick={() => void reinvite(e)}>
                         New invitation link
