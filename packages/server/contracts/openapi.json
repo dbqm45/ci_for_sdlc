@@ -4127,6 +4127,16 @@
         }
       }
     },
+    "/api/beta/survey-definitions": {
+      "get": {
+        "summary": "The beta surveys with their questions (operator)",
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
     "/api/beta/surveys": {
       "get": {
         "summary": "The surveys of the person's beta team; open ones with their questions",

@@ -44,6 +44,7 @@ samym serwerze nie ma sensu — każde uruchomienie dostaje nowy serwer i katalo
 | # | Krok | Oczekiwany wynik |
 |---|---|---|
 | 1 | Otwórz aplikację, zaloguj się jako **Olga Operator** | pasek „Local beta”; w menu *Beta operator* |
+| 1a | *Beta operator* → *Preview surveys* (`#/operator/surveys`) | trzy ankiety (wejściowa, co dwa tygodnie, końcowa) z pytaniami, do przeklikania; nic się nie wysyła |
 | 2 | `#/beta`: wypełnij formularz jako Bea (`bea@beta.local`), zaznacz trzy zgody, wyślij | „Thank you”; w skrzynce: potwierdzenie dla Bei i „new application” dla operatora |
 | 3 | Wyślij formularz bez jednej zgody albo z e-mailem bez domeny | lista problemów nad przyciskiem, nic nie wysłane |
 | 4 | *Beta operator* → *Approve* (identyfikator przestrzeni podpowiedziany z nazwy zespołu) | link zaproszenia pokazany raz; w skrzynce mail „your invitation” z tym linkiem |

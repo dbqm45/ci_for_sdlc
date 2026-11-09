@@ -34,6 +34,7 @@ import { Settings } from './pages/Settings';
 import { Audit } from './pages/Audit';
 import { BetaApply } from './pages/BetaApply';
 import { Operator } from './pages/Operator';
+import { SurveyPreview } from './pages/SurveyPreview';
 import { Survey } from './pages/Survey';
 import { LocalBar, LocalLogin, LocalMailbox } from './pages/LocalBeta';
 import { betaNow, localPage } from './lib/localBeta';
@@ -382,6 +383,7 @@ export function App() {
   else if (section === 'impact') page = <Impact />;
   else if (section === 'settings') page = <Settings />;
   else if (section === 'audit') page = <Audit />;
+  else if (section === 'operator' && param === 'surveys' && me?.user?.operator) page = <SurveyPreview kind={focus} />;
   else if (section === 'operator' && me?.user?.operator) page = <Operator />;
   else if (section === 'survey' && me?.beta) page = <Survey id={param && decodeURIComponent(param)} />;
   else page = <Overview />;

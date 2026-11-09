@@ -727,6 +727,12 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     return e;
   };
 
+  /** Every survey with its questions, for the operator to read (and click through) before teams answer them. */
+  app.get('/api/beta/survey-definitions', { schema: { summary: 'The beta surveys with their questions (operator)' } }, async (req) => {
+    requireOperator(req);
+    return (['entry', 'biweekly', 'exit'] as const).map((kind) => SURVEYS[kind]);
+  });
+
   app.get('/api/beta/surveys', { schema: { summary: "The surveys of the person's beta team; open ones with their questions" } }, async (req) => {
     const e = betaOfPerson(req);
     return surveyStates(e, Date.now(), req.account!.userId).map((x) => {
