@@ -34,7 +34,8 @@ import { Settings } from './pages/Settings';
 import { Audit } from './pages/Audit';
 import { BetaApply } from './pages/BetaApply';
 import { Operator } from './pages/Operator';
-import { betaLabel } from './lib/beta';
+import { Survey } from './pages/Survey';
+import { betaBlockReason, betaLabel, surveyDueText } from './lib/beta';
 
 type Analysis = AnalysisResult & { running?: boolean; lastReason?: string };
 
@@ -48,6 +49,8 @@ interface AppCtx {
   version: number;
   /** Who is logged in (accounts mode); undefined until GET /api/auth/me answers. */
   me?: Me;
+  /** Reads GET /api/auth/me again (after a beta survey, its state changes). */
+  refreshMe: () => Promise<void>;
 }
 
 const Ctx = createContext<AppCtx>(null as unknown as AppCtx);
@@ -317,11 +320,18 @@ export function App() {
     };
   }, [drawerOpen, closeDrawer]);
 
+  const refreshMe = useCallback(async () => {
+    try {
+      setMe(await api.me());
+    } catch {
+      /* keep what is shown */
+    }
+  }, []);
   const ctx = useMemo<AppCtx>(
-    () => ({ analysis, refresh, runAnalysis, setAnalysis: (a) => (setAnalysis(a), setVersion((v) => v + 1)), toast, navigate, version, me }),
-    [analysis, refresh, runAnalysis, toast, navigate, version, me],
+    () => ({ analysis, refresh, runAnalysis, setAnalysis: (a) => (setAnalysis(a), setVersion((v) => v + 1)), toast, navigate, version, me, refreshMe }),
+    [analysis, refresh, runAnalysis, toast, navigate, version, me, refreshMe],
   );
-  const analyzeBlocked = disabledReason(me, 'member');
+  const analyzeBlocked = disabledReason(me, 'member') ?? betaBlockReason(me?.beta);
 
   const [section, param, focus] = path.split('/').filter(Boolean);
   // The beta application form is public: no login, no workspace (docs/BETA-ENROLLMENT-PLAN.md).
@@ -339,6 +349,7 @@ export function App() {
   else if (section === 'settings') page = <Settings />;
   else if (section === 'audit') page = <Audit />;
   else if (section === 'operator' && me?.user?.operator) page = <Operator />;
+  else if (section === 'survey' && me?.beta) page = <Survey id={param && decodeURIComponent(param)} />;
   else page = <Overview />;
 
   const debt = analysis ? analysis.metrics.decisionDebt.critical + analysis.metrics.decisionDebt.important : 0;
@@ -403,6 +414,7 @@ export function App() {
       <div className="nav-section">Administration</div>
       {ADMIN.map((n) => navLink(n))}
       {me?.user?.operator && navLink({ path: '/operator', label: 'Beta operator', Icon: UserIcon })}
+      {me?.beta?.startedAt && navLink({ path: '/survey', label: 'Beta surveys', Icon: FileTextIcon })}
       <div className="sidebar-divider sources-divider" />
       <div className="nav-section sources-group-label">Sources</div>
       <div className="sources-group col">
@@ -498,6 +510,16 @@ export function App() {
             <AccountMenu navigate={navigate} me={me} />
           </header>
           <main className="content" key={ws}>
+            {surveyDueText(me?.beta) && section !== 'survey' && (
+              <div className="survey-banner" role="status">
+                <span>
+                  {surveyDueText(me?.beta)} {me?.beta?.surveyDue?.kind === 'entry' && 'Analyses start once it is in.'}
+                </span>
+                <a className="btn sm primary" href={`#/survey/${me!.beta!.surveyDue!.id}`}>
+                  Fill in
+                </a>
+              </div>
+            )}
             {page}
           </main>
         </div>

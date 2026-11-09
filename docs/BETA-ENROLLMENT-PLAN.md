@@ -1,6 +1,6 @@
 # Zapisy i uczestnictwo w becie (T10)
 
-Stan: 2026-11-09, PR 1 zrobiony (zgłoszenia i zaproszenia, opis niżej w „Zrobione”), PR 2–3 w planie. Zadanie T10 z [`BETA-PLAN.md`](BETA-PLAN.md) §4. Cel: zespół zapisuje się sam, dostaje
+Stan: 2026-11-09, PR 1–2 zrobione (zgłoszenia i zaproszenia, ankiety; opis niżej w „Zrobione”), PR 3 w planie. Zadanie T10 z [`BETA-PLAN.md`](BETA-PLAN.md) §4. Cel: zespół zapisuje się sam, dostaje
 betę na określony czas, a wypełnianie ankiet ([`BETA-SURVEYS.md`](BETA-SURVEYS.md)) i koniec bety pilnuje serwer,
 nie właściciel w kalendarzu.
 
@@ -113,6 +113,27 @@ Warunek: wiele organizacji na jednej instalacji (`docs/ORGANIZATIONS-PLAN.md`, o
 - Ograniczenie: limit na adres IP bierze `req.ip`; za proxy bez `trustProxy` (do ustawienia przy hostingu, T1) jest
   to adres proxy, więc limit 5/h działa wtedy na całą instalację.
 - Testy: `packages/server/test/beta.test.ts` (BETA-01–14), `packages/web/test/beta.test.ts` (BUI-01–04).
+
+## Zrobione: PR 2 (2026-11-09) — ankiety w aplikacji
+- Pytania z `BETA-SURVEYS.md` B–D jako dane w `packages/server/src/beta-surveys.ts` (`SURVEYS`, po angielsku jak cały
+  interfejs, z `version`; typy: wybór, wielokrotny wybór, skala 1–5, liczba z „nie wiem”, tekst, kwota). Pytania
+  sprawdzające mają `check: true`. Sprawdzanie odpowiedzi: `answerProblems()` (każdy problem osobno), zapis:
+  `cleanAnswers()`.
+- Harmonogram `surveySchedule(startedAt, endsAt)`: wejściowa od razu (termin 3 dni), dwutygodniowa co 14 dni przed
+  ostatnim tygodniem (termin 5 dni po otwarciu), końcowa tydzień przed końcem (termin tydzień po końcu). Pytanie
+  kontrolne (BETA-SURVEYS.md C) jest w każdej dwutygodniowej, nie co drugą.
+- `GET /api/beta/surveys` (osoba z zespołu bety): ankiety ze stanem `upcoming`/`open`/`answered`, otwarte z pytaniami.
+  `POST /api/beta/surveys/:id/answers { answers }`: raz na osobę (409), inne osoby zespołu mogą dodać swoje; przed
+  otwarciem 409, nieznana 404, błędy 422 z listą. Odpowiedzi w logu `beta-survey-answers` w `_platform`, w zapisie
+  uczestnictwa `surveys[id] = { answeredAt, by[] }`; wpis w audycie przestrzeni zespołu.
+- **Ankieta wejściowa przed analizą:** dopóki jej nie ma, `POST …/analyze`, `…/items/:key/ai-review`
+  i `…/connections/atlassian/start` odpowiadają 403 (przeglądanie działa). `GET /api/auth/me` → `beta.entrySurveyDone`
+  i `beta.surveyDue`.
+- UI: baner „The … survey is due …” z przyciskiem *Fill in*, strona `#/survey` (lista) i `#/survey/<id>` (formularz),
+  *Beta surveys* w menu, *Analyze now* wyłączony z podpowiedzią do czasu ankiety wejściowej.
+- Operator: `GET /api/beta/enrollments` z `surveySlots`, kolumna „Surveys” (odpowiedziane z otwartych, zaległe)
+  i *Answers (JSON)* (`GET /api/beta/enrollments/:id/answers`).
+- Testy: `packages/server/test/beta-surveys.test.ts` (SV-01–09), `packages/web/test/beta.test.ts` (BUI-05–08).
 
 ## Testy (najpierw czerwone)
 - `judgeEnrollment()`: tabela przypadków na granicach (termin dziś, dzień 6/7 po terminie, dwie zaległe, przedłużenie,

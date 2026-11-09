@@ -2027,3 +2027,34 @@ dialog.modal::backdrop {
   background: var(--bad-soft);
   color: var(--bad);
 }
+
+/* Closed beta: the survey due banner and the survey form (docs/BETA-ENROLLMENT-PLAN.md) */
+.survey-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.survey-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.survey-form legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+.survey-help {
+  display: block;
+  margin-top: 2px;
+}
+.survey-q.is-missing legend,
+.survey-q.is-missing > span,
+.survey-q.is-missing label > span {
+  color: var(--bad);
+}
