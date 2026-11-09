@@ -17,10 +17,30 @@ ma dostęp i jak to jest zabezpieczone. Zmienne aplikacji i sprawdzenie samej be
 - **Właściciel kont:** konta Render, domeny, Atlassian i Resend należą do Ciebie (właściciela produktu) — Claude
   przygotowuje pliki i instrukcje, ale nie ma i nie powinien mieć dostępu do paneli ani sekretów.
 
-> **Do potwierdzenia przy zakładaniu:** pola `render.yaml` są zgodne ze specyfikacją Blueprint Render
-> (render.com/docs/blueprint-spec), ale w chwili pisania nie dało się jej otworzyć z sesji Claude (sieć). Plan `starter`
-> to ten, na którym działa ShipScope. Jeśli Render zgłosi błąd pola albo planu przy tworzeniu Blueprintu, popraw
-> nazwę według komunikatu panelu (albo `render blueprints validate` w CLI Render) i daj znać — poprawię plik.
+Pola `render.yaml` sprawdzone ze specyfikacją Blueprint Render (render.com/docs/blueprint-spec) 2026-11-09. Jeśli
+Render mimo to zgłosi błąd pola albo planu przy tworzeniu Blueprintu, popraw według komunikatu panelu (albo
+`render blueprints validate` w CLI Render) i daj znać — poprawię plik.
+
+### Plan i koszt
+
+Ceny z cennika Render (render.com/pricing), 2026-11-09, netto; PLN po ok. 3,70 zł/USD.
+
+| Co | Plan | Parametry | Miesięcznie |
+|---|---|---|---|
+| Workspace | **Hobby** | 1 osoba w panelu, odtwarzanie bazy do punktu w czasie z 3 dni | $0 |
+| Aplikacja `quorum` | `0.5c-512mb` | 0,5 CPU, 512 MB RAM | $7 (ok. 26 zł) |
+| Baza `quorum-db` | `0.1c-256mb` | 256 MB RAM, 100 połączeń | $6 (ok. 22 zł) |
+| Dysk bazy | `diskSizeGB: 5` | $0,30 za GB | $1,50 (ok. 6 zł) |
+| **Razem** | | | **$14,50 (ok. 54 zł; z VAT 23% ok. 66 zł)** |
+
+- **Dlaczego nie darmowe:** darmowa aplikacja usypia się bez ruchu (zadanie bety co godzinę staje), darmowa baza
+  wygasa po 30 dniach i nie ma odtwarzania. Hobby jest bezpłatne, ale płaci się za uruchomione usługi.
+- **Wystarczy na:** plan bety to 3–5 zespołów (`BETA-PLAN.md` §2), najpierw jeden. Pomiar lokalny: serwer po starcie
+  zajmuje ok. 160 MB z 512 MB, frontend waży ok. 0,5 MB (5 GB transferu w Hobby to zapas).
+- **Kiedy podnieść:** aplikacja → `1c-2g` ($25), gdy pamięć w *Metrics* trzyma się powyżej ok. 400 MB albo usługa
+  restartuje się z braku pamięci; dysk → więcej GB (da się powiększyć, nie zmniejszyć); workspace → **Pro** ($25), gdy
+  w panelu ma być druga osoba albo potrzeba 7 dni odtwarzania zamiast 3. Przed pierwszym zespołem: kopia poza
+  Render (T5), bo 3 dni odtwarzania to mało.
 
 ## 2. Pierwsze uruchomienie — krok po kroku
 
@@ -30,7 +50,7 @@ ma dostęp i jak to jest zabezpieczone. Zmienne aplikacji i sprawdzenie samej be
 
 ### Krok 1. Konto Render
 1. Załóż konto na render.com (najlepiej logując się kontem GitHub właściciela repo).
-2. **Włącz 2FA** (Account Settings → Security). Dodaj kartę płatniczą (plany płatne — darmowa baza wygasa po 30 dniach).
+2. **Włącz 2FA** (Account Settings → Security). Dodaj kartę płatniczą (workspace Hobby jest bezpłatny, ale aplikacja i baza są na planach płatnych — §1, *Plan i koszt*).
 3. Przy łączeniu z GitHubem daj aplikacji Render dostęp **tylko do repozytorium `ci_for_sdlc`**, nie do wszystkich.
 
 ### Krok 2. Utworzenie z Blueprintu
@@ -92,7 +112,7 @@ Do odhaczenia przy pierwszym wdrożeniu (i w przeglądzie T9):
 | 7 | Adres klienta za proxy | wyślij zgłoszenie z formularza bety; w logu Render `remoteAddress` żądania to Twój adres, nie adres Render (gdyby był adresem Render, zmień `CI_TRUST_PROXY`) |
 | 8 | Sekrety | tylko w Render i w menedżerze haseł; `render.yaml` ich nie ma (test `RB-04`) |
 | 9 | 2FA | włączone na Render, u rejestratora domeny, w Atlassian i Resend |
-| 10 | Kopie bazy | baza → *Recovery*: odtwarzanie do punktu w czasie dostępne dla planu (zakres dni zależy od planu — zapisz w mapie); dodatkowa kopia poza Render to T5 |
+| 10 | Kopie bazy | baza → *Recovery*: odtwarzanie do punktu w czasie dostępne (Hobby: 3 dni, Pro: 7 dni); dodatkowa kopia poza Render to T5 |
 | 11 | Dostęp do konta | Render → Workspace → Members: tylko osoby, które mają tam być |
 
 ## 4. Mapa wdrożenia (uzupełnić po założeniu)
@@ -101,11 +121,11 @@ Do odhaczenia przy pierwszym wdrożeniu (i w przeglądzie T9):
 |---|---|
 | Dostawca | Render (render.com) |
 | Konto Render (właściciel, e-mail) | _do uzupełnienia_ |
-| Usługa | `quorum`, Web Service, Docker, plan `starter`, region Frankfurt |
+| Usługa | `quorum`, Web Service, Docker, plan `0.5c-512mb`, region Frankfurt; workspace Hobby |
 | Adres techniczny | `https://quorum-….onrender.com` _do uzupełnienia_ |
 | Domena | `<domena>` _do uzupełnienia_; rejestrator: _do uzupełnienia_; rekord: CNAME → adres techniczny |
-| Baza | `quorum-db`, Render Postgres 17, plan `starter`, Frankfurt, bez dostępu z internetu |
-| Kopie bazy | odtwarzanie do punktu w czasie: _zakres z panelu_; kopia poza Render: T5 |
+| Baza | `quorum-db`, Render Postgres 17, plan `0.1c-256mb`, dysk 5 GB, Frankfurt, bez dostępu z internetu |
+| Kopie bazy | odtwarzanie do punktu w czasie: 3 dni (Hobby); kopia poza Render: T5 |
 | Sekrety (tylko nazwy) | `CI_ENCRYPTION_KEY`, `CI_ADMIN_TOKEN`, `CI_USAGE_SECRET` (wygenerowane przez Render, kopie w menedżerze haseł), `ATLASSIAN_CLIENT_SECRET`, `RESEND_API_KEY`, `POSTHOG_API_KEY` |
 | Osoby z dostępem do Render | _do uzupełnienia_ |
 | Aplikacja Atlassian (konsola, właściciel) | _do uzupełnienia_ |
