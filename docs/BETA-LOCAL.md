@@ -24,6 +24,10 @@ Tryb lokalny daje trzy rzeczy, których serwer produkcyjny nie ma:
 - **przesuwany zegar**: pasek „Local beta” u góry każdej strony (*+1 day*, *+3 days*, *+7 days*); po każdym
   przesunięciu serwer uruchamia zadanie bety (przypomnienia, wstrzymanie, koniec). Sesje w tym trybie nie wygasają.
 
+**Jeśli zamiast ekranu logowania widać „Could not load analysis: Log in first.”**, przeglądarka dostała stary build
+interfejsu (sprzed logowania kontami). Od 2026-11-09 `npm start` przebudowuje interfejs sam, gdy jego źródła są nowsze
+niż build (`scripts/ensure-web.mjs`); ze starszą wersją uruchom raz `npm run build` i odśwież stronę bez cache.
+
 **Bezpieczeństwo:** serwer odmawia startu z `CI_BETA_LOCAL=1`, jeśli `NODE_ENV=production`, `CI_PUBLIC_URL` nie jest
 na `localhost`/`127.0.0.1`, `HOST` nie jest loopbackiem albo tryb to nie `accounts`
 (`packages/server/src/beta-local.ts`, `localBetaMode()`). Trasy `/api/dev/*` istnieją tylko w tym trybie.
