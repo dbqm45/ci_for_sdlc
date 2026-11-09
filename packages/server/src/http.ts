@@ -116,6 +116,9 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
 
   app.addHook('onRequest', async (req) => {
     if (!req.url.startsWith('/api/') || req.url.startsWith('/api/webhooks/') || /^\/api\/w\/[^/]+\/webhooks\//.test(req.url)) return;
+    // The platform's health check calls the service under its own address (e.g. *.onrender.com), not the public
+    // domain in CI_ALLOWED_HOSTS. Health is a read of no data, open to everyone already, so no Host check.
+    if (req.method === 'GET' && req.url.split('?')[0] === '/api/health') return;
     const host = (req.headers.host ?? '').toLowerCase();
     const hostOk = hosts.has(host) || hosts.has(hostnameOf(host)) || isLoopbackName(hostnameOf(host)) || (!hosts.size && (accounts || !!(cfg.adminToken || cfg.readToken)));
     if (!hostOk) throw httpError(403, `Host "${host}" is not allowed. Add it to CI_ALLOWED_HOSTS.`);

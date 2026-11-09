@@ -29,47 +29,10 @@ Wdrożenie: [`DEPLOYMENT.md`](DEPLOYMENT.md); plan: [`BETA-PLAN.md`](BETA-PLAN.m
 
 ## 2. Konfiguracja (raz)
 
-### Krok 1. Klucz kopii
-1. Wygeneruj klucz: `openssl rand -hex 32`.
-2. **Najpierw zapisz go w menedżerze haseł** (wpis „Quorum produkcja”, pole `BACKUP_ENCRYPTION_KEY`). Bez niego
-   żadnej kopii nie da się otworzyć — nie ma obejścia. Trzymaj go osobno od danych dostępowych do B2.
-3. W menedżerze haseł musi być też `CI_ENCRYPTION_KEY` (`DEPLOYMENT.md`, krok 2): bez niego zaszyfrowane dokumenty
-   z kopii są nie do odczytania.
-
-### Krok 2. Konto i bucket w Backblaze B2
-1. Załóż konto na backblaze.com i przy zakładaniu wybierz region **EU Central**. Regionu nie da się potem zmienić;
-   jeśli konto już istnieje w innym regionie, potrzebne jest nowe.
-2. Włącz **2FA** (My Settings → Security).
-3. *Buckets → Create a Bucket*: nazwa np. `quorum-backups-<coś-losowego>` (nazwy są globalne), **Private**,
-   szyfrowanie po stronie B2 włączone (dodatkowe; kopia i tak jest szyfrowana), **Object Lock: Enable**.
-   Object Lock trzeba włączyć tutaj — zadanie wysyła każdy plik z blokadą i bez niej B2 odrzuci zapis.
-4. Zapisz **Endpoint** bucketa (np. `s3.eu-central-003.backblazeb2.com`) — to `B2_ENDPOINT`.
-5. *Lifecycle Settings* bucketa → *Use custom lifecycle rules*: dla prefiksu `daily/` ukrywanie po 36 dniach, dla
-   `monthly/` po 101 dniach, usuwanie ukrytych po 1 dniu. Bez tego pliki zostają na zawsze (blokada tylko
-   chroni przed usunięciem, nie usuwa).
-6. *Application Keys → Add a New Application Key*: dostęp **tylko do tego bucketa**, *Read and Write*. Zapisz
-   `keyID` (`B2_KEY_ID`) i `applicationKey` (`B2_APPLICATION_KEY`, pokazuje się raz) w menedżerze haseł.
-   Blokada *compliance* sprawia, że nawet ten klucz nie usunie zablokowanej kopii. Węższy klucz (tylko zapis plików
-   i ich blokad) da się utworzyć narzędziem `b2` z uprawnieniami `writeFiles,writeFileRetentions` — nie
-   sprawdzałem tego w panelu; wtedy do próby odtworzenia potrzebny jest osobny klucz tylko do odczytu
-   (`listFiles,readFiles`).
-
-### Krok 3. Render
-1. Po merge'u tego PR-a Render pokaże w Blueprincie nową usługę `quorum-backup` (*Cron Job*, Frankfurt). Zatwierdź
-   ją (*Blueprint → Sync*) i wpisz zmienne `sync: false`:
-
-   | Zmienna | Wartość |
-   |---|---|
-   | `BACKUP_ENCRYPTION_KEY` | z kroku 1 |
-   | `B2_ENDPOINT` | Endpoint bucketa, np. `https://s3.eu-central-003.backblazeb2.com` |
-   | `B2_BUCKET` | nazwa bucketa |
-   | `B2_KEY_ID`, `B2_APPLICATION_KEY` | z kroku 2.6 |
-
-2. Uruchom zadanie raz ręcznie: `quorum-backup` → *Trigger Run*. W logu ma być `"msg":"backup uploaded"`, a w B2
-   plik `daily/<dzisiaj>.qbk` z blokadą (*Browse Files* → plik → *Object Lock: Compliance, retain until …*).
-3. W Render → *Notifications* sprawdź, że powiadomienia o nieudanych przebiegach idą na Twój e-mail.
-4. Dopisz B2 do listy podprzetwarzających w DPA (`BETA-PLAN.md` §5): kopia zawiera dane osobowe (e-maile kont,
-   zgłoszenia do bety), choć zaszyfrowane.
+Krok po kroku w [`DEPLOYMENT.md`](DEPLOYMENT.md): klucz kopii (krok 0.3), konto i bucket B2 z Object Lock, reguły
+czyszczenia i klucz dostępu (krok 4), zmienne usługi `quorum-backup` (krok 6), pierwszy przebieg i próba odtworzenia
+(krok 10). Dopisz B2 do listy podprzetwarzających w DPA: kopia zawiera dane osobowe (e-maile kont, zgłoszenia do bety),
+choć zaszyfrowane.
 
 ## 3. Próba odtworzenia (przed pierwszym zespołem i raz w trakcie bety)
 

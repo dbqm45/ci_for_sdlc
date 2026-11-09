@@ -47,14 +47,9 @@ z linkiem) — wtedy link zaproszenia przekazujesz sam z panelu operatora.
 
 ## 2. Kolejność pierwszego uruchomienia
 
-1. Aplikacja w Atlassian Developer Console z zakresem `read:me` i *Callback URL*
-   `https://<domena>/api/connections/atlassian/callback` ([`CONNECT-ATLASSIAN.md`](CONNECT-ATLASSIAN.md), krok 1).
-2. Domena nadawcy zweryfikowana w Resend, klucz API utworzony (uprawnienie *Sending access*).
-3. Zmienne z §1 ustawione, serwer uruchomiony (`npm start` albo obraz z `Dockerfile`).
-4. Zaloguj się kontem z `CI_BOOTSTRAP_EMAIL` — zostajesz Ownerem pierwszej organizacji (przestrzeń `default`).
-5. W menu pojawia się *Beta operator* (Twój e-mail jest w `CI_OPERATOR_EMAILS`).
-6. Wyślij zespołom adres formularza: `https://<domena>/#/beta`.
-7. Zgłoszenia zatwierdzasz na `#/operator` (*Approve* zakłada organizację, przestrzeń i wysyła zaproszenie Ownera).
+Na Render: krok po kroku w [`DEPLOYMENT.md`](DEPLOYMENT.md) §2 (konta, Blueprint, domena, pierwsze logowanie, AI,
+kopie). Na innym serwerze ta sama kolejność: aplikacja Atlassian, domena nadawcy w Resend, zmienne z §1, start
+(`npm start` albo obraz z `Dockerfile`), logowanie kontem z `CI_BOOTSTRAP_EMAIL`.
 
 ## 3. Sprawdzenie po wdrożeniu
 

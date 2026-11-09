@@ -37,51 +37,9 @@ OpenAI, własny endpoint), więc zmiana dostawcy to zmiana zmiennych, nie kodu.
 
 ## 2. Konfiguracja (raz, właściciel)
 
-### Krok 1. Konto AWS i dostęp do Bedrocka
-1. Konto AWS z **2FA na koncie root**; do codziennej pracy osobny użytkownik, nie root.
-2. Konsola → **Amazon Bedrock**, region **eu-central-1 (Frankfurt)** → *Model access* → włącz dostęp do wybranego
-   modelu Claude (Anthropic może poprosić o krótki opis zastosowania).
-3. Zapisz **id modelu albo profilu wnioskowania UE** (*Inference profiles*, zwykle z przedrostkiem `eu.`) — to
-   `CI_AI_MODEL`. Profil `eu.` kieruje ruch tylko do regionów UE. Na betę wystarczy Claude Sonnet; Opus jest
-   ok. 2× droższy na token (stawki w `usage.ts`).
-4. **IAM → Users → Create user** `quorum-bedrock`, bez dostępu do konsoli, z polityką tylko do wywoływania modelu
-   (podmień region, konto i id):
-
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [{
-       "Effect": "Allow",
-       "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
-       "Resource": [
-         "arn:aws:bedrock:eu-central-1:<konto>:inference-profile/<id profilu>",
-         "arn:aws:bedrock:*::foundation-model/<id modelu>"
-       ]
-     }]
-   }
-   ```
-
-   Profil `eu.` wywołuje model w kilku regionach UE, dlatego `foundation-model` ma `*` w miejscu regionu. Nie
-   sprawdzałem tej polityki na koncie — jeśli Bedrock odpowie `AccessDenied`, komunikat poda brakującą akcję albo
-   zasób.
-5. *Security credentials → Create access key* (typ „Application running outside AWS”). `Access key ID` i `Secret
-   access key` zapisz od razu w menedżerze haseł.
-6. **Budżet AWS** (*Billing → Budgets*): miesięczny, np. $60 przy jednym zespole, z alertem e-mail przy 80%. To druga
-   linia obrony obok limitu w aplikacji.
-
-### Krok 2. Render
-W usłudze `quorum` → *Environment*: `CI_AI_MODEL` = id z kroku 1.3, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` =
-z kroku 1.5. `CI_AI_PROVIDER=bedrock`, `CI_AI_REGION=eu-central-1` i `CI_AI_MONTHLY_LIMIT_USD=50` są już w
-`render.yaml`. Bez `CI_AI_MODEL` serwer nie wystartuje (komunikat to powie); do czasu założenia AWS wpisz `todo` —
-analizy działają, a przegląd AI zgłosi błąd.
-
-### Krok 3. Sprawdzenie
-1. Ustawienia przestrzeni → *AI provider*: „Provided by the platform: bedrock · <model>” i linia z wydatkiem.
-2. Na historyjce *AI review* → wynik bez błędu; w audycie wpis `ai_call` z kosztem.
-3. `#/operator` → *AI limits*: przestrzeń ma wydatek > $0 i `calls` > 0, bez „without a known price”.
-4. Dopisz **AWS (Bedrock, UE)** do listy podprzetwarzających w DPA (`BETA-PLAN.md` §5): do modelu trafia treść
-   historyjek i stron (przycięta, z `redactPersonalData`). Sprawdź w aktualnych warunkach AWS, że dane wejściowe nie są
-   używane do trenowania modeli, i zapisz to w informacji dla zespołów.
+Krok po kroku w [`DEPLOYMENT.md`](DEPLOYMENT.md): konto AWS, dostęp do modelu w Bedrocku (eu-central-1), profil UE,
+użytkownik IAM tylko z `bedrock:InvokeModel`, klucze i budżet AWS (krok 3); zmienne w Render (krok 6); sprawdzenie
+(krok 9); AWS Bedrock w DPA (krok 12).
 
 ## 3. Ile to kosztuje
 
