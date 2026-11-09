@@ -75,8 +75,8 @@ Przejście automatem (Playwright, zrzuty ekranu) całego scenariusza do kroku 16
    wyjaśnienia może wziąć to za swoje dane. Potrzebny baner „Sample data — connect your Jira” z przyciskiem do
    *Settings → Integrations* i krok „Połącz Jirę” zaraz po ankiecie wejściowej.
 2. **Ekran logowania nie prowadzi do formularza bety.** Gdy zgłoszenia są otwarte, link „Apply for the beta”.
-3. **Język:** interfejs, maile i ankiety są po angielsku; zespoły bety będą najpewniej polskie. Decyzja właściciela:
-   polska wersja tekstów bety (maile i ankiety) czy angielski.
+3. **Język:** interfejs, maile i ankiety są po angielsku. Decyzja właściciela (2026-11-09): zostają po angielsku,
+   bez polskiej wersji.
 4. **„Findings without a reaction after 14 days: 100%”** w *Usage* przy zespole bez żadnej decyzji wygląda alarmująco;
    lepiej pokazać liczbę („12 of 12”) albo „—”, dopóki nie ma decyzji.
 5. Drobne: po wysłaniu ankiety przegląd otwiera się przewinięty tam, gdzie był formularz; przed zalogowaniem

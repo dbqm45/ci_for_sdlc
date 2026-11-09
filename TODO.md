@@ -14,7 +14,6 @@
       - przestrzeń zespołu startuje z danymi demo („Checkout”): baner „Sample data — connect your Jira” i krok
         „Połącz Jirę” zaraz po ankiecie wejściowej;
       - link „Apply for the beta” na ekranie logowania, gdy zgłoszenia są otwarte;
-      - decyzja właściciela: język tekstów bety (maile i ankiety po polsku czy po angielsku jak interfejs);
       - *Usage*: „Findings without a reaction” jako liczba („12 of 12”) albo „—” bez decyzji, zamiast 100%;
       - drobne: przegląd po wysłaniu ankiety otwiera się przewinięty; 401 z `/api/workspaces` przed zalogowaniem.
 - [ ] **`CI_TRUST_PROXY` dla limitu zgłoszeń do bety** (przy hostingu, T1): Fastify bez `trustProxy` widzi za load
