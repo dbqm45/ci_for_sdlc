@@ -37,6 +37,8 @@ const ROUTE_ROLES: Record<string, Role> = {
   'GET /invitations': 'admin',
   'POST /invitations': 'admin',
   'DELETE /invitations/:id': 'admin',
+  // An operator of the installation (checked by the route itself: CI_OPERATOR_EMAILS, not a role).
+  'POST /orgs': 'viewer',
   // Anyone logged in.
   'POST /auth/logout': 'viewer',
 };

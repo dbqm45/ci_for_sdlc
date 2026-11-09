@@ -25,6 +25,8 @@ export interface Workspace {
   store: Store;
   engine: Engine;
   atlassian: AtlassianConnection;
+  /** The organization it belongs to (accounts mode, docs/ORGANIZATIONS-PLAN.md); none = the first organization. */
+  orgId?: string;
   /** Where its decided A2a steps go besides the log (pdi's registry); set by buildApp. */
   sink?: AutoCloseSink;
 }
@@ -106,11 +108,11 @@ export class Workspaces {
     return this.all().map(({ id, name }) => ({ id, name }));
   }
 
-  /** A new workspace with the default settings (demo mode), like a fresh installation. */
-  async create(id: string, name: string, at: string): Promise<Workspace> {
+  /** A new workspace with the default settings (demo mode), like a fresh installation; `orgId`: its organization. */
+  async create(id: string, name: string, at: string, orgId?: string): Promise<Workspace> {
     if (!WORKSPACE_ID.test(id)) throw new Error(`Workspace id must match ${WORKSPACE_ID_PATTERN}`);
     if (this.byId.has(id)) throw new WorkspaceExistsError(`Workspace ${id} already exists`);
-    const info: WorkspaceInfo = { id, name: name.trim() || id, createdAt: at };
+    const info: WorkspaceInfo = { id, name: name.trim() || id, createdAt: at, ...(orgId && { orgId }) };
     await this.default.store.updateWorkspaces((all) => [...all.filter((w) => w.id !== id), info]);
     return this.open(info);
   }
@@ -140,7 +142,7 @@ export class Workspaces {
     await store.init();
     const atlassian = new AtlassianConnection(store, this.connect);
     const engine = new Engine(store, this.connect.mode === 'oauth' ? atlassian : undefined);
-    const w: Workspace = { id: info.id, name: info.name, store, engine, atlassian };
+    const w: Workspace = { id: info.id, name: info.name, store, engine, atlassian, ...(info.orgId && { orgId: info.orgId }) };
     this.byId.set(w.id, w);
     await this.setup(w);
     return w;

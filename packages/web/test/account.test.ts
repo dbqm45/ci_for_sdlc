@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignableRoles, canManage, disabledReason, loginErrorFrom, roleLabel, showLogin, type Me } from '../src/lib/account';
+import { assignableRoles, canManage, disabledReason, loginErrorFrom, roleLabel, showLogin, startWorkspace, type Me } from '../src/lib/account';
 import { authStep } from '../src/lib/auth';
 
 // Accounts mode (docs/ACCOUNTS-PLAN.md, stage 2): the login screen, the person menu and buttons a role may not use.
@@ -60,5 +60,19 @@ describe('tokens in accounts mode', () => {
   it('ACC-07: a 401 never asks for a token; a person logs in instead', () => {
     expect(authStep({ status: 401, challenge: true, retried: false, used: '', current: '', accounts: true })).toBe('fail');
     expect(authStep({ status: 401, challenge: true, retried: false, used: '', current: '' })).toBe('prompt');
+  });
+});
+
+describe('where the app opens (docs/ORGANIZATIONS-PLAN.md)', () => {
+  const beta: Me = { mode: 'accounts', user: { id: 'u2', name: 'Bea Beta', email: '', role: 'owner' }, org: { id: 'o2', name: 'Beta' }, home: 'beta-team' };
+  it.each([
+    ['a person of another organization opens on their workspace', beta, undefined, 'default', 'beta-team'],
+    ['an address that names a workspace wins', beta, 'beta-mobile', 'beta-mobile', undefined],
+    ['already there', beta, undefined, 'beta-team', undefined],
+    ['the first organization stays on default', { ...beta, home: 'default' }, undefined, 'default', undefined],
+    ['token mode has no home', TOKEN, undefined, 'default', undefined],
+    ['an organization without a workspace stays', { ...beta, home: null }, undefined, 'default', undefined],
+  ] as const)('ACC-ORG: %s', (_, me, address, current, expected) => {
+    expect(startWorkspace(me, address, current)).toBe(expected);
   });
 });

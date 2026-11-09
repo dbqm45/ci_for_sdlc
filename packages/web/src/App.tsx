@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { api, currentUser, currentWorkspace, loginUrl, readToken, setAccountsMode, setWorkspace, workspaceApi, type AnalysisResult, errMsg } from './api';
-import { disabledReason, loginErrorFrom, roleLabel, showLogin, type Me } from './lib/account';
+import { disabledReason, loginErrorFrom, roleLabel, showLogin, startWorkspace, type Me } from './lib/account';
 import { WorkspaceSelect } from './components/WorkspaceSelect';
 import { hashPath, parseHashPath } from './lib/workspace';
 import { ago, Sdot, Source, Spinner } from './components/ui';
@@ -263,6 +263,12 @@ export function App() {
       .me()
       .then((m) => {
         setAccountsMode(m.mode === 'accounts', () => setMe({ mode: 'accounts', user: null }));
+        // A person of another organization does not see `default`: open their own workspace (ORGANIZATIONS-PLAN).
+        const home = startWorkspace(m, parseHashPath(location.hash.slice(1)).ws, currentWorkspace());
+        if (home) {
+          setWorkspace(home);
+          location.hash = hashPath(parseHashPath(location.hash.slice(1)).path, home);
+        }
         setMe(m);
       })
       .catch(() => setMe({ mode: 'token', user: null }));

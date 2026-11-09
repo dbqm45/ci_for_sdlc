@@ -40,6 +40,8 @@ export interface WorkspaceInfo {
   id: string;
   name: string;
   createdAt: string;
+  /** The organization it belongs to (accounts mode); none = the first organization. */
+  orgId?: string;
 }
 export interface PdiOutboxEntry {
   event: PdiEvent;

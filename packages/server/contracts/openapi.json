@@ -3535,7 +3535,7 @@
     },
     "/api/auth/me": {
       "get": {
-        "summary": "The auth mode and the logged-in person, if any",
+        "summary": "The auth mode and the logged-in person with their organization, if any",
         "responses": {
           "200": {
             "description": "Default Response"
@@ -3810,6 +3810,111 @@
             }
           },
           "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs": {
+      "get": {
+        "summary": "Every organization with its workspaces and people (operator)",
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "Open an organization: its first workspace and an invitation for its Owner (operator)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "workspace",
+                  "ownerEmail"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "workspace": {
+                    "type": "object",
+                    "required": [
+                      "id"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+                      },
+                      "name": {
+                        "type": "string",
+                        "maxLength": 100
+                      }
+                    }
+                  },
+                  "ownerEmail": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "pattern": "^[^\\s@]+@[^\\s@]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
             "description": "Problem details",
             "content": {
               "application/json": {

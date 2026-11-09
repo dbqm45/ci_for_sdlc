@@ -23,6 +23,8 @@ Lokalne uruchomienie, testy e2e i demo zostają bez logowania. Tryb `accounts` d
 - **Organizacja** (`org`): `id`, `name`, `createdAt`. W pierwszej wersji instalacja ma **jedną** organizację, która
   obejmuje wszystkie przestrzenie robocze. Wiele organizacji na jednym serwerze (rejestracja z okresem próbnym)
   przyjdzie z rozliczeniami (krok 7) i z `org_id` w RLS.
+  *Zmienione 2026-11-09 (`docs/ORGANIZATIONS-PLAN.md`): wiele organizacji na jednej instalacji; pierwsza obejmuje
+  dotychczasowe przestrzenie, kolejne otwiera operator.*
 - **Członkostwo**: `userId`, `orgId`, `role`.
 - **Role** (od najmocniejszej):
 

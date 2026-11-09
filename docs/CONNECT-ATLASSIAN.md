@@ -94,6 +94,7 @@ Viewer; szczegóły w [`ACCOUNTS-PLAN.md`](ACCOUNTS-PLAN.md)). Działa w obu try
    | `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET` | z kroku 1.5 |
    | `CI_PUBLIC_URL` | jak w tabeli wyżej |
    | `CI_BOOTSTRAP_EMAIL` | opcjonalnie: e-mail konta Atlassian, które zostanie pierwszym Ownerem |
+   | `CI_OPERATOR_EMAILS` | opcjonalnie: e-maile kont Atlassian operatorów instalacji (po przecinku), którzy otwierają kolejne organizacje (`docs/ORGANIZATIONS-PLAN.md`) |
 
    *Callback URL* jest ten sam co dla połączenia (`…/api/connections/atlassian/callback`); nie dodawaj drugiego.
    `CI_ENCRYPTION_KEY` jest potrzebny tylko dla połączenia w trybie `oauth`.
