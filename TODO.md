@@ -2,6 +2,26 @@
 
 ## Następne kroki (stan 28.10.2026)
 
+- [ ] **Zamknięta beta Quorum** — plan w [`docs/BETA-PLAN.md`](docs/BETA-PLAN.md): prace T1–T9 (hosting w UE,
+      aplikacja Atlassian na produkcji, Figma per przestrzeń, limit AI per przestrzeń, kopie, monitoring, usuwanie
+      danych, raport użycia, przegląd bezpieczeństwa), potem 3–5 zespołów przez ok. 12 tygodni. Czeka na decyzje
+      właściciela z §9 planu.
+- [ ] **MCP: sprawdzenie zlecenia przed pracą (prekontrola dla fabryki tf).** Cel (właściciel, 2026-11-09): gdy
+      zlecam coś do zrobienia w fabryce tf, Quorum przez MCP wykrywa niejasności, sprzeczności i braki **zanim**
+      persona zacznie pracę, a fabryka pokazuje je i pyta. Strona tf: `docs/todo.md` w dbqm45/tf („Prekontrola
+      zlecenia przez Quorum”). Po stronie ci_for_sdlc:
+      - **Element z kluczem** (TSK-n, CHG-n, klucz Jiry): wystarczają istniejące narzędzia `get_item_readiness`
+        i `list_decisions` — do dopisania w README MCP jako zalecany przebieg „przed pracą”.
+      - **Zlecenie bez klucza (sam tekst):** nowe narzędzie MCP `check_task` (tylko do odczytu) nad nową trasą
+        `POST /api/check` (bezstanowa: tytuł, opis, kryteria, opcjonalne klucze powiązanych elementów i
+        przestrzeń) — uruchamia reguły (REQ, ERR, ARCH, DES, CON…) i opcjonalnie recenzję AI na szkicu złożonym
+        z tekstu i kontekstu przestrzeni, **niczego nie zapisuje** (bez decyzji, migawki i dryfu), zwraca
+        ustalenia z pytaniami i dowodami oraz sprzeczności z aktywnymi decyzjami. Uprawnienie: token odczytu
+        (`CI_READ_TOKEN`), limit wywołań i limit AI przestrzeni (beta T4).
+      - Odpowiedź w kształcie, który fabryka pokaże człowiekowi bez przeróbek: `blocking[]`, `questions[]`
+        (z opcjami), `conflicts[]` (decyzja, cytat), `readiness`.
+      - Testy: kontrakt narzędzia MCP, trasa bez zapisu (stan magazynu przed i po identyczny), przypadki z
+        `AI-QUALITY-PLAN.md` jako zlecenia tekstowe.
 - [ ] **Pierwszy płatny przebieg ewaluacji recenzenta AI (wstrzymany).** Telemetria i zestaw 14 przypadków są w
       `main` (#91, `docs/AI-QUALITY-PLAN.md`). Brakuje klucza `ANTHROPIC_API_KEY` w środowisku, w którym uruchamiamy
       przebieg. Po dodaniu klucza: `npm run eval:ai -- --paid --config anthropic:claude-haiku-5-5:low --config
