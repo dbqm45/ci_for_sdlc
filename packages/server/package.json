@@ -11,7 +11,9 @@
     "test:coverage": "vitest run --coverage",
     "test:contract": "vitest run test/openapi.contract.test.ts",
     "test:contract:update": "vitest run test/openapi.contract.test.ts -u",
-    "db:import": "tsx src/db-import-cli.ts"
+    "db:import": "tsx src/db-import-cli.ts",
+    "backup": "tsx src/backup-cli.ts",
+    "restore-check": "tsx src/restore-check-cli.ts"
   },
   "dependencies": {
     "@ci/core": "*",

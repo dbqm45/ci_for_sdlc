@@ -9,7 +9,9 @@ ma dostęp i jak to jest zabezpieczone. Zmienne aplikacji i sprawdzenie samej be
 - **Aplikacja:** usługa *Web Service* `quorum` na Render, z obrazu `Dockerfile` z tego repo, region Frankfurt,
   jedna instancja (kolejka zapisów i zadanie bety działają w procesie).
 - **Baza:** *Render Postgres* `quorum-db`, region Frankfurt, **bez adresu w internecie** (`ipAllowList: []`) —
-  łączy się z nią tylko aplikacja przez sieć prywatną Render.
+  łączy się z nią tylko aplikacja i zadanie kopii przez sieć prywatną Render.
+- **Kopie:** zadanie cykliczne `quorum-backup` (*Cron Job*, Frankfurt) co dzień szyfruje kopię i wysyła ją do
+  Backblaze B2 w UE, z blokadą przed usunięciem ([`BACKUPS.md`](BACKUPS.md), T5).
 - **Konfiguracja:** [`render.yaml`](../render.yaml) w repo (Render Blueprint). Sekrety nie mają w nim wartości:
   Render pyta o nie przy zakładaniu (`sync: false`) albo sam je losuje (`generateValue: true`).
 - **Wdrożenia:** Render buduje i wdraża każdy commit `main`, ale dopiero gdy przejdą testy GitHuba
@@ -40,7 +42,9 @@ Ceny z cennika Render (render.com/pricing), 2026-11-09, netto; PLN po ok. 3,70 z
 - **Kiedy podnieść:** aplikacja → `1c-2g` ($25), gdy pamięć w *Metrics* trzyma się powyżej ok. 400 MB albo usługa
   restartuje się z braku pamięci; dysk → więcej GB (da się powiększyć, nie zmniejszyć); workspace → **Pro** ($25), gdy
   w panelu ma być druga osoba albo potrzeba 7 dni odtwarzania zamiast 3. Przed pierwszym zespołem: kopia poza
-  Render (T5), bo 3 dni odtwarzania to mało.
+  Render (T5, [`BACKUPS.md`](BACKUPS.md)), bo 3 dni odtwarzania to mało.
+- **Kopie (T5):** zadanie `quorum-backup` (*Cron Job*, `0.5c-512mb`, kilka sekund dziennie) — grosze miesięcznie;
+  Backblaze B2 w darmowych 10 GB.
 
 ## 2. Pierwsze uruchomienie — krok po kroku
 
@@ -112,7 +116,7 @@ Do odhaczenia przy pierwszym wdrożeniu (i w przeglądzie T9):
 | 7 | Adres klienta za proxy | wyślij zgłoszenie z formularza bety; w logu Render `remoteAddress` żądania to Twój adres, nie adres Render (gdyby był adresem Render, zmień `CI_TRUST_PROXY`) |
 | 8 | Sekrety | tylko w Render i w menedżerze haseł; `render.yaml` ich nie ma (test `RB-04`) |
 | 9 | 2FA | włączone na Render, u rejestratora domeny, w Atlassian i Resend |
-| 10 | Kopie bazy | baza → *Recovery*: odtwarzanie do punktu w czasie dostępne (Hobby: 3 dni, Pro: 7 dni); dodatkowa kopia poza Render to T5 |
+| 10 | Kopie bazy | baza → *Recovery*: odtwarzanie do punktu w czasie dostępne (Hobby: 3 dni, Pro: 7 dni); kopia poza Render: `quorum-backup` ma udane przebiegi, w B2 są pliki z blokadą, próba odtworzenia zapisana w [`BACKUPS.md`](BACKUPS.md) §3 |
 | 11 | Dostęp do konta | Render → Workspace → Members: tylko osoby, które mają tam być |
 
 ## 4. Mapa wdrożenia (uzupełnić po założeniu)
@@ -125,8 +129,8 @@ Do odhaczenia przy pierwszym wdrożeniu (i w przeglądzie T9):
 | Adres techniczny | `https://quorum-….onrender.com` _do uzupełnienia_ |
 | Domena | `<domena>` _do uzupełnienia_; rejestrator: _do uzupełnienia_; rekord: CNAME → adres techniczny |
 | Baza | `quorum-db`, Render Postgres 17, plan `0.1c-256mb`, dysk 5 GB, Frankfurt, bez dostępu z internetu |
-| Kopie bazy | odtwarzanie do punktu w czasie: 3 dni (Hobby); kopia poza Render: T5 |
-| Sekrety (tylko nazwy) | `CI_ENCRYPTION_KEY`, `CI_ADMIN_TOKEN`, `CI_USAGE_SECRET` (wygenerowane przez Render, kopie w menedżerze haseł), `ATLASSIAN_CLIENT_SECRET`, `RESEND_API_KEY`, `POSTHOG_API_KEY` |
+| Kopie bazy | odtwarzanie do punktu w czasie: 3 dni (Hobby); kopia poza Render: `quorum-backup` codziennie 02:17 UTC → Backblaze B2 EU Central, bucket _do uzupełnienia_ ([`BACKUPS.md`](BACKUPS.md)) |
+| Sekrety (tylko nazwy) | `CI_ENCRYPTION_KEY`, `CI_ADMIN_TOKEN`, `CI_USAGE_SECRET` (wygenerowane przez Render, kopie w menedżerze haseł), `ATLASSIAN_CLIENT_SECRET`, `RESEND_API_KEY`, `POSTHOG_API_KEY`; kopie: `BACKUP_ENCRYPTION_KEY`, `B2_KEY_ID`, `B2_APPLICATION_KEY` (w Render i w menedżerze haseł) |
 | Osoby z dostępem do Render | _do uzupełnienia_ |
 | Aplikacja Atlassian (konsola, właściciel) | _do uzupełnienia_ |
 | Resend (domena nadawcy) | _do uzupełnienia_ |
