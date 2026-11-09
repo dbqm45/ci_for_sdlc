@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.43] - 2026-11-09
+
+### Nowe
+
+- add beta applications and operator approval (#115)
+
 ## [0.1.42] - 2026-11-09
 
 ### Nowe
