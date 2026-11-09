@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.47] - 2026-11-09
+
+### Poprawione
+
+- **server:** deliver pdi events scheduled while a delivery runs (#120)
+
 ## [0.1.46] - 2026-11-09
 
 ### Nowe
