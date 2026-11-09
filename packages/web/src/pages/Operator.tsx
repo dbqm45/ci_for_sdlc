@@ -54,6 +54,19 @@ export function Operator() {
     }
     await load();
   };
+  /** Asks for a number of days and a reason, then runs the operator's change. */
+  const withDays = async (e: BetaEnrollment, what: string, max: number, run: (days: number, reason: string) => Promise<unknown>, done: string) => {
+    const days = Number(window.prompt(`${what} for ${e.application.org}: how many days (1–${max})?`, '7'));
+    if (!Number.isInteger(days) || days < 1 || days > max) return;
+    const reason = window.prompt('Reason (optional, kept in the history):') ?? '';
+    try {
+      await run(days, reason);
+      toast(done);
+    } catch (err) {
+      toast(errMsg(err));
+    }
+    await load();
+  };
   /** Every answer of one team as a JSON file, for reading them next to the measured usage. */
   const download = async (e: BetaEnrollment) => {
     try {
@@ -167,6 +180,8 @@ export function Operator() {
                     {e.endsAt ? (
                       <>
                         ends {new Date(e.endsAt).toLocaleDateString()} ({e.daysLeft} days left)
+                        {e.pauseOn && <div>pauses {new Date(e.pauseOn).toLocaleDateString()}</div>}
+                        {e.pausedReason && <div>{e.pausedReason}</div>}
                       </>
                     ) : e.status === 'invited' ? (
                       'waits for the Owner to join'
@@ -177,9 +192,19 @@ export function Operator() {
                   <td className="small">{surveysSummary(e)}</td>
                   <td>
                     {e.startedAt && (
-                      <button className="btn sm" onClick={() => void download(e)}>
-                        Answers (JSON)
-                      </button>
+                      <div className="row wrap" style={{ gap: 6 }}>
+                        <button className="btn sm" onClick={() => void download(e)}>
+                          Answers (JSON)
+                        </button>
+                        {e.status !== 'ended' && (
+                          <button className="btn sm" onClick={() => void withDays(e, 'No pause', 30, (d, r) => api.graceBeta(e.id, d, r), 'Pause held off')}>
+                            No pause for…
+                          </button>
+                        )}
+                        <button className="btn sm" onClick={() => void withDays(e, 'Extend the beta', 60, (d, r) => api.extendBeta(e.id, d, r), 'Beta extended')}>
+                          Extend…
+                        </button>
+                      </div>
                     )}
                     {e.status === 'invited' && (
                       <button className="btn sm" onClick={() => void reinvite(e)}>

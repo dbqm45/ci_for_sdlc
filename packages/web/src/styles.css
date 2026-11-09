@@ -2040,6 +2040,10 @@ dialog.modal::backdrop {
   border-radius: 10px;
   background: var(--accent-soft);
 }
+.survey-banner.is-paused {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
 .survey-form fieldset {
   border: 0;
   padding: 0;

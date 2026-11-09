@@ -172,7 +172,8 @@ describe('the operator', () => {
     vi.setSystemTime(Date.parse(endsAt) - 3_600_000);
     fake.state.as = BEA;
     let later = (await login(app.app)).session!;
-    expect((await me(later)).beta).toMatchObject({ status: 'active', daysLeft: 1 });
+    // No survey was answered in those weeks, so the team is paused (docs/BETA-ENROLLMENT-PLAN.md, beta-lifecycle.test.ts).
+    expect((await me(later)).beta).toMatchObject({ status: 'paused', daysLeft: 1 });
     vi.setSystemTime(Date.parse(endsAt));
     later = (await login(app.app)).session!;
     expect((await me(later)).beta).toMatchObject({ status: 'ended', daysLeft: 0 });
@@ -239,7 +240,15 @@ describe('beta rules', () => {
     ['at the end', '2026-11-11T09:00:00Z', Date.parse('2026-11-11T09:00:00Z'), 0, 'ended'],
     ['long after', '2026-11-11T09:00:00Z', Date.parse('2027-01-01T00:00:00Z'), 0, 'ended'],
   ])('BETA-13: days left and status %s', (_, endsAt, now, days, status) => {
-    const e = { status: endsAt ? ('active' as const) : ('invited' as const), endsAt };
+    const e = {
+      id: 'e1',
+      application: {} as never,
+      consents: {} as never,
+      appliedAt: '2026-11-01T00:00:00Z',
+      history: [],
+      status: endsAt ? ('active' as const) : ('invited' as const),
+      ...(endsAt && { startedAt: '2026-11-10T09:00:00Z', endsAt, surveys: { entry: { answeredAt: '2026-11-10T09:00:00Z', by: ['u'] } } }),
+    };
     expect(daysLeft(e, now)).toBe(days);
     expect(statusAt(e, now)).toBe(status);
   });

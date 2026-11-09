@@ -2,7 +2,7 @@
  * The closed beta in the UI (docs/BETA-ENROLLMENT-PLAN.md): the public application form at `#/beta`, the operator's
  * panel at `#/operator`, and the days left shown to a beta team.
  */
-export type BetaStatus = 'applied' | 'rejected' | 'invited' | 'active' | 'ended';
+export type BetaStatus = 'applied' | 'rejected' | 'invited' | 'active' | 'overdue' | 'paused' | 'ended';
 
 /** How the beta looks to its team (GET /api/auth/me → `beta`). */
 export interface BetaView {
@@ -14,6 +14,10 @@ export interface BetaView {
   entrySurveyDone?: boolean;
   /** The survey to answer now, if any. */
   surveyDue?: { id: string; kind: SurveyKind; dueAt: string } | null;
+  /** When analyses pause unless the overdue survey is answered (status `overdue`). */
+  pauseOn?: string;
+  /** Why analyses are paused (status `paused`). */
+  pausedReason?: string;
 }
 
 export type SurveyKind = 'entry' | 'biweekly' | 'exit';
@@ -58,7 +62,13 @@ export const answersBody = (draft: AnswerDraft) => Object.fromEntries(Object.ent
 
 /** Why analysing waits for a beta team; undefined when it does not. */
 export const betaBlockReason = (beta: BetaView | null | undefined) =>
-  beta?.status === 'active' && beta.entrySurveyDone === false ? 'Fill in the entry survey first' : undefined;
+  beta?.status === 'paused'
+    ? 'Paused until the overdue survey is answered'
+    : beta?.status === 'ended'
+      ? 'The beta has ended'
+      : (beta?.status === 'active' || beta?.status === 'overdue') && beta.entrySurveyDone === false
+        ? 'Fill in the entry survey first'
+        : undefined;
 
 /** The banner text for the survey due now; undefined when none is. */
 export function surveyDueText(beta: BetaView | null | undefined, now = Date.now()): string | undefined {
@@ -68,6 +78,8 @@ export function surveyDueText(beta: BetaView | null | undefined, now = Date.now(
   const left = Date.parse(due.dueAt) - now;
   const days = Math.floor(left / 86_400_000);
   const when = left < 0 ? `was due on ${due.dueAt.slice(0, 10)}` : days === 0 ? 'is due today' : days === 1 ? 'is due tomorrow' : `is due in ${days} days`;
+  if (beta?.status === 'paused') return `Analyses are paused: ${beta.pausedReason ?? 'a survey is overdue'}. ${name} resumes them at once.`;
+  if (beta?.status === 'overdue' && beta.pauseOn) return `${name} ${when}. Analyses pause on ${beta.pauseOn.slice(0, 10)} without it.`;
   return `${name} ${when}.`;
 }
 
@@ -169,11 +181,12 @@ export function workspaceIdFrom(name: string): string {
 export function betaLabel(beta: BetaView | null | undefined): string | undefined {
   if (!beta) return undefined;
   if (beta.status === 'ended') return 'Beta ended';
-  if (beta.status !== 'active' || beta.daysLeft === undefined) return undefined;
+  if (beta.status === 'paused') return 'Beta paused';
+  if ((beta.status !== 'active' && beta.status !== 'overdue') || beta.daysLeft === undefined) return undefined;
   return beta.daysLeft === 1 ? 'Beta: last day' : `Beta: ${beta.daysLeft} days left`;
 }
 
-export const STATUS_LABEL: Record<BetaStatus, string> = { applied: 'Waiting', rejected: 'Rejected', invited: 'Invited', active: 'Active', ended: 'Ended' };
+export const STATUS_LABEL: Record<BetaStatus, string> = { applied: 'Waiting', rejected: 'Rejected', invited: 'Invited', active: 'Active', overdue: 'Survey overdue', paused: 'Paused', ended: 'Ended' };
 
 /** The operator's line for a team's surveys: answered of those opened so far, and how many are overdue. */
 export function surveysSummary(e: { surveySlots?: { state: 'upcoming' | 'open' | 'answered'; dueAt: string }[] }, now = Date.now()): string {
