@@ -107,6 +107,9 @@ export function Operator() {
           <h1>Beta operator</h1>
           <p>Applications for the closed beta and the teams taking part. Approving opens the team's organization and workspace.</p>
         </div>
+        <a className="btn" href="#/operator/surveys">
+          Preview surveys
+        </a>
       </div>
       {link && (
         <Card title={`Owner invitation for ${link.org}`}>

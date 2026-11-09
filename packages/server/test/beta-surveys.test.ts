@@ -197,6 +197,18 @@ describe('answering', () => {
 });
 
 describe('the operator', () => {
+  it('SV-10: the operator reads every survey with its questions; a team member does not', async () => {
+    const r = await app.app.inject({ method: 'GET', url: '/api/beta/survey-definitions', headers: browser(ada) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().map((s: { kind: string; questions: unknown[] }) => [s.kind, s.questions.length])).toEqual([
+      ['entry', SURVEYS.entry.questions.length],
+      ['biweekly', SURVEYS.biweekly.questions.length],
+      ['exit', SURVEYS.exit.questions.length],
+    ]);
+    expect((await app.app.inject({ method: 'GET', url: '/api/beta/survey-definitions', headers: browser(bea) })).statusCode).toBe(403);
+    expect((await app.app.inject({ method: 'GET', url: '/api/beta/survey-definitions', headers: browser(adam) })).statusCode).toBe(403);
+  });
+
   it('SV-09: reads the answers as stored (trimmed, with the survey version) and each team\'s survey slots', async () => {
     await answer(bea, 'entry', ENTRY);
     const e = await enrollment();

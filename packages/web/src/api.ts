@@ -3,7 +3,7 @@ import type { Me, Role } from './lib/account';
 import { authStep } from './lib/auth';
 import type { ChangeState } from './lib/changes';
 import { DEFAULT_WORKSPACE, apiUrl } from './lib/workspace';
-import type { applicationBody, BetaStatus, BetaView, SurveyState, UsageReport } from './lib/beta';
+import type { applicationBody, BetaStatus, BetaView, Question, SurveyKind, SurveyState, UsageReport } from './lib/beta';
 
 let workspace = DEFAULT_WORKSPACE;
 /** The workspace this page shows (F5); every request of a workspace goes to its routes. */
@@ -272,6 +272,8 @@ export const api = {
   /** The surveys of the person's beta team; open ones carry their questions. */
   betaSurveys: () => req<SurveyState[]>('GET', '/api/beta/surveys'),
   answerSurvey: (id: string, answers: Record<string, string | number | string[]>) => req<{ survey: string; at: string; beta: BetaView }>('POST', `/api/beta/surveys/${encodeURIComponent(id)}/answers`, { answers }),
+  /** Operator only: every survey with its questions, for the preview. */
+  surveyDefinitions: () => req<{ kind: SurveyKind; title: string; minutes: number; version: number; questions: Question[] }[]>('GET', '/api/beta/survey-definitions'),
   /** Operator only: every answer of one team. */
   betaAnswers: (enrollmentId: string) => req<unknown[]>('GET', `/api/beta/enrollments/${encodeURIComponent(enrollmentId)}/answers`),
   /** Operator: move the end of a team's beta. */

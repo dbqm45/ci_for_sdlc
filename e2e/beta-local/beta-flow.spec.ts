@@ -34,6 +34,16 @@ test('BETA-E2E-01: apply, approve, join, entry survey, overdue, pause, answer, r
   await loginAs(page, OPERATOR, '/');
   await expect(page.getByRole('link', { name: 'Beta operator' })).toBeVisible();
 
+  // The operator previews the surveys before any team answers them.
+  await page.getByRole('link', { name: 'Beta operator' }).click();
+  await page.getByRole('link', { name: 'Preview surveys' }).click();
+  await expect(page.getByRole('heading', { name: 'Survey preview' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Entry survey \(version 1\)/ })).toBeVisible();
+  await page.getByRole('radio', { name: 'The PO' }).check();
+  await page.getByRole('tab', { name: /Exit survey/ }).click();
+  await expect(page.getByText(/How would you feel if you could no longer use Quorum/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send answers' })).toHaveCount(0);
+
   // The public application form.
   await page.goto('/#/beta');
   await page.getByLabel('Organization').fill('Beta Corp');

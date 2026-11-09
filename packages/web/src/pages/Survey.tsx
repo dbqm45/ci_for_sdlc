@@ -132,7 +132,7 @@ export function Survey({ id }: { id?: string }) {
   );
 }
 
-function QuestionField({ n, q, value, onChange, missing }: { n: number; q: Question; value: AnswerDraft[string]; onChange: (v: AnswerDraft[string]) => void; missing: boolean }) {
+export function QuestionField({ n, q, value, onChange, missing }: { n: number; q: Question; value: AnswerDraft[string]; onChange: (v: AnswerDraft[string]) => void; missing: boolean }) {
   const label = (
     <span>
       {n}. {q.text}

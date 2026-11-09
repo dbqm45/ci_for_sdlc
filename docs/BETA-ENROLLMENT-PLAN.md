@@ -132,6 +132,7 @@ Warunek: wiele organizacji na jednej instalacji (`docs/ORGANIZATIONS-PLAN.md`, o
   i `beta.surveyDue`.
 - UI: baner „The … survey is due …” z przyciskiem *Fill in*, strona `#/survey` (lista) i `#/survey/<id>` (formularz),
   *Beta surveys* w menu, *Analyze now* wyłączony z podpowiedzią do czasu ankiety wejściowej.
+- Operator: podgląd ankiet *Preview surveys* (`#/operator/surveys`, `GET /api/beta/survey-definitions`), bez wysyłania.
 - Operator: `GET /api/beta/enrollments` z `surveySlots`, kolumna „Surveys” (odpowiedziane z otwartych, zaległe)
   i *Answers (JSON)* (`GET /api/beta/enrollments/:id/answers`).
 - Testy: `packages/server/test/beta-surveys.test.ts` (SV-01–09), `packages/web/test/beta.test.ts` (BUI-05–08).
