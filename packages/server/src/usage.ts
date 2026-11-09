@@ -186,6 +186,9 @@ export interface UsageReport {
   falseAlarms: Record<string, number | null>;
   /** Findings shown more than 14 days ago without a decision since, of all shown that long ago. */
   unreacted: number | null;
+  /** The same as counts: how many have no reaction, of how many shown more than 14 days ago. */
+  unreactedCount: number;
+  shownOver14Days: number;
   /** From the first source connection (else the first analysis) to the first decision. */
   hoursToFirstDecision: number | null;
   /** Answer proposals accepted without change, of all judged. */
@@ -234,6 +237,8 @@ export function usageReport(events: UsageEvent[], startedAt: string, now: number
     accuracy: ratio(byEffect(['resolve', 'accept_risk']), decided.length),
     falseAlarms: Object.fromEntries(origins.map((o) => [o, ratio(byEffect(['dismiss'], decided.filter((e) => String(e.props.origin ?? 'unknown') === o)), decided.filter((e) => String(e.props.origin ?? 'unknown') === o).length)])),
     unreacted: ratio(shownOld.length - reacted, shownOld.length),
+    unreactedCount: shownOld.length - reacted,
+    shownOver14Days: shownOld.length,
     hoursToFirstDecision: firstSource && firstDecision ? Math.round(((Date.parse(firstDecision.at) - Date.parse(firstSource.at)) / HOUR_MS) * 10) / 10 : null,
     answerAcceptance: ratio(judged.filter((e) => e.props.outcome === 'accept').length, judged.length),
     forcedApprovals: ratio(approvals.filter((e) => e.props.forced === true).length, approvals.length),

@@ -10,12 +10,9 @@
 - [x] **Lokalny przebieg całej bety** — `npm run local -- --beta` (logowanie dowolną osobą, skrzynka maili
       w aplikacji, przesuwany zegar), scenariusz ręczny i test e2e `npm run test:e2e:beta-local`:
       [`docs/BETA-LOCAL.md`](docs/BETA-LOCAL.md). Pierwsze przejście: 5 błędów poprawionych od razu, reszta niżej.
-- [ ] **Poprawki bety z lokalnego przejścia** (`docs/BETA-LOCAL.md` §4), przed pierwszym zespołem:
-      - przestrzeń zespołu startuje z danymi demo („Checkout”): baner „Sample data — connect your Jira” i krok
-        „Połącz Jirę” zaraz po ankiecie wejściowej;
-      - link „Apply for the beta” na ekranie logowania, gdy zgłoszenia są otwarte;
-      - *Usage*: „Findings without a reaction” jako liczba („12 of 12”) albo „—” bez decyzji, zamiast 100%;
-      - drobne: przegląd po wysłaniu ankiety otwiera się przewinięty; 401 z `/api/workspaces` przed zalogowaniem.
+- [x] **Poprawki bety z lokalnego przejścia** (`docs/BETA-LOCAL.md` §4): baner danych przykładowych z „Connect Jira”,
+      link do formularza bety na ekranie logowania, „bez reakcji” jako liczby, nowa strona od góry, bez zapytań przed
+      zalogowaniem. Język tekstów bety: zostaje angielski (decyzja właściciela 2026-11-09).
 - [ ] **`CI_TRUST_PROXY` dla limitu zgłoszeń do bety** (przy hostingu, T1): Fastify bez `trustProxy` widzi za load
       balancerem adres proxy, więc limit 5 zgłoszeń na godzinę na adres działa na całą instalację
       (`docs/SETUP-BETA.md` §4).

@@ -70,17 +70,16 @@ Przejście automatem (Playwright, zrzuty ekranu) całego scenariusza do kroku 16
 5. Mail „the entry survey is open” szedł dopiero przy najbliższym godzinnym przebiegu zadania, a nie zaraz po
    dołączeniu Ownera. Teraz zadanie bety rusza od razu po dołączeniu (w tle; zamknięcie serwera na nie czeka).
 
-**Do poprawy przed pierwszym zespołem** (pozycje w `TODO.md`):
-1. **Przestrzeń zespołu startuje z danymi demo** (projekt „Checkout”, 11 elementów, ustalenia). Zespół bety bez
-   wyjaśnienia może wziąć to za swoje dane. Potrzebny baner „Sample data — connect your Jira” z przyciskiem do
-   *Settings → Integrations* i krok „Połącz Jirę” zaraz po ankiecie wejściowej.
-2. **Ekran logowania nie prowadzi do formularza bety.** Gdy zgłoszenia są otwarte, link „Apply for the beta”.
-3. **Język:** interfejs, maile i ankiety są po angielsku. Decyzja właściciela (2026-11-09): zostają po angielsku,
-   bez polskiej wersji.
-4. **„Findings without a reaction after 14 days: 100%”** w *Usage* przy zespole bez żadnej decyzji wygląda alarmująco;
-   lepiej pokazać liczbę („12 of 12”) albo „—”, dopóki nie ma decyzji.
-5. Drobne: po wysłaniu ankiety przegląd otwiera się przewinięty tam, gdzie był formularz; przed zalogowaniem
-   konsola pokazuje 401 z `/api/workspaces` (lista przestrzeni pobierana za wcześnie).
+**Poprawione po przejściu (2026-11-09, osobny PR):**
+1. **Przestrzeń zespołu z danymi demo:** zespół bety, którego przestrzeń wciąż pokazuje projekt demo, widzi baner
+   „This workspace shows sample data…”; Owner i Admin dostają przycisk *Connect Jira* (do *Settings*), pozostali
+   prośbę do Admina (`sampleDataNotice()`).
+2. **Ekran logowania** prowadzi do formularza bety („Apply for the closed beta”), gdy zgłoszenia są otwarte.
+3. **Język:** interfejs, maile i ankiety zostają po angielsku (decyzja właściciela 2026-11-09).
+4. **„Findings without a reaction after 14 days”** w *Usage* pokazuje liczby („12 of 12 — no decisions yet”,
+   „3 of 12 (25%)”), a nie samo 100% (`unreactedCount`, `shownOver14Days` w raporcie).
+5. Każda nowa strona otwiera się od góry (także przegląd po wysłaniu ankiety); aplikacja nie wysyła zapytań, dopóki
+   serwer nie powie, kto jest zalogowany (koniec 401 z `/api/workspaces` przed logowaniem).
 
 **Ograniczenia samego trybu lokalnego:**
 - Czasy względne w nagłówku („Last analysis: just now”) liczą się zegarem przeglądarki, więc po przesunięciu zegara

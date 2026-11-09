@@ -37,7 +37,7 @@ import { Operator } from './pages/Operator';
 import { Survey } from './pages/Survey';
 import { LocalBar, LocalLogin, LocalMailbox } from './pages/LocalBeta';
 import { betaNow, localPage } from './lib/localBeta';
-import { betaBlockReason, betaLabel, surveyDueText } from './lib/beta';
+import { betaBlockReason, betaLabel, sampleDataNotice, surveyDueText } from './lib/beta';
 
 type Analysis = AnalysisResult & { running?: boolean; lastReason?: string };
 
@@ -202,6 +202,8 @@ function AccountMenu({ navigate, me }: { navigate: (p: string) => void; me?: Me 
 /** Accounts mode without a session: the only way in is logging in with Atlassian (or an invitation link). */
 function LoginScreen() {
   const error = loginErrorFrom(location.search);
+  const [betaOpen, setBetaOpen] = useState(false);
+  useEffect(() => void api.betaInfo().then((b) => setBetaOpen(b.open)).catch(() => undefined), []);
   return (
     <div className="login-screen">
       <div className="card card-pad login-card">
@@ -218,6 +220,11 @@ function LoginScreen() {
         <a className="btn primary" href={loginUrl()}>
           Log in with Atlassian
         </a>
+        {betaOpen && (
+          <p className="small muted">
+            New here? <a href="#/beta">Apply for the closed beta</a>
+          </p>
+        )}
       </div>
     </div>
   );
@@ -234,6 +241,8 @@ export function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [railExpanded, setRailExpanded] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLElement>(null);
+  const [demo, setDemo] = useState(false);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   const toast = useCallback((m: string) => {
@@ -294,6 +303,20 @@ export function App() {
     return subscribeEvents(workspaceApi('/api/events'), { analysis: () => void refresh(), status: (data) => setRunning(!!JSON.parse(data).running) }, { token: readToken });
   }, [refresh, ws, ready]);
 
+  // A beta team on the demo project is told so (docs/BETA-LOCAL.md §4); read again after every change.
+  useEffect(() => {
+    if (!ready || !me?.beta) return setDemo(false);
+    void api
+      .settings()
+      .then((s) => setDemo(s.settings.mode === 'demo'))
+      .catch(() => setDemo(false));
+  }, [ready, ws, version, me?.beta]);
+
+  // Another page starts at its top, not where the previous one was scrolled to.
+  useEffect(() => {
+    contentRef.current?.scrollTo?.({ top: 0 });
+  }, [path]);
+
   // Close the drawer/rail-overlay on route change, and whenever the matching
   // breakpoint no longer applies (resize back to desktop).
   useEffect(() => {
@@ -339,6 +362,12 @@ export function App() {
   // The beta application form is public: no login, no workspace (docs/BETA-ENROLLMENT-PLAN.md).
   if (section === 'beta') return <BetaApply />;
   // The local walkthrough's own pages, and its login instead of Atlassian's (docs/BETA-LOCAL.md).
+  if (!me)
+    return (
+      <div className="login-screen">
+        <Spinner />
+      </div>
+    );
   if (me?.local && localPage(location.hash) === 'login') return <LocalLogin />;
   if (me?.local && localPage(location.hash) === 'mail') return <LocalMailbox />;
   if (showLogin(me)) return me?.local ? <LocalLogin /> : <LoginScreen />;
@@ -524,7 +553,17 @@ export function App() {
               }}
             />
           )}
-          <main className="content" key={ws}>
+          <main className="content" key={ws} ref={contentRef}>
+            {sampleDataNotice(me?.beta, demo, !disabledReason(me, 'admin')) && (
+              <div className="survey-banner" role="note">
+                <span>{sampleDataNotice(me?.beta, demo, !disabledReason(me, 'admin'))}</span>
+                {!disabledReason(me, 'admin') && (
+                  <a className="btn sm" href={`#${hashPath('/settings', ws)}`}>
+                    Connect Jira
+                  </a>
+                )}
+              </div>
+            )}
             {surveyDueText(me?.beta, betaNow(me?.local)) && section !== 'survey' && (
               <div className={`survey-banner ${me?.beta?.status === 'paused' ? 'is-paused' : ''}`} role="status">
                 <span>

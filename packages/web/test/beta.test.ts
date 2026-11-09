@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { betaNow, inviteFromHash, localPage } from '../src/lib/localBeta';
-import { EMPTY_FORM, usageLines, answersBody, applicationBody, betaBlockReason, betaLabel, formProblems, surveyDueText, surveysSummary, unanswered, workspaceIdFrom, type ApplicationForm, type Question } from '../src/lib/beta';
+import { EMPTY_FORM, sampleDataNotice, usageLines, answersBody, applicationBody, betaBlockReason, betaLabel, formProblems, surveyDueText, surveysSummary, unanswered, workspaceIdFrom, type ApplicationForm, type Question } from '../src/lib/beta';
 
 // The closed beta in the UI (docs/BETA-ENROLLMENT-PLAN.md): the application form, workspace ids and days left.
 const FILLED: ApplicationForm = {
@@ -187,5 +187,24 @@ describe("the beta's clock in the local walkthrough", () => {
   it("BUI-14: the server's moved clock wins over the browser's", () => {
     expect(betaNow({ now: '2026-12-05T14:00:00.000Z' })).toBe(Date.parse('2026-12-05T14:00:00.000Z'));
     expect(Math.abs(betaNow(undefined) - Date.now())).toBeLessThan(1000);
+  });
+});
+
+describe('fixes from the local walkthrough', () => {
+  const base = { weeks: [], activeWeeks: 0, accuracy: null, falseAlarms: {}, hoursToFirstDecision: null, answerAcceptance: null, forcedApprovals: null, aiCostUsd: 0, surveysAnswered: 0 };
+  const unreacted = (r: Partial<Parameters<typeof usageLines>[0]>) => Object.fromEntries(usageLines({ ...base, decided: 0, unreacted: null, ...r }))['Findings without a reaction after 14 days'];
+  it('BUI-15: findings without a reaction read as counts; without decisions it says so instead of 100%', () => {
+    expect(unreacted({ decided: 0, unreacted: 1, unreactedCount: 12, shownOver14Days: 12 })).toBe('12 of 12 — no decisions yet');
+    expect(unreacted({ decided: 4, unreacted: 0.25, unreactedCount: 3, shownOver14Days: 12 })).toBe('3 of 12 (25%)');
+    expect(unreacted({ decided: 4, unreacted: null, unreactedCount: 0, shownOver14Days: 0 })).toBe('—');
+  });
+
+  it('BUI-16: a beta team on the demo project is told what it sees and who connects Jira', () => {
+    const active = { status: 'active' as const };
+    expect(sampleDataNotice(active, true, true)).toMatch(/sample data.*Connect your Jira in Settings/);
+    expect(sampleDataNotice(active, true, false)).toMatch(/Ask an Admin/);
+    expect(sampleDataNotice(active, false, true)).toBeUndefined();
+    expect(sampleDataNotice(null, true, true)).toBeUndefined();
+    expect(sampleDataNotice({ status: 'ended' }, true, true)).toBeUndefined();
   });
 });

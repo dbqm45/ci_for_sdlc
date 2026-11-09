@@ -87,6 +87,8 @@ describe('events and measures', () => {
       falseAlarms: { rule: 0, ai: 0.5 },
       // REQ-001 was decided, DES-002 never: one of the two shown more than 14 days ago.
       unreacted: 0.5,
+      unreactedCount: 1,
+      shownOver14Days: 2,
       hoursToFirstDecision: 12,
       answerAcceptance: 0.5,
       forcedApprovals: 0.333,
