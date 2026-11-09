@@ -12,16 +12,20 @@ pytania, każde z miarą i progiem ustalonym z góry:
 | Czy zespół wraca do narzędzia bez przypominania? | tygodnie z co najmniej jedną analizą i jedną decyzją na zespół | ≥ 3 z 5 zespołów w 6 z 8 tygodni |
 | Czy ustalenia są trafne? | odsetek ustaleń zamkniętych decyzją „rozwiązane” lub „przyjęte ryzyko” wobec „odrzucone” (audyt) | ≥ 60% trafnych; < 20% odrzuconych jako fałszywe |
 | Czy ktoś zapłaci? | deklaracja zakupu po becie (list intencyjny lub zgoda na płatny plan od dnia X) z ceną | ≥ 2 zespoły z ceną w przedziale planu Team |
+| Czy to jest „musieć mieć”? | pytanie Seana Ellisa w ankiecie końcowej: „bardzo rozczarowany”, gdyby Quorum zniknęło | ≥ 40% odpowiadających |
 
-Dodatkowo, jakościowo: które ustalenia oszczędziły pracę (przykłady z rozmów), czego brakowało, co przeszkadzało.
+Dodatkowo, jakościowo (z ankiet, §7): które ustalenia oszczędziły pracę, czego brakowało, co przeszkadzało. Miary
+liczymy z pomiaru (§8), nie z deklaracji; ankieta je uzupełnia i sprawdza.
 
 ## 2. Kto
-- **3–5 zespołów** (design partners), nie więcej — każdy dostaje uwagę i rozmowę co dwa tygodnie.
+- **3–5 zespołów** (design partners), nie więcej — każdy dostaje uwagę: ankietę co dwa tygodnie (§7) i odpowiedź
+  na każde zgłoszenie w 1 dzień roboczy. Rozmowa tylko wtedy, gdy zespół jej chce albo ankieta tego wymaga.
 - **Profil:** zespół produktowy na Jira Cloud i Confluence (Figma mile widziana), 5–30 osób, z PO lub analitykiem,
   który pisze historyjki; najlepiej taki, który już narzeka na niejasne wymagania lub poprawki po review.
 - **Źródła kontaktów:** własna sieć, społeczności PO/QA, osoby z poprzednich projektów. Bez płatnej reklamy.
-- **Umowa bety:** bezpłatnie na czas bety, w zamian rozmowy co dwa tygodnie i zgoda na mierzenie użycia; DPA
-  podpisane przed podłączeniem prawdziwych danych.
+- **Umowa bety:** bezpłatnie na czas bety, w zamian **ankieta co dwa tygodnie (ok. 5 minut, [`BETA-SURVEYS.md`](BETA-SURVEYS.md))**,
+  ankieta wejściowa i końcowa oraz zgoda na mierzenie użycia w zakresie z §8 (zdarzenia bez treści historyjek);
+  DPA podpisane przed podłączeniem prawdziwych danych. Zgodę zespół daje w formularzu zgłoszenia do bety (§7).
 
 ## 3. Zakres produktu w becie
 **W becie:** analiza gotowości historyjek i epiców z Jiry, Confluence i (opcjonalnie) Figmy; pytania i decyzje;
@@ -44,8 +48,9 @@ Każda pozycja to osobny PR z testami; kolejność według zależności.
 | T5 | **Kopie i odtwarzanie:** dzienna kopia bazy poza dostawcą hostingu, próba odtworzenia przed startem i raz w becie | utrata decyzji klienta zabija zaufanie | brak |
 | T6 | **Monitoring i alerty:** `/api/health` w zewnętrznym monitorze, logi błędów z alertem, panel zużycia AI | dowiadujemy się o awarii przed klientem | health jest |
 | T7 | **Usunięcie danych klienta na żądanie:** usunięcie przestrzeni z kasowaniem (dziś archiwizacja) i odłączenie OAuth | wymóg RODO i DPA | archiwizacja jest, kasowania brak |
-| T8 | **Pomiar użycia bez zewnętrznej analityki:** zdarzenia z audytu (analiza, decyzja, zatwierdzenie, odrzucone ustalenie) w raporcie per przestrzeń i tydzień | miary z §1 | audyt jest, raportu brak |
+| T8 | **Pomiar użycia (§8):** zdarzenia wysyłane przez serwer do narzędzia analityki (bez treści), wyłącznik per przestrzeń, ankiety w aplikacji; zapasowo raport z audytu per przestrzeń i tydzień | miary z §1 | audyt jest, wysyłki zdarzeń i ankiet brak |
 | T9 | **Przegląd bezpieczeństwa przed startem:** skan zależności, przegląd tras bez uwierzytelnienia, prosty test DAST (np. OWASP ZAP) na środowisku testowym | minimum przed prawdziwymi danymi | skan zależności w CI jest |
+| T10 | **Zapisy i uczestnictwo w becie ([`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md)):** formularz zgłoszenia, zatwierdzenie przez operatora, jednorazowe zaproszenie tworzące przestrzeń, okres bety z datą końca, ankiety w aplikacji z terminami, codzienne zadanie (przypomnienia, wstrzymanie, koniec bety), panel operatora | zapis, ankiety i czas bety bez ręcznego pilnowania | zaproszenia do istniejącej przestrzeni są (`accounts.ts`), reszty brak |
 
 Świadomie odkładamy krok 5 z `SAAS.md` (kolejka i workery): przy 3–5 zespołach jeden serwer wystarcza, a analiza
 w procesie serwera jest już kolejkowana. Wracamy do tego, gdy analiza jednego zespołu zacznie blokować innych
@@ -64,32 +69,94 @@ w procesie serwera jest już kolejkowana. Wracamy do tego, gdy analiza jednego z
 
 | Faza | Czas | Co | Wynik |
 |---|---|---|---|
-| 0. Przygotowanie | 3–4 tyg. | T1–T9, dokumenty z §5, lista 10 kandydatów, scenariusz rozmowy | środowisko produkcyjne, 3–5 zgód |
-| 1. Pierwszy zespół | 2 tyg. | wdrożenie z nami na rozmowie (podłączenie Jiry, pierwsza analiza, decyzje), poprawki zgłoszonych błędów | lista poprawek przed kolejnymi |
-| 2. Pozostałe zespoły | 6 tyg. | onboarding po jednym zespole na tydzień, rozmowy co 2 tygodnie, tygodniowy raport T8 | miary z §1 |
-| 3. Ocena | 1–2 tyg. | podsumowanie miar, rozmowy o cenie, decyzja | go / zmiana kierunku / stop |
+| 0. Przygotowanie | 3–4 tyg. | T1–T9, dokumenty z §5, lista 10 kandydatów, formularz zgłoszenia i ankiety z [`BETA-SURVEYS.md`](BETA-SURVEYS.md) w narzędziu (§8), panel miar | środowisko produkcyjne, 3–5 zgód |
+| 1. Pierwszy zespół | 2 tyg. | ankieta wejściowa, samodzielne wdrożenie według instrukcji (podłączenie Jiry, pierwsza analiza, decyzje) z nami na czacie, poprawki zgłoszonych błędów | lista poprawek przed kolejnymi; czas do pierwszej decyzji |
+| 2. Pozostałe zespoły | 6 tyg. | onboarding po jednym zespole na tydzień, ankieta co 2 tygodnie, tygodniowy przegląd panelu miar | miary z §1 |
+| 3. Ocena | 1–2 tyg. | ankieta końcowa (z ceną), podsumowanie miar, decyzja | go / zmiana kierunku / stop |
 
-## 7. Rozmowy i cena
-- Scenariusz rozmowy: ostatnie ustalenie, które pomogło; ostatnie, które było szumem; co robili przed Quorum; czego
-  brakuje. Notatki w jednym miejscu, cytaty z datą.
-- Pytanie o cenę pod koniec bety, z konkretną propozycją planu Team (per stanowisko z limitem AI, `SAAS.md` §6)
-  i dwoma alternatywami (per zespół, per przestrzeń). Zapisujemy próg, przy którym „za drogo”.
-- Oferta na koniec: zniżka dla design partnerów na pierwszy rok w zamian za zgodę na referencję.
+## 7. Ankiety i cena (zamiast rozmów)
+Pytania są w [`BETA-SURVEYS.md`](BETA-SURVEYS.md), gotowe do przeniesienia do formularza:
+- **Formularz zgłoszenia** (raz, przed startem): dane zespołu, zgoda na mierzenie i ankiety, akceptacja regulaminu bety.
+- **Ankieta wejściowa** (raz, przed pierwszą analizą, ok. 7 min): jak dziś sprawdzają gotowość, punkt odniesienia
+  (ile historyjek wróciło z developmentu przez niejasne wymagania w ostatnim sprincie).
+- **Ankieta co dwa tygodnie** (ok. 5 min, 8 pytań): konkretne ustalenia z kluczem, szum, oszczędzony czas, co
+  przeszkadza. Wysyłana w aplikacji i mailem do osoby kontaktowej zespołu.
+- **Ankieta końcowa** (raz, w fazie 3, ok. 10 min): pytanie Seana Ellisa, cena (cztery pytania Van Westendorpa i
+  propozycja planu Team), co musiałoby się zmienić, żeby zapłacić.
 
-## 8. Ryzyka
+Zasady:
+- **Pytania sprawdzające:** każda ankieta ma pytania, których odpowiedź da się porównać z pomiarem (np. „ile
+  ustaleń odrzuciliście jako fałszywe” wobec zdarzeń `finding_decided` z `effect: dismiss`) albo które wymagają
+  konkretu (klucz historyjki, który da się znaleźć w audycie). Rozbieżność > 50% albo przykład, którego nie ma w
+  danych, oznacza, że odpowiedź traktujemy ostrożnie i pytamy dodatkowo (krótka wiadomość, nie rozmowa).
+- **Wypełnialność:** cel ≥ 80% ankiet dwutygodniowych; dwie brakujące z rzędu → wiadomość do osoby kontaktowej.
+- **Cena:** w ankiecie końcowej konkretna propozycja planu Team (per stanowisko z limitem AI, `SAAS.md` §6) i dwie
+  alternatywy (per zespół, per przestrzeń); zapisujemy próg „za drogo”.
+- **Oferta na koniec:** zniżka dla design partnerów na pierwszy rok w zamian za zgodę na referencję.
+
+## 8. Pomiar: narzędzie i co mierzymy
+**Narzędzie (rekomendacja): PostHog w regionie UE** — zdarzenia produktowe, panele (retencja, lejki) i ankiety
+w jednym narzędziu, z biblioteką dla Node.js do wysyłki z serwera; ma też wersję do samodzielnego hostowania.
+Przed wyborem potwierdzić: aktualny cennik i limit darmowy, region danych UE, DPA i miejsce na liście
+podprzetwarzających (§5). Alternatywa bez nowego podprzetwarzającego: zdarzenia tylko w audycie Quorum, raport
+tygodniowy z niego (T8) i ankiety w formularzu (np. Tally albo Google Forms — też z DPA).
+
+Zasady:
+- Zdarzenia wysyła **serwer**, nie przeglądarka: bez automatycznego zbierania kliknięć, bez nagrywania sesji, bez
+  treści z Jiry, Confluence i Figmy, bez imion i e-maili. Osoba i przestrzeń jako pseudonimy (skrót HMAC z sekretem
+  serwera), organizacja jako identyfikator grupy.
+- Wyłącznik per przestrzeń w ustawieniach (`telemetry: off`) i zmienna serwera wyłączająca wysyłkę w całości;
+  bez zgody z formularza (§7) wysyłka wyłączona.
+- Wspólna lista zdarzeń w kodzie (jeden moduł), testy, że żadne zdarzenie nie niesie pola spoza listy.
+
+**Zdarzenia** (nazwa — kiedy — właściwości; wszystkie mają `workspace`, `org`, `user` jako pseudonimy i `at`):
+
+| Zdarzenie | Kiedy | Właściwości |
+|---|---|---|
+| `source_connected` | podłączenie Jiry, Confluence, Figmy albo repo | `source` |
+| `analysis_completed` | koniec analizy | `trigger` (manual, schedule, webhook, gate), `items`, `findings_open`, `durationMs`, `ai` (tak/nie), `ai_tokens`, `ai_cost_usd` |
+| `finding_shown` | ustalenie po raz pierwszy w wyniku | `rule`, `severity`, `origin` (rule, ai) |
+| `finding_decided` | decyzja na ustaleniu | `rule`, `severity`, `origin`, `effect` (resolve, accept_risk, dismiss, confirm), `age_hours` (od `finding_shown`) |
+| `answer_proposal_judged` | przyjęcie, poprawka albo odrzucenie odpowiedzi ze źródła (A2a) | `outcome`, `rule` |
+| `item_approved` | zatwierdzenie historyjki | `forced` (tak/nie), `blocking_findings` |
+| `drift_detected` | dryf po zatwierdzeniu | `kind` |
+| `item_viewed` | otwarcie strony elementu | `type` |
+| `mcp_tool_called` | wywołanie narzędzia MCP | `tool` |
+| `gate_run` | bramka na PR (`analyze --repo`) | `result` (pass, fail), `changes` |
+| `survey_answered` | odpowiedź na ankietę | `survey` (entry, biweekly, exit) |
+
+**Miary** (liczone w narzędziu, przeglądane co tydzień):
+
+| Miara | Wzór | Do czego (§1) |
+|---|---|---|
+| Aktywny tydzień zespołu | tydzień z ≥ 1 `analysis_completed` i ≥ 1 `finding_decided` w przestrzeni | powroty |
+| Retencja tygodniowa | odsetek zespołów aktywnych w tygodniu N od startu | powroty |
+| Trafność ustaleń | `finding_decided` z `effect` resolve lub accept_risk ÷ wszystkie `finding_decided` | trafność |
+| Fałszywe alarmy | `effect: dismiss` ÷ wszystkie `finding_decided`, osobno dla `origin: ai` i `rule` | trafność |
+| Ustalenia bez reakcji | `finding_shown` bez `finding_decided` po 14 dniach ÷ `finding_shown` | szum |
+| Czas do pierwszej wartości | od `source_connected` do pierwszego `finding_decided` | onboarding |
+| Akceptacja odpowiedzi ze źródeł | przyjęte bez zmian ÷ ocenione `answer_proposal_judged` | A2a, autonomia |
+| Koszt AI na zespół i analizę | suma `ai_cost_usd` per przestrzeń i tydzień; średnia na analizę | cena, T4 |
+| Wymuszone zatwierdzenia | `item_approved` z `forced` ÷ wszystkie | czy blokady są trafne |
+
+## 9. Ryzyka
 
 | Ryzyko | Skutek | Ograniczenie |
 |---|---|---|
 | Za dużo fałszywych ustaleń | zespół przestaje otwierać narzędzie | polityka `suggest` zamiast `apply`, przegląd odrzuconych co tydzień, ewaluacje AI (`AI-QUALITY-PLAN.md`) |
 | Koszt AI wyższy niż zakładany | strata na każdym zespole | T4 (twardy limit), pomiar kosztu na analizę od pierwszego tygodnia |
 | Wyciek lub utrata danych klienta | koniec bety i reputacji | T1, T5, T7, T9, DPA |
-| Zespół nie ma czasu na rozmowy | brak wniosków | umowa bety z rytmem rozmów; mniej zespołów, ale zaangażowanych |
+| Zespół nie wypełnia ankiet | brak wniosków jakościowych | krótka ankieta (5 min) w aplikacji, przypomnienie, dwie brakujące → wiadomość; miary z §8 zbierają się i bez ankiet |
+| Pomiar zbiera za dużo | ryzyko RODO, utrata zaufania | zdarzenia z serwera z zamkniętej listy, pseudonimy, wyłącznik, DPA z narzędziem analityki |
 | Rozjazd uwagi na nowe funkcje w trakcie bety | beta bez wniosków | zamrożenie zakresu; nowe pomysły trafiają do `TODO.md` |
 
-## 9. Decyzje właściciela przed startem
+## 10. Decyzje właściciela przed startem
 1. Hosting i region (rekomendacja: zarządzana platforma kontenerów w UE z zarządzanym Postgresem; ShipScope działa
    już na Render, co upraszcza obsługę — sprawdzić aktualny cennik i dostępność regionu UE).
 2. Dostawca AI dla bety (Anthropic API albo Bedrock w regionie UE) i limit miesięczny na przestrzeń.
 3. Nazwa produktu i domena (potrzebne do aplikacji Atlassian, T2).
 4. Podmiot prawny i dokumenty z §5.
 5. Lista kandydatów do bety.
+6. Narzędzie do pomiaru i ankiet (rekomendacja: PostHog w UE, §8) albo wariant bez nowego podprzetwarzającego.
+7. Progi i dostawca maili dla T10 (`BETA-ENROLLMENT-PLAN.md`, „Decyzje właściciela”): po ilu dniach zaległej
+   ankiety wstrzymanie, czy wstrzymanie automatyczne czy po potwierdzeniu, ile dni danych po końcu bety.
