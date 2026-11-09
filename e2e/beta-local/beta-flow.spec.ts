@@ -74,6 +74,11 @@ test('BETA-E2E-01: apply, approve, join, entry survey, overdue, pause, answer, r
   await page.getByRole('textbox', { name: /one problem/ }).fill('Edge cases are missing');
   await page.getByRole('button', { name: 'Send answers' }).click();
   await expect(page.locator('header.topbar').getByRole('button', { name: /Analyze now/ })).toBeEnabled();
+  // The workspace still shows the demo project: the team is told so, and its Owner gets the way to connect Jira.
+  const sample = page.getByRole('note').filter({ hasText: 'sample data' });
+  await expect(sample).toBeVisible();
+  await expect(sample.getByRole('link', { name: 'Connect Jira' })).toHaveAttribute('href', /\/settings$/);
+  await page.screenshot({ path: test.info().outputPath('sample-data-notice.png') });
 
   // Two weeks on: the two-week survey opens; a week after its due date the team is paused.
   await moveClock(page, '+7 days', 2);

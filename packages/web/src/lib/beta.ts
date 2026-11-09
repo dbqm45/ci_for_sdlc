@@ -72,6 +72,16 @@ export const betaBlockReason = (beta: BetaView | null | undefined) =>
         ? 'Fill in the entry survey first'
         : undefined;
 
+/**
+ * The notice for a beta team whose workspace still shows the demo project (BETA-LOCAL.md §4): what it is and what to
+ * do next; undefined when the workspace reads the team's own sources or this is not a beta team.
+ */
+export function sampleDataNotice(beta: BetaView | null | undefined, demo: boolean, canConnect: boolean): string | undefined {
+  if (!demo || !beta || !['active', 'overdue'].includes(beta.status)) return undefined;
+  const what = 'This workspace shows sample data (a demo project), not your team\'s stories.';
+  return canConnect ? `${what} Connect your Jira in Settings to analyse your own backlog.` : `${what} Ask an Admin of your team to connect your Jira in Settings.`;
+}
+
 /** The banner text for the survey due now; undefined when none is. */
 export function surveyDueText(beta: BetaView | null | undefined, now = Date.now()): string | undefined {
   const due = beta?.surveyDue;
@@ -208,6 +218,8 @@ export interface UsageReport {
   accuracy: number | null;
   falseAlarms: Record<string, number | null>;
   unreacted: number | null;
+  unreactedCount?: number;
+  shownOver14Days?: number;
   hoursToFirstDecision: number | null;
   answerAcceptance: number | null;
   forcedApprovals: number | null;
@@ -217,6 +229,13 @@ export interface UsageReport {
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`);
 
+function unreactedText(r: UsageReport): string {
+  if (r.unreactedCount === undefined || r.shownOver14Days === undefined) return pct(r.unreacted);
+  if (!r.shownOver14Days) return '—';
+  const counts = `${r.unreactedCount} of ${r.shownOver14Days}`;
+  return r.decided ? `${counts} (${pct(r.unreacted)})` : `${counts} — no decisions yet`;
+}
+
 /** The measures as label and value, in the order of BETA-PLAN.md §8. */
 export function usageLines(r: UsageReport): [string, string][] {
   return [
@@ -224,7 +243,8 @@ export function usageLines(r: UsageReport): [string, string][] {
     ['Findings decided', String(r.decided)],
     ['Accuracy (resolved or risk accepted)', pct(r.accuracy)],
     ...Object.entries(r.falseAlarms).map(([origin, v]): [string, string] => [`False alarms (${origin})`, pct(v)]),
-    ['Findings without a reaction after 14 days', pct(r.unreacted)],
+    // Without any decision yet, a share of 100% only says the team has not started deciding: show the counts.
+    ['Findings without a reaction after 14 days', unreactedText(r)],
     ['Time to the first decision', r.hoursToFirstDecision === null ? '—' : r.hoursToFirstDecision < 48 ? `${r.hoursToFirstDecision} h` : `${Math.round(r.hoursToFirstDecision / 24)} days`],
     ['Answers from sources accepted as they were', pct(r.answerAcceptance)],
     ['Forced approvals', pct(r.forcedApprovals)],
