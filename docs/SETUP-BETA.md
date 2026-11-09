@@ -3,7 +3,8 @@
 Stan: 2026-11-09. Co ustawić, żeby zapisy, ankiety, wstrzymanie i maile bety działały na serwerze produkcyjnym.
 Jak beta działa: [`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md) (T10) i [`ORGANIZATIONS-PLAN.md`](ORGANIZATIONS-PLAN.md);
 po co jest i co mierzymy: [`BETA-PLAN.md`](BETA-PLAN.md); pytania ankiet: [`BETA-SURVEYS.md`](BETA-SURVEYS.md).
-Pozostałe prace przed pierwszym zespołem (hosting, kopie, monitoring…) to T1–T9 w `BETA-PLAN.md` §4.
+Pozostałe prace przed pierwszym zespołem (hosting, kopie, monitoring…) to T1–T9 w `BETA-PLAN.md` §4. Wdrożenie na Render
+(T1, krok po kroku, mapa wdrożenia i sprawdzenie bezpieczeństwa): [`DEPLOYMENT.md`](DEPLOYMENT.md).
 Przed wdrożeniem przejdź betę lokalnie: [`BETA-LOCAL.md`](BETA-LOCAL.md) (`npm run local -- --beta`).
 
 ## 1. Zmienne środowiskowe
@@ -62,9 +63,8 @@ z linkiem) — wtedy link zaproszenia przekazujesz sam z panelu operatora.
 
 ## 4. Znane ograniczenia (do zrobienia)
 
-- **Limit zgłoszeń za proxy:** limit 5 zgłoszeń na godzinę liczy się z `req.ip`. Fastify nie ma dziś włączonego
-  `trustProxy`, więc za load balancerem wszystkie zgłoszenia mają adres proxy i limit działa na całą instalację.
-  Do zrobienia przy hostingu (T1): zmienna `CI_TRUST_PROXY` przekazywana do Fastify (pozycja w `TODO.md`).
+- **Limit zgłoszeń za proxy:** `CI_TRUST_PROXY` = liczba pośredników przed serwerem (na Render `1`, ustawione w
+  `render.yaml`); bez niej limit 5 zgłoszeń na godzinę liczyłby się dla całej instalacji.
 - **Jeden serwer na bazę:** kolejka zapisów i zadanie bety działają w procesie — nie uruchamiaj dwóch instancji
   na tej samej bazie (`WORKSPACES-F5-PLAN.md`, „Ograniczenie”).
 - **pdi** należy do pierwszej organizacji; zespoły bety go nie widzą (`ORGANIZATIONS-PLAN.md`).

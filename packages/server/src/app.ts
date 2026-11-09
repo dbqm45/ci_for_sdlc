@@ -10,6 +10,7 @@ import { SURVEYS } from './beta-surveys.js';
 import { betaMails, runBetaJob } from './beta-job.js';
 import { PAUSE_AFTER_DAYS } from './beta-lifecycle.js';
 import { mailerFromEnv, type Mailer } from './mailer.js';
+import { checkRlsRole, securityHeaders, trustProxyFrom } from './production.js';
 import { LOCAL_PEOPLE, MemoryMailer, localBetaMode, shiftedClock } from './beta-local.js';
 import { PostHogSink, Usage, triggerOf, usageReport, type UsageEventName, type UsageSink } from './usage.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
@@ -85,7 +86,17 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const clock = local.enabled ? shiftedClock() : undefined;
   const localMail = local.enabled && !opts.mailer ? new MemoryMailer() : undefined;
   // Strict bodies: unknown properties and wrong types are rejected, not silently dropped or coerced.
-  const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } } });
+  const app = Fastify({
+    logger: opts.logger ?? false,
+    // Behind the hosting's load balancer (CI_TRUST_PROXY = its number of hops), req.ip is the client's address.
+    trustProxy: trustProxyFrom(process.env.CI_TRUST_PROXY),
+    ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } },
+  });
+  // Security headers on every response (docs/DEPLOYMENT.md): no foreign scripts, no framing, HSTS over https.
+  const headers = securityHeaders(connect.publicUrl);
+  app.addHook('onSend', async (_req, reply) => {
+    for (const [k, v] of Object.entries(headers)) if (!reply.hasHeader(k)) reply.header(k, v);
+  });
   let pdi!: PdiLink;
 
   /** The pdi changes with the stories of every workspace (F5): each workspace is analysed first. */
@@ -100,7 +111,13 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
 
   const databaseUrl = opts.databaseUrl ?? process.env.CI_DATABASE_URL ?? '';
   const pool = databaseUrl ? new pg.Pool({ connectionString: databaseUrl, max: 10 }) : undefined;
-  if (pool) await migrate(pool);
+  if (pool) {
+    // Row-level security keeps workspaces apart only for a role it applies to: refuse to serve people otherwise.
+    const problem = await checkRlsRole(pool);
+    if (problem && process.env.NODE_ENV === 'production') throw new Error(`CI_DATABASE_URL: ${problem}. Use a role without SUPERUSER and BYPASSRLS (docs/DEPLOYMENT.md).`);
+    if (problem) console.warn(`Warning — CI_DATABASE_URL: ${problem}. Fine for a local test, never in production.`);
+    await migrate(pool);
+  }
   const storage = pool ? new PgStorage(pool) : new FileStorage(opts.dataDir);
   /** Resolves when the background work (e.g. the beta job after a join) is done; set below. */
   let settle: () => Promise<void> = async () => undefined;

@@ -41,7 +41,7 @@ Każda pozycja to osobny PR z testami; kolejność według zależności.
 
 | # | Co | Dlaczego w becie | Stan dziś |
 |---|---|---|---|
-| T1 | **Hosting produkcyjny:** obraz z `Dockerfile`, usługa w regionie UE, zarządzany Postgres z odtwarzaniem do punktu w czasie, domena i HTTPS | dane klientów nie mogą leżeć na laptopie | obraz jest, wdrożenia brak |
+| T1 | **Hosting produkcyjny:** obraz z `Dockerfile`, usługa w regionie UE, zarządzany Postgres z odtwarzaniem do punktu w czasie, domena i HTTPS | dane klientów nie mogą leżeć na laptopie | `render.yaml` (Render, Frankfurt), instrukcja i mapa w `DEPLOYMENT.md`; założenie kont i domena — właściciel |
 | T2 | **Aplikacja Atlassian (OAuth 3LO) na domenie produkcyjnej**, logowanie i połączenie Jiry/Confluence per przestrzeń | każdy zespół łączy własną witrynę | kod jest (#104, OAuth Atlassian), rejestracja aplikacji na produkcji brak |
 | T3 | **Figma per przestrzeń:** token Figmy zapisany zaszyfrowany w przestrzeni (albo OAuth Figmy) zamiast `FIGMA_TOKEN` serwera | dziś jeden token na instalację — nie do przyjęcia przy kilku klientach | brak |
 | T4 | **AI z limitem per przestrzeń:** klucz platformy (Anthropic albo Bedrock w UE), licznik zużycia z telemetrii (#91) i twardy limit miesięczny; po przekroczeniu analiza bez AI | koszt AI to główny koszt zmienny | telemetria jest, limitu brak |
@@ -50,7 +50,7 @@ Każda pozycja to osobny PR z testami; kolejność według zależności.
 | T7 | **Usunięcie danych klienta na żądanie:** usunięcie przestrzeni z kasowaniem (dziś archiwizacja) i odłączenie OAuth | wymóg RODO i DPA | archiwizacja jest, kasowania brak |
 | T8 | **Pomiar użycia (§8):** zdarzenia wysyłane przez serwer (bez treści) do własnego logu i do PostHog, wyłącznik zespołu, ankiety w aplikacji, raport miar dla operatora | miary z §1 | zrobione (§8, „Zrobione”); ankiety w T10 |
 | T9 | **Przegląd bezpieczeństwa przed startem:** skan zależności, przegląd tras bez uwierzytelnienia, prosty test DAST (np. OWASP ZAP) na środowisku testowym | minimum przed prawdziwymi danymi | skan zależności w CI jest |
-| T10 | **Zapisy i uczestnictwo w becie ([`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md)):** formularz zgłoszenia, zatwierdzenie przez operatora, jednorazowe zaproszenie tworzące przestrzeń, okres bety z datą końca, ankiety w aplikacji z terminami, codzienne zadanie (przypomnienia, wstrzymanie, koniec bety), panel operatora | zapis, ankiety i czas bety bez ręcznego pilnowania | zaproszenia do istniejącej przestrzeni są (`accounts.ts`), reszty brak |
+| T10 | **Zapisy i uczestnictwo w becie ([`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md)):** formularz zgłoszenia, zatwierdzenie przez operatora, jednorazowe zaproszenie tworzące przestrzeń, okres bety z datą końca, ankiety w aplikacji z terminami, codzienne zadanie (przypomnienia, wstrzymanie, koniec bety), panel operatora | zapis, ankiety i czas bety bez ręcznego pilnowania | zrobione (#114–#117, #121–#124) |
 
 Świadomie odkładamy krok 5 z `SAAS.md` (kolejka i workery): przy 3–5 zespołach jeden serwer wystarcza, a analiza
 w procesie serwera jest już kolejkowana. Wracamy do tego, gdy analiza jednego zespołu zacznie blokować innych
