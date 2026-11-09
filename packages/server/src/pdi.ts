@@ -59,6 +59,8 @@ export class PdiLink {
   private readonly publicUrl?: string;
   private readonly timeoutMs: number;
   private delivering?: Promise<void>;
+  /** One more run, for whoever calls deliver while a run is in flight: it starts after that run and sees what they queued. */
+  private redelivering?: Promise<void>;
   /** Queueing scheduled after analyses, in order; delivery waits for it. */
   private pending: Promise<unknown> = Promise.resolve();
 
@@ -178,8 +180,20 @@ export class PdiLink {
    * queued without an attempt, and no request outlasts the budget.
    */
   deliver(opts: { budgetMs?: number } = {}): Promise<void> {
-    this.delivering ??= this.deliverDue(opts.budgetMs === undefined ? Infinity : Date.now() + opts.budgetMs).finally(() => (this.delivering = undefined));
-    return this.delivering;
+    const deadline = opts.budgetMs === undefined ? Infinity : Date.now() + opts.budgetMs;
+    if (!this.delivering) {
+      this.delivering = this.deliverDue(deadline).finally(() => (this.delivering = undefined));
+      return this.delivering;
+    }
+    // A run in flight waited only for the queueing scheduled before it began; what the caller scheduled since (e.g. the
+    // readiness after a later analysis) would wait for the next timer. So callers during a run share one run after it.
+    this.redelivering ??= this.delivering
+      .catch(() => undefined)
+      .then(() => {
+        this.redelivering = undefined;
+        return this.deliver({ budgetMs: deadline === Infinity ? undefined : Math.max(0, deadline - Date.now()) });
+      });
+    return this.redelivering;
   }
 
   private async deliverDue(deadline: number) {

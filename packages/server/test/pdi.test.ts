@@ -171,13 +171,14 @@ describe('without pdi configured', () => {
   });
 });
 
+const change = (id: string, readiness: ChangeReadiness['readiness']): ChangeReadiness => ({ change: id, readiness, openQuestions: 0, items: [] });
+const link = async (f: typeof fetch, opts: Partial<PdiOptions> = {}) => {
+  const store = new Store(mkdtempSync(join(tmpdir(), 'ci-pdi-cli-')));
+  await store.init();
+  return { store, pdi: new PdiLink(store, { eventsUrl: 'https://pdi.example.com', secret: SECRET, fetch: f, ...opts }, {}) };
+};
+
 describe('bounded delivery for the CLI gate (L3, docs/PDI-L3-PLAN.md)', () => {
-  const change = (id: string, readiness: ChangeReadiness['readiness']): ChangeReadiness => ({ change: id, readiness, openQuestions: 0, items: [] });
-  const link = async (f: typeof fetch, opts: Partial<PdiOptions> = {}) => {
-    const store = new Store(mkdtempSync(join(tmpdir(), 'ci-pdi-cli-')));
-    await store.init();
-    return { store, pdi: new PdiLink(store, { eventsUrl: 'https://pdi.example.com', secret: SECRET, fetch: f, ...opts }, {}) };
-  };
 
   it('enqueue returns the events it queued, none when the readiness did not change', async () => {
     const { pdi } = await link(fakeFetch as typeof fetch);
@@ -201,5 +202,28 @@ describe('bounded delivery for the CLI gate (L3, docs/PDI-L3-PLAN.md)', () => {
     const outbox = await store.pdiOutbox();
     expect(outbox.map((e) => [e.event.payload.change, e.attempts])).toEqual([['CHG-1', 1], ['CHG-2', 1], ['CHG-3', 0]]);
     expect(outbox[0]?.lastError).toMatch(/^pdi unreachable: /);
+  });
+});
+
+describe('delivery while a delivery is in flight', () => {
+  it('sends what was scheduled during a run: the caller waits for a run after it, not the one in flight', async () => {
+    const sent: string[] = [];
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const slow = (async (_url: string, init?: { body?: string }) => {
+      const e = JSON.parse(String(init?.body));
+      if (!sent.length) await held;
+      sent.push(`${e.payload.change}:${e.payload.readiness}`);
+      return new Response('{}', { status: 202 });
+    }) as unknown as typeof fetch;
+    const { pdi } = await link(slow);
+    pdi.schedule(() => pdi.enqueue([change('CHG-12', 'ready')]));
+    const first = pdi.deliver();
+    await new Promise((r) => setTimeout(r, 20)); // the first send is now held
+    pdi.schedule(() => pdi.enqueue([change('CHG-12', 'not_ready')]));
+    const second = pdi.deliver();
+    release();
+    await Promise.all([first, second]);
+    expect(sent).toEqual(['CHG-12:ready', 'CHG-12:not_ready']);
   });
 });
