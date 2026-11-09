@@ -71,6 +71,7 @@ Ceny z cennika Render (render.com/pricing), 2026-11-09, netto; PLN po ok. 3,70 z
    | `CI_BOOTSTRAP_EMAIL`, `CI_OPERATOR_EMAILS` | e-mail Twojego konta Atlassian |
    | `RESEND_API_KEY`, `CI_MAIL_FROM` | z kroku 5; do tego czasu mogą być puste (maile tylko w logu) |
    | `POSTHOG_API_KEY` | opcjonalnie; puste = pomiar tylko we własnym logu |
+   | `CI_AI_MODEL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | AI platformy (Bedrock, UE): [`AI-PLATFORM.md`](AI-PLATFORM.md); do tego czasu `todo` — analizy działają, AI zgłasza błąd |
 
 4. **Apply.** Pierwsze wdrożenie trwa kilka minut. Gotowe, gdy usługa ma status *Live*, a
    `https://quorum-….onrender.com/api/health` (adres z panelu) zwraca `"ok":true` i `"storage":"postgres"`.
@@ -130,7 +131,7 @@ Do odhaczenia przy pierwszym wdrożeniu (i w przeglądzie T9):
 | Domena | `<domena>` _do uzupełnienia_; rejestrator: _do uzupełnienia_; rekord: CNAME → adres techniczny |
 | Baza | `quorum-db`, Render Postgres 17, plan `0.1c-256mb`, dysk 5 GB, Frankfurt, bez dostępu z internetu |
 | Kopie bazy | odtwarzanie do punktu w czasie: 3 dni (Hobby); kopia poza Render: `quorum-backup` codziennie 02:17 UTC → Backblaze B2 EU Central, bucket _do uzupełnienia_ ([`BACKUPS.md`](BACKUPS.md)) |
-| Sekrety (tylko nazwy) | `CI_ENCRYPTION_KEY`, `CI_ADMIN_TOKEN`, `CI_USAGE_SECRET` (wygenerowane przez Render, kopie w menedżerze haseł), `ATLASSIAN_CLIENT_SECRET`, `RESEND_API_KEY`, `POSTHOG_API_KEY`; kopie: `BACKUP_ENCRYPTION_KEY`, `B2_KEY_ID`, `B2_APPLICATION_KEY` (w Render i w menedżerze haseł) |
+| Sekrety (tylko nazwy) | `CI_ENCRYPTION_KEY`, `CI_ADMIN_TOKEN`, `CI_USAGE_SECRET` (wygenerowane przez Render, kopie w menedżerze haseł), `ATLASSIAN_CLIENT_SECRET`, `RESEND_API_KEY`, `POSTHOG_API_KEY`; AI: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` ([`AI-PLATFORM.md`](AI-PLATFORM.md)); kopie: `BACKUP_ENCRYPTION_KEY`, `B2_KEY_ID`, `B2_APPLICATION_KEY` (w Render i w menedżerze haseł) |
 | Osoby z dostępem do Render | _do uzupełnienia_ |
 | Aplikacja Atlassian (konsola, właściciel) | _do uzupełnienia_ |
 | Resend (domena nadawcy) | _do uzupełnienia_ |

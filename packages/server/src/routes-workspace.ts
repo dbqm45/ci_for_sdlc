@@ -3,6 +3,7 @@ import { AUTO_CLOSE_DECISION_TYPE, acceptanceStats, autoCloseDecision, DEMO_SCEN
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { ConnectError, stateCookie, type ConnectConfig } from './connections.js';
 import { proposalEvent, recordAutoClose } from './auto-close.js';
+import { effectiveAi } from './ai-budget.js';
 import type { Engine } from './engine.js';
 import { actorOf, httpError } from './http.js';
 import { MUTATION, answerActionBody, answerParams, approveBody, atlassianSiteBody, decisionBody, errors, idParams, impactQuery, itemKeyParams, settingsBody, withdrawBody } from './schemas.js';
@@ -32,6 +33,25 @@ const APPROVABLE = new Set(['story', 'bug']);
 
 /** The analysis of a workspace, run once if there is none yet. */
 export const ensure = async (engine: Engine): Promise<AnalysisResult> => engine.state.result ?? (await engine.analyze('initial'));
+
+/**
+ * The platform's AI as a workspace sees it (T4): who sets the provider and model, and this month's spend against the
+ * limit. Absent when the workspace chooses its own AI.
+ */
+export function aiPlatformView(engine: Engine) {
+  const p = engine.aiPlatform;
+  if (!p?.config) return {};
+  const { provider, model, effort } = p.config.provider;
+  const b = p.budget?.status(p.workspace);
+  return {
+    aiPlatform: {
+      provider,
+      model,
+      ...(effort && { effort }),
+      ...(b && { budget: { month: b.month, ...(b.limitUsd !== undefined && { limitUsd: b.limitUsd }), spentUsd: b.spentUsd, exhausted: b.exhausted, unpricedCalls: b.unpricedCalls } }),
+    },
+  };
+}
 
 /** Who acted and how they were authorized, for audit entries. */
 export const who = (req: FastifyRequest, body?: { by?: string; decidedBy?: string } | null) => ({ actor: actorOf(req, body), via: req.principal ?? undefined });
@@ -100,7 +120,7 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
   app.post<{ Params: { key: string } }>('/items/:key/ai-review', { schema: { params: itemKeyParams, response: errors(400, 422), ...MUTATION } }, async (req) => {
     const { store, engine } = of(req);
     const s = await store.settings();
-    if (s.ai.provider === 'none') throw httpError(400, 'No AI provider configured. Choose one in Settings → AI Provider.');
+    if (effectiveAi(s.ai, engine.aiPlatform?.config).provider === 'none') throw httpError(400, 'No AI provider configured. Choose one in Settings → AI Provider.');
     const result = await engine.analyze(`AI review of ${req.params.key}`, { aiKeys: [req.params.key] });
     return { item: result.items.find((i) => i.key === req.params.key), errors: result.ai.errors };
   });
@@ -292,7 +312,7 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
 
   // ------------------------------------------------------------------ settings
   app.get('/settings', async (req, reply) => {
-    const { store, atlassian } = of(req);
+    const { store, atlassian, engine } = of(req);
     const s = await store.settings();
     reply.header('etag', etagOf(s));
     return {
@@ -312,6 +332,7 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
       },
       connectMode: connect.mode,
       defaultModels: DEFAULT_MODELS,
+      ...aiPlatformView(engine),
     };
   });
 

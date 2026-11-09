@@ -3927,6 +3927,125 @@
         }
       }
     },
+    "/api/ai-budget": {
+      "get": {
+        "summary": "The platform's AI and every workspace's spend this month against its limit (operator)",
+        "responses": {
+          "403": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ai-budget/{ws}": {
+      "put": {
+        "summary": "Change a workspace's monthly AI limit; it applies to the next call (operator)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "limitUsd"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "limitUsd": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "object",
+                        "nullable": true,
+                        "enum": [
+                          null
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "default"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+            },
+            "in": "path",
+            "name": "ws",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/beta": {
       "get": {
         "summary": "Whether teams may apply for the beta, and for how long it runs (public)",

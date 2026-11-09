@@ -67,6 +67,22 @@ services:
       # Optional: usage measurement also to PostHog EU (docs/BETA-PLAN.md §8).
       - key: POSTHOG_API_KEY
         sync: false
+      # The platform's AI (T4, docs/AI-PLATFORM.md): Claude on Amazon Bedrock in the EU for every workspace, with a
+      # monthly limit per workspace that the operator changes on #/operator. Workspaces cannot pick another provider.
+      - key: CI_AI_PROVIDER
+        value: bedrock
+      - key: CI_AI_REGION
+        value: eu-central-1
+      # The Bedrock model or EU inference profile id, as the Bedrock console shows it (docs/AI-PLATFORM.md, step 2).
+      - key: CI_AI_MODEL
+        sync: false
+      - key: CI_AI_MONTHLY_LIMIT_USD
+        value: "50"
+      # An IAM user allowed only bedrock:InvokeModel on that model (docs/AI-PLATFORM.md, step 1).
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
 
   # T5 (docs/BACKUPS.md): a daily backup outside Render, to Backblaze B2 (EU Central, Amsterdam), locked in
   # compliance mode. Same image as the app; the backup reads each workspace under its own row-level security scope

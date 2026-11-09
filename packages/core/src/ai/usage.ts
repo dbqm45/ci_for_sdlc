@@ -1,7 +1,9 @@
 /**
  * Telemetry of AI calls (docs/AI-QUALITY-PLAN.md, step 1): tokens, cost and time of every call that reached a model.
  * Default prices are the Anthropic API rates (USD per million tokens) as listed on 2026-10-06; a cache write is
- * priced at 1.25 × input (5-minute TTL). Bedrock, Vertex and OpenAI-compatible providers have other or unknown
+ * priced at 1.25 × input (5-minute TTL). Claude on Bedrock (`anthropic.<model>` or an inference profile such as
+ * `eu.anthropic.<model>-v1:0`) is priced at the same list rates — an estimate: check AWS's Bedrock pricing for the
+ * region and set an organization rate when it differs. Vertex and OpenAI-compatible providers have other or unknown
  * rates: without an organization rate their cost is unknown, never zero.
  */
 
@@ -34,8 +36,20 @@ const ANTHROPIC_PRICES: Record<string, AiPrice> = {
   'claude-haiku-5-5': claude(0.1, 0.5, 0.01),
 };
 
+/** The Claude model behind a Bedrock model id or inference profile, e.g. `eu.anthropic.claude-sonnet-5-5-v1:0`. */
+export function bedrockClaudeModel(model: string): string | undefined {
+  return /^(?:[a-z]+\.)?anthropic\.(claude-[a-z0-9-]+?)(?:-\d{8})?(?:-v\d+(?::\d+)?)?$/.exec(model)?.[1];
+}
+
 export function priceOf(provider: string, model: string, own: AiPrices = {}): AiPrice | undefined {
-  return own[`${provider}/${model}`] ?? (provider === 'anthropic' ? ANTHROPIC_PRICES[model] : undefined);
+  const mine = own[`${provider}/${model}`];
+  if (mine) return mine;
+  if (provider === 'anthropic') return ANTHROPIC_PRICES[model];
+  if (provider === 'bedrock') {
+    const base = bedrockClaudeModel(model);
+    return base ? ANTHROPIC_PRICES[base] : undefined;
+  }
+  return undefined;
 }
 
 export function aiCallCost(usage: AiUsage, price: AiPrice | undefined): number | undefined {

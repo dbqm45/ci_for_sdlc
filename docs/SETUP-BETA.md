@@ -25,6 +25,9 @@ Sekrety (oznaczone 🔒) trzymaj tylko w zmiennych środowiskowych platformy alb
 | `CI_ALLOWED_HOSTS` | `<domena>` | nagłówek `Host` spoza `localhost` (ochrona przed DNS rebinding) |
 | `HOST` | `0.0.0.0` | nasłuch poza loopbackiem (w kontenerze) |
 | `CI_ADMIN_TOKEN` 🔒 | długi losowy ciąg | maszyny (CLI, MCP, pdi); z tokenem administratora też widać panel operatora przez API |
+| `CI_AI_PROVIDER`, `CI_AI_MODEL`, `CI_AI_REGION` | `bedrock`, id modelu z konsoli Bedrock, `eu-central-1` | AI platformy dla każdej przestrzeni; zespół nie wybiera dostawcy ([`AI-PLATFORM.md`](AI-PLATFORM.md)) |
+| `CI_AI_MONTHLY_LIMIT_USD` | `50` | domyślny limit AI na przestrzeń i miesiąc; operator zmienia go dla przestrzeni na `#/operator` |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` 🔒 | użytkownik IAM tylko z `bedrock:InvokeModel` | dostęp do Bedrocka |
 
 Opcjonalne:
 
