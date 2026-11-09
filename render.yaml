@@ -68,6 +68,41 @@ services:
       - key: POSTHOG_API_KEY
         sync: false
 
+  # T5 (docs/BACKUPS.md): a daily backup outside Render, to Backblaze B2 (EU Central, Amsterdam), locked in
+  # compliance mode. Same image as the app; the backup reads each workspace under its own row-level security scope
+  # with the app's role and seals the export with BACKUP_ENCRYPTION_KEY. A failed run makes Render notify.
+  - type: cron
+    name: quorum-backup
+    runtime: docker
+    region: frankfurt
+    plan: 0.5c-512mb
+    # Every day at 02:17 UTC.
+    schedule: "17 2 * * *"
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node --import tsx packages/server/src/backup-cli.ts
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CI_DATABASE_URL
+        fromDatabase:
+          name: quorum-db
+          property: connectionString
+      # Created by you (openssl rand -hex 32) and kept in the password manager first: without it no backup opens.
+      - key: BACKUP_ENCRYPTION_KEY
+        sync: false
+      # From Backblaze B2: the bucket's endpoint (https://s3.eu-central-003.backblazeb2.com), its name and an
+      # application key limited to that bucket.
+      - key: B2_ENDPOINT
+        sync: false
+      - key: B2_BUCKET
+        sync: false
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APPLICATION_KEY
+        sync: false
+
 databases:
   - name: quorum-db
     databaseName: quorum

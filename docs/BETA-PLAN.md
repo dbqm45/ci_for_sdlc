@@ -48,7 +48,7 @@ Każda pozycja to osobny PR z testami; kolejność według zależności.
 | T2 | **Aplikacja Atlassian (OAuth 3LO) na domenie produkcyjnej**, logowanie i połączenie Jiry/Confluence per przestrzeń | każdy zespół łączy własną witrynę | kod jest (#104, OAuth Atlassian), rejestracja aplikacji na produkcji brak |
 | T3 | **Figma per przestrzeń:** token Figmy zapisany zaszyfrowany w przestrzeni (albo OAuth Figmy) zamiast `FIGMA_TOKEN` serwera | dziś jeden token na instalację — nie do przyjęcia przy kilku klientach | brak |
 | T4 | **AI z limitem per przestrzeń:** klucz platformy (Anthropic albo Bedrock w UE), licznik zużycia z telemetrii (#91) i twardy limit miesięczny; po przekroczeniu analiza bez AI | koszt AI to główny koszt zmienny | telemetria jest, limitu brak |
-| T5 | **Kopie i odtwarzanie:** dzienna kopia bazy poza dostawcą hostingu, próba odtworzenia przed startem i raz w becie | utrata decyzji klienta zabija zaufanie | brak |
+| T5 | **Kopie i odtwarzanie:** dzienna kopia bazy poza dostawcą hostingu, próba odtworzenia przed startem i raz w becie | utrata decyzji klienta zabija zaufanie | zrobione w kodzie: zadanie `quorum-backup` do Backblaze B2 (UE) i `restore-check` ([`BACKUPS.md`](BACKUPS.md)); konfiguracja B2 i pierwsza próba odtworzenia — właściciel |
 | T6 | **Monitoring i alerty:** `/api/health` w zewnętrznym monitorze, logi błędów z alertem, panel zużycia AI | dowiadujemy się o awarii przed klientem | health jest |
 | T7 | **Usunięcie danych klienta na żądanie:** usunięcie przestrzeni z kasowaniem (dziś archiwizacja) i odłączenie OAuth | wymóg RODO i DPA | archiwizacja jest, kasowania brak |
 | T8 | **Pomiar użycia (§8):** zdarzenia wysyłane przez serwer (bez treści) do własnego logu i do PostHog, wyłącznik zespołu, ankiety w aplikacji, raport miar dla operatora | miary z §1 | zrobione (§8, „Zrobione”); ankiety w T10 |
@@ -62,7 +62,7 @@ w procesie serwera jest już kolejkowana. Wracamy do tego, gdy analiza jednego z
 ## 5. Prawo i zaufanie (minimum)
 - Podmiot, który zawiera umowy (działalność lub spółka) — decyzja właściciela, z doradcą.
 - Regulamin bety, polityka prywatności, **umowa powierzenia (DPA)** z listą podprzetwarzających (hosting, baza,
-  dostawca AI, poczta) i regionem danych.
+  kopie bazy — Backblaze B2, dostawca AI, poczta) i regionem danych.
 - Jasna informacja, co trafia do modelu AI (treść historyjek i stron, przycięta przez `maxCharsPerSource`, z
   `redactPersonalData`) i że dostawca AI nie trenuje na danych (sprawdzić w aktualnych warunkach dostawcy).
 - Kontakt w sprawie incydentu i czas reakcji (np. odpowiedź w 1 dzień roboczy).

@@ -7,6 +7,9 @@ import type { ActiveDecision } from '@ci/core';
 import { buildApp } from '../src/app.js';
 import { PgBackend, migrate, MIGRATIONS } from '../src/backend.js';
 import { importFiles } from '../src/db-import.js';
+import { exportStorage, sealBackup } from '../src/backup.js';
+import { runRestoreCheck } from '../src/backup-run.js';
+import { PgStorage } from '../src/workspaces.js';
 
 // F5 (docs/WORKSPACES-F5-PLAN.md, "Postgres"): with CI_DATABASE_URL the workspaces live in Postgres, as JSON
 // documents and logs kept apart by row-level security. Runs against a real database: set CI_TEST_DATABASE_URL to a
@@ -137,5 +140,27 @@ describe.skipIf(!url)('Postgres storage', () => {
     } finally {
       delete process.env.CI_ENCRYPTION_KEY;
     }
+  });
+
+  it('PG-07: the backup (T5) reads every listed space under its own scope with the app role, and restores into an empty database', async () => {
+    const storage = new PgStorage(pool);
+    await storage.backend('default').write('workspaces.json', [{ id: 'mobile', name: 'Mobile', createdAt: '2026-11-01T00:00:00.000Z' }]);
+    await storage.backend('default').append('audit', { summary: 'default' });
+    await storage.backend('_platform').write('beta-enrollments.json', [{ id: 'e1', status: 'active' }]);
+    await storage.backend('mobile').write('settings.json', { project: { key: 'MOB', name: 'Mobile', nested: { b: 1, a: 2 } } });
+    await storage.backend('mobile').append('audit', { summary: 'mobile' });
+    await storage.archive('old', '2026-11-02T00:00:00.000Z');
+    // Without a scope the role sees nothing, which is why a pg_dump with it would back up empty tables.
+    expect((await pool.query('select count(*)::int as n from ci_documents')).rows[0].n).toBe(0);
+
+    const backup = await exportStorage(storage, new Date('2026-11-09T03:17:00Z'));
+    expect(backup.spaces.map((s) => s.id)).toEqual(['default', '_platform', 'mobile']);
+    const sealed = sealBackup(backup, 'dummy-backup-key-0123456789abcdef0123456789');
+
+    await expect(runRestoreCheck({ storage, sealed, secret: 'dummy-backup-key-0123456789abcdef0123456789' })).rejects.toThrow(/already has data/);
+    await pool.query('truncate ci_documents, ci_log_entries');
+    const r = await runRestoreCheck({ storage, sealed, secret: 'dummy-backup-key-0123456789abcdef0123456789' });
+    expect(r.summary).toEqual({ spaces: 3, documents: 3, entries: 2 });
+    expect(await storage.backend('mobile').read('settings.json')).toEqual({ project: { key: 'MOB', name: 'Mobile', nested: { a: 2, b: 1 } } });
   });
 });

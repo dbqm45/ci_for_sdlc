@@ -6,9 +6,10 @@ import { parse } from 'yaml';
 // The Render Blueprint (render.yaml, docs/DEPLOYMENT.md): the promises the deployment makes about where data lives
 // and how secrets are handled, checked so an edit cannot quietly break them.
 const blueprint = parse(readFileSync(new URL('../../render.yaml', import.meta.url), 'utf8'));
-const [web] = blueprint.services;
+const [web, backup] = blueprint.services;
 const [db] = blueprint.databases;
 const env = Object.fromEntries(web.envVars.map((e) => [e.key, e]));
+const backupEnv = Object.fromEntries(backup.envVars.map((e) => [e.key, e]));
 
 describe('render.yaml', () => {
   it('RB-01: the service and its database are in the EU, the database without an address on the internet', () => {
@@ -43,9 +44,22 @@ describe('render.yaml', () => {
 
   it('RB-04: no secret has a value in the file: Render asks for it or generates it', () => {
     const secret = /KEY|SECRET|TOKEN|PASSWORD/;
-    for (const e of web.envVars.filter((x) => secret.test(x.key))) {
+    for (const e of [...web.envVars, ...backup.envVars].filter((x) => secret.test(x.key))) {
       assert.ok(e.sync === false || e.generateValue === true || e.fromDatabase, `${e.key} must not have a value in render.yaml`);
       assert.equal(e.value, undefined, `${e.key} has a value`);
     }
+  });
+
+  it('RB-06: the daily backup (T5) runs in the EU from the same image, on the same database, after the checks pass', () => {
+    assert.equal(backup.type, 'cron');
+    assert.equal(backup.name, 'quorum-backup');
+    assert.equal(backup.region, 'frankfurt');
+    assert.match(backup.plan, /^\d+(\.\d+)?c-\d+(mb|g)$/);
+    assert.match(backup.schedule, /^\d+ \d+ \* \* \*$/);
+    assert.equal(backup.dockerfilePath, web.dockerfilePath);
+    assert.equal(backup.dockerCommand, 'node --import tsx packages/server/src/backup-cli.ts');
+    assert.equal(backup.autoDeployTrigger, 'checksPass');
+    assert.equal(backupEnv.CI_DATABASE_URL.fromDatabase.name, db.name);
+    for (const k of ['BACKUP_ENCRYPTION_KEY', 'B2_ENDPOINT', 'B2_BUCKET', 'B2_KEY_ID', 'B2_APPLICATION_KEY']) assert.equal(backupEnv[k]?.sync, false, k);
   });
 });
