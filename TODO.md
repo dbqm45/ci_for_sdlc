@@ -7,21 +7,15 @@
       danych, raport użycia, przegląd bezpieczeństwa), potem 3–5 zespołów przez ok. 12 tygodni. Czeka na decyzje
       właściciela z §10 planu. T10 (zapisy, ankiety, wstrzymanie, maile) zrobione (#114–#117); uruchomienie na
       serwerze: [`docs/SETUP-BETA.md`](docs/SETUP-BETA.md).
-- [ ] **Lokalny przebieg całej bety przed pierwszym zespołem** (właściciel, 2026-11-09). Cel: obejrzeć i sprawdzić
-      cały flow tak, jak zobaczą go zespół i operator, zanim trafi do ludzi, i zebrać poprawki. Do zrobienia:
-      - tryb lokalny bez prawdziwego Atlassiana i Resend, np. `npm run local -- --beta`: serwer w trybie `accounts`
-        z fałszywym logowaniem (wybór osoby z listy: operator, Owner zespołu, członek zespołu), skrzynka pocztowa
-        w aplikacji albo w Mailpit zamiast Resend (podgląd treści każdego maila) i przesuwany zegar (np. przycisk
-        „+1 dzień” albo `CI_FAKE_NOW`), żeby zobaczyć przypomnienia, wstrzymanie i koniec bety bez czekania tygodni;
-        tylko na loopbacku, nigdy na produkcji;
-      - scenariusz do przejścia ręcznie (lista kroków z oczekiwanym wynikiem): zgłoszenie przez `#/beta` → mail
-        potwierdzenia i mail do operatora → *Approve* na `#/operator` → mail z zaproszeniem → logowanie Ownera →
-        ankieta wejściowa i odblokowanie analizy → zaproszenie członka → ankieta dwutygodniowa → zaległa ankieta,
-        ostrzeżenie, wstrzymanie i wznowienie → łaska i przedłużenie operatora → koniec bety i ankieta końcowa →
-        pobranie odpowiedzi (JSON);
-      - test e2e (Playwright) tego samego scenariusza na trybie lokalnym, żeby flow nie zepsuł się po cichu;
-      - z przejścia: lista poprawek tekstów (UI, maile, pytania ankiet) i zachowań do zrobienia przed pierwszym
-        zespołem.
+- [x] **Lokalny przebieg całej bety** — `npm run local -- --beta` (logowanie dowolną osobą, skrzynka maili
+      w aplikacji, przesuwany zegar), scenariusz ręczny i test e2e `npm run test:e2e:beta-local`:
+      [`docs/BETA-LOCAL.md`](docs/BETA-LOCAL.md). Pierwsze przejście: 5 błędów poprawionych od razu, reszta niżej.
+- [ ] **Poprawki bety z lokalnego przejścia** (`docs/BETA-LOCAL.md` §4), przed pierwszym zespołem:
+      - przestrzeń zespołu startuje z danymi demo („Checkout”): baner „Sample data — connect your Jira” i krok
+        „Połącz Jirę” zaraz po ankiecie wejściowej;
+      - link „Apply for the beta” na ekranie logowania, gdy zgłoszenia są otwarte;
+      - *Usage*: „Findings without a reaction” jako liczba („12 of 12”) albo „—” bez decyzji, zamiast 100%;
+      - drobne: przegląd po wysłaniu ankiety otwiera się przewinięty; 401 z `/api/workspaces` przed zalogowaniem.
 - [ ] **`CI_TRUST_PROXY` dla limitu zgłoszeń do bety** (przy hostingu, T1): Fastify bez `trustProxy` widzi za load
       balancerem adres proxy, więc limit 5 zgłoszeń na godzinę na adres działa na całą instalację
       (`docs/SETUP-BETA.md` §4).

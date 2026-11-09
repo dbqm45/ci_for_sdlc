@@ -10,6 +10,7 @@ import { SURVEYS } from './beta-surveys.js';
 import { betaMails, runBetaJob } from './beta-job.js';
 import { PAUSE_AFTER_DAYS } from './beta-lifecycle.js';
 import { mailerFromEnv, type Mailer } from './mailer.js';
+import { LOCAL_PEOPLE, MemoryMailer, localBetaMode, shiftedClock } from './beta-local.js';
 import { PostHogSink, Usage, triggerOf, usageReport, type UsageEventName, type UsageSink } from './usage.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
@@ -59,6 +60,8 @@ export interface AppOptions {
   mailer?: Mailer;
   /** Where usage events go besides our own log (T8); default PostHog with POSTHOG_API_KEY, else none. */
   usageSink?: UsageSink;
+  /** The local beta walkthrough (docs/BETA-LOCAL.md); default CI_BETA_LOCAL=1. Only on loopback outside production. */
+  betaLocal?: boolean;
 }
 
 /** A workspace's part of the pdi changes: its analysis and the changes of its stories. */
@@ -72,10 +75,15 @@ interface ChangePart {
  * The server. `engine` and `store` are those of the `default` workspace (F5, docs/WORKSPACES-F5-PLAN.md); the others
  * are in `workspaces`.
  */
-export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts; betaJob: (now?: number) => Promise<void>; usage: Usage }> {
+export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts; betaJob: (now?: number) => Promise<void>; usage: Usage; settle: () => Promise<void> }> {
   const authMode = opts.authMode ?? process.env.CI_AUTH_MODE ?? 'token';
   if (authMode !== 'token' && authMode !== 'accounts') throw new Error(`CI_AUTH_MODE must be "token" or "accounts", not "${authMode}".`);
   const connect = opts.connect ?? connectConfigFromEnv();
+  // The local beta walkthrough: fake login, in-app mailbox, a clock that moves forward. Refused off loopback.
+  const local = localBetaMode({ ...process.env, ...(opts.betaLocal !== undefined && { CI_BETA_LOCAL: opts.betaLocal ? '1' : '0' }) }, { publicUrl: connect.publicUrl, authMode });
+  if (local.refused) throw new Error(local.refused);
+  const clock = local.enabled ? shiftedClock() : undefined;
+  const localMail = local.enabled && !opts.mailer ? new MemoryMailer() : undefined;
   // Strict bodies: unknown properties and wrong types are rejected, not silently dropped or coerced.
   const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } } });
   let pdi!: PdiLink;
@@ -94,6 +102,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const pool = databaseUrl ? new pg.Pool({ connectionString: databaseUrl, max: 10 }) : undefined;
   if (pool) await migrate(pool);
   const storage = pool ? new PgStorage(pool) : new FileStorage(opts.dataDir);
+  /** Resolves when the background work (e.g. the beta job after a join) is done; set below. */
+  let settle: () => Promise<void> = async () => undefined;
   /** Usage measurement after each analysis (T8); set once the beta and the accounts are known. */
   let afterAnalysis: ((w: Workspace) => Promise<void>) | undefined;
   const workspaces = new Workspaces(storage, connect, async (w) => {
@@ -133,6 +143,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     clientSecret: connect.atlassian.clientSecret,
     bootstrapEmail: opts.bootstrapEmail ?? (process.env.CI_BOOTSTRAP_EMAIL || undefined),
     operatorEmails: opts.operatorEmails ?? (process.env.CI_OPERATOR_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean),
+    sessionsNeverExpire: local.enabled,
   });
   if (accounts.enabled) await accounts.init();
 
@@ -154,7 +165,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   if (usage.cfg.enabled) await usage.init();
   const usageTimer = usage.cfg.sink ? setInterval(() => void usage.flush(), 30_000) : undefined;
   usageTimer?.unref();
-  const mailer = opts.mailer ?? mailerFromEnv((o, msg) => app.log.info(o, msg));
+  const mailer = opts.mailer ?? localMail ?? mailerFromEnv((o, msg) => app.log.info(o, msg));
   const operatorEmails = opts.operatorEmails ?? (process.env.CI_OPERATOR_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean);
   /** A beta mail that must not fail the request: a failure is logged (the job retries its own mails). */
   const mailNow = (m: Parameters<Mailer['send']>[0]) => void mailer.send(m).catch((err) => app.log.warn({ err: String(err), subject: m.subject }, 'beta mail failed'));
@@ -270,6 +281,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const guard: GuardConfig = { adminToken: opts.adminToken ?? env.adminToken, readToken: opts.readToken ?? env.readToken, allowedHosts: opts.allowedHosts ?? env.allowedHosts, allowedOrigins: opts.allowedOrigins ?? env.allowedOrigins,
     mode: authMode,
     session: (req) => accounts.session(cookieValue(req.headers.cookie, SESSION_COOKIE)),
+    devOpen: local.enabled,
   };
 
   await app.register(fastifySwagger, {
@@ -292,7 +304,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   /** A beta team analyses and connects Atlassian only after its entry survey, the baseline (docs/BETA-ENROLLMENT-PLAN.md). */
   const ENTRY_SURVEY_GATED = /^\/api(?:\/w\/[^/]+)?\/(?:analyze|items\/[^/]+\/ai-review|connections\/atlassian\/start)$/;
   /** A paused or ended beta team reads and answers surveys, nothing else changes (docs/BETA-ENROLLMENT-PLAN.md). */
-  const STILL_ALLOWED = /^\/api\/(?:beta|auth)\//;
+  const STILL_ALLOWED = /^\/api\/(?:beta|auth|dev)\//;
   app.addHook('preHandler', async (req) => {
     if (!req.account || req.method === 'GET' || req.method === 'HEAD') return;
     const path = req.url.split('?')[0]!;
@@ -407,6 +419,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const loginQuery = { type: 'object', properties: { bootstrap: { type: 'string', maxLength: 200 }, invite: { type: 'string', maxLength: 200 } } } as const;
   app.get<{ Querystring: { bootstrap?: string; invite?: string } }>('/api/auth/login', { schema: { hide: true, querystring: loginQuery } }, async (req, reply) => {
     if (!accounts.enabled) throw httpError(404, 'Login is off: CI_AUTH_MODE is not "accounts".');
+    // Local walkthrough: no Atlassian; the local login page picks the person (an invitation rides along).
+    if (local.enabled) return reply.redirect(`/#/dev/login${req.query.invite ? `?invite=${encodeURIComponent(req.query.invite)}` : ''}`);
     const { url, cookie } = accounts.start({ bootstrap: req.query.bootstrap, invite: req.query.invite });
     reply.header('set-cookie', cookie);
     return reply.redirect(url);
@@ -414,7 +428,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
 
   app.get('/api/auth/me', { schema: { summary: 'The auth mode and the logged-in person with their organization, if any' } }, async (req) => {
     const a = req.account;
-    if (!a) return { mode: authMode, user: null };
+    const localInfo = local.enabled ? { local: { offsetDays: Math.round((clock!.offsetMs / 86_400_000) * 10) / 10, now: new Date().toISOString() } } : {};
+    if (!a) return { mode: authMode, user: null, ...localInfo };
     const org = accounts.org(a.orgId);
     const mine = workspaces.all().filter((w) => visible(req, w));
     return {
@@ -427,6 +442,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
         const e = beta.forOrg(a.orgId);
         return e ? betaView(e, Date.now(), pauseAfterDays) : null;
       })(),
+      ...localInfo,
     };
   });
 
@@ -489,18 +505,78 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     return reply.code(204).send();
   });
 
+  /** Work that must not hold a response but must finish before the server closes. */
+  const background = new Set<Promise<unknown>>();
+  const inBackground = (work: Promise<unknown>) => {
+    const p = work.catch((e) => app.log.error(e)).finally(() => background.delete(p));
+    background.add(p);
+  };
+  settle = async () => {
+    while (background.size) await Promise.allSettled([...background]);
+  };
+  app.addHook('onClose', () => settle());
+
+  /** Someone joined through an invitation: audited; the Owner of an invited beta team starts its beta. */
+  async function afterJoin(joined: { name: string; role: Role; orgId: string } | undefined) {
+    if (!joined) return;
+    const at = new Date().toISOString();
+    await auditOf(joined.orgId).audit({ at, kind: 'member', actor: joined.name, via: 'session', summary: `${joined.name} joined as ${joined.role}` });
+    const started = joined.role === 'owner' ? await beta.joined(joined.orgId, joined.name, at) : undefined;
+    if (started) {
+      await auditOf(joined.orgId).audit({ at, kind: 'member', actor: joined.name, via: 'session', summary: `Beta started; it ends on ${started.endsAt!.slice(0, 10)}` });
+      // The entry survey's mail goes out now, not at the next hourly run (closing the server waits for it).
+      inBackground(betaJob());
+    }
+  }
+
+  // ------------------------------------------------------------------ local beta walkthrough (docs/BETA-LOCAL.md)
+  if (local.enabled) {
+    app.log.warn('CI_BETA_LOCAL=1: fake login, in-app mailbox and a movable clock are on. Never use this mode with real people or data.');
+    app.get('/api/dev/beta', { schema: { hide: true } }, async () => ({
+      people: LOCAL_PEOPLE,
+      offsetDays: Math.round((clock!.offsetMs / 86_400_000) * 10) / 10,
+      now: new Date().toISOString(),
+      mails: localMail ? localMail.mails.length : null,
+    }));
+    const devLoginBody = {
+      type: 'object',
+      required: ['name', 'email'],
+      additionalProperties: false,
+      properties: { name: { type: 'string', minLength: 1, maxLength: 100 }, email: { type: 'string', maxLength: 200, pattern: '^[^\\s@]+@[^\\s@]+$' }, invite: { type: 'string', maxLength: 200 } },
+    } as const;
+    /** Logs in as any person, by the same rules as a real login (invitation, first Owner, known person). */
+    app.post<{ Body: { name: string; email: string; invite?: string } }>('/api/dev/login', { schema: { hide: true, body: devLoginBody } }, async (req, reply) => {
+      const email = req.body.email.trim().toLowerCase();
+      try {
+        const { id, joined } = await accounts.devLogin({ provider: 'atlassian', subject: `local:${email}`, name: req.body.name.trim(), email }, { invite: req.body.invite });
+        await afterJoin(joined);
+        reply.header('set-cookie', accounts.sessionCookie(id));
+        return { ok: true };
+      } catch (e) {
+        if (e instanceof ConnectError) throw httpError(403, e.message);
+        throw e;
+      }
+    });
+    app.get('/api/dev/mails', { schema: { hide: true } }, async () => localMail?.mails ?? []);
+    /** Moves the clock forward and runs the beta's job, as the hourly timer would have. */
+    app.post<{ Body: { days?: number; hours?: number } }>(
+      '/api/dev/clock',
+      { schema: { hide: true, body: { type: 'object', additionalProperties: false, properties: { days: { type: 'number', minimum: 0, maximum: 120 }, hours: { type: 'number', minimum: 0, maximum: 72 } } } } },
+      async (req) => {
+        clock!.forward(((req.body.days ?? 0) * 24 + (req.body.hours ?? 0)) * 3_600_000);
+        await betaJob();
+        return { offsetDays: Math.round((clock!.offsetMs / 86_400_000) * 10) / 10, now: new Date().toISOString() };
+      },
+    );
+    app.addHook('onClose', async () => clock!.restore());
+  }
+
   /** Accounts mode: the browser comes back from a login (not from connecting a workspace). */
   const loginCallback = async (req: FastifyRequest<{ Querystring: { code?: string; state?: string; error?: string } }>, reply: FastifyReply) => {
     reply.header('set-cookie', accounts.loginCookie('', 0));
     try {
       const { id, joined } = await accounts.complete({ ...req.query, cookieState: cookieValue(req.headers.cookie, LOGIN_COOKIE) });
-      if (joined) {
-        const at = new Date().toISOString();
-        await auditOf(joined.orgId).audit({ at, kind: 'member', actor: joined.name, via: 'session', summary: `${joined.name} joined as ${joined.role}` });
-        // The Owner of an invited beta team joined: the beta starts now.
-        const started = joined.role === 'owner' ? await beta.joined(joined.orgId, joined.name, at) : undefined;
-        if (started) await auditOf(joined.orgId).audit({ at, kind: 'member', actor: joined.name, via: 'session', summary: `Beta started; it ends on ${started.endsAt!.slice(0, 10)}` });
-      }
+      await afterJoin(joined);
       reply.header('set-cookie', accounts.sessionCookie(id));
       return reply.redirect('/');
     } catch (e) {
@@ -962,5 +1038,5 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       await usage.idle().catch(() => undefined);
       await pool.end();
     });
-  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts, betaJob, usage };
+  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts, betaJob, usage, settle: () => settle() };
 }

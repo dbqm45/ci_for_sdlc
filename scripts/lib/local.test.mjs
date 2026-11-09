@@ -111,3 +111,16 @@ describe('LOC-ENV: dependencies, 1Password, Node', () => {
     assert.equal(nodeOk('v20.18.0'), false);
   });
 });
+
+it('LOC-BETA: --beta runs the local beta walkthrough on loopback, as the operator, without Atlassian keys', () => {
+  const args = parseArgs(['--beta']);
+  assert.equal(args.beta, true);
+  assert.equal(accountsOf(args, {}), true);
+  const p = plan({ mode: 'token', dev: false, beta: true, accounts: true }, { HOST: '0.0.0.0', CI_PUBLIC_URL: 'https://quorum.example' });
+  assert.deepEqual(
+    { CI_BETA_LOCAL: p.vars.CI_BETA_LOCAL, CI_AUTH_MODE: p.vars.CI_AUTH_MODE, HOST: p.vars.HOST, CI_PUBLIC_URL: p.vars.CI_PUBLIC_URL, CI_BOOTSTRAP_EMAIL: p.vars.CI_BOOTSTRAP_EMAIL, CI_OPERATOR_EMAILS: p.vars.CI_OPERATOR_EMAILS },
+    { CI_BETA_LOCAL: '1', CI_AUTH_MODE: 'accounts', HOST: '127.0.0.1', CI_PUBLIC_URL: 'http://localhost:4317', CI_BOOTSTRAP_EMAIL: 'operator@quorum.local', CI_OPERATOR_EMAILS: 'operator@quorum.local' },
+  );
+  assert.equal(p.vars.ATLASSIAN_CLIENT_ID, 'local-beta-not-used');
+  assert.equal(plan({ mode: 'token', dev: false }, {}).vars.CI_BETA_LOCAL, undefined);
+});

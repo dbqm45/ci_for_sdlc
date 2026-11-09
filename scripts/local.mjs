@@ -7,6 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_ENV_FILE, accountsOf, UNDER_OP, USAGE, missingRequired, modeOf, needsInstall, nodeOk, optionalStatus, parseArgs, plan, shouldUseOp } from './lib/local.mjs';
@@ -57,12 +58,14 @@ if (needsInstall({ lockMtimeMs: mtime(`${ROOT}/package-lock.json`), installedMti
 // --- Keys
 const mode = modeOf(args, process.env);
 const accounts = accountsOf(args, process.env);
-const p = plan({ mode, dev: args.dev, port: args.port, accounts }, process.env);
+const p = plan({ mode, dev: args.dev, port: args.port, accounts, beta: args.beta }, process.env);
 const env = { ...process.env, ...p.vars };
+// The walkthrough keeps its own data, so it never mixes with .ci-data (and can be thrown away: delete the folder).
+if (args.beta && !process.env.CI_DATA_DIR) env.CI_DATA_DIR = join(ROOT, '.ci-data-beta-local');
 delete env[UNDER_OP];
 
 const label = accounts ? `${mode} + accounts` : mode;
-const missing = missingRequired(mode, env, accounts);
+const missing = args.beta ? [] : missingRequired(mode, env, accounts);
 if (missing.length) {
   if (!args.prompt || !process.stdin.isTTY) fail(`Brakuje zmiennych dla trybu ${label}: ${missing.map((m) => m.name).join(', ')}. Ustaw je (np. z menedżera haseł) i uruchom ponownie.`);
   step(`Tryb ${label}: brakuje ${missing.length} klucz(y). Wklej je z menedżera haseł (nie będą widoczne ani zapisane)`);
@@ -89,8 +92,12 @@ if (await waitForHealth(p.healthUrl, 180_000)) {
   const opt = optionalStatus(mode, env, accounts);
   console.log(`\n${bold('Gotowe:')} ${bold(p.appUrl)}`);
   console.log(`  Tryb połączenia z Atlassianem: ${mode}${mode === 'oauth' ? ` (Settings → Integrations → Connect Atlassian)` : ''}`);
-  if (accounts) console.log('  Logowanie: kontem Atlassian (CI_AUTH_MODE=accounts). Pierwszy Owner: CI_BOOTSTRAP_EMAIL albo link z logu serwera wyżej');
-  if (mode === 'oauth' || accounts) console.log(`  Callback URL w aplikacji Atlassiana: ${p.callbackUrl}`);
+  if (args.beta) {
+    console.log('  Lokalny przebieg bety (docs/BETA-LOCAL.md): logowanie dowolną osobą, bez Atlassiana i Resend');
+    console.log(`  Formularz zgłoszenia: ${p.appUrl}/#/beta   Skrzynka maili: ${p.appUrl}/#/dev/mail`);
+    console.log(`  Najpierw zaloguj się jako operator (${env.CI_BOOTSTRAP_EMAIL}); dane: ${env.CI_DATA_DIR}`);
+  } else if (accounts) console.log('  Logowanie: kontem Atlassian (CI_AUTH_MODE=accounts). Pierwszy Owner: CI_BOOTSTRAP_EMAIL albo link z logu serwera wyżej');
+  if (!args.beta && (mode === 'oauth' || accounts)) console.log(`  Callback URL w aplikacji Atlassiana: ${p.callbackUrl}`);
   console.log(`  Klucze: ${opt.map((o) => `${o.name} ${o.set ? '✓' : '—'}`).join(', ')}`);
   console.log('  Zatrzymanie: Ctrl+C\n');
 } else if (!stopping) {
