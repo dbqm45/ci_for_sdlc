@@ -1,7 +1,7 @@
 import type { AiEffort, AiProviderKind, ClaimPackId, Settings as SettingsData } from '@ci/core';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useApp } from '../App';
-import { api, ApiError, currentUser, errMsg, setCurrentUser, type AtlassianStatus } from '../api';
+import { api, ApiError, currentUser, errMsg, setCurrentUser, type AiPlatformInfo, type AtlassianStatus } from '../api';
 import { Card, Sdot, SourceLogo, Spinner, StatusIcon } from '../components/ui';
 import { parseFigmaFileKey } from '../components/figmaFileKey';
 import { SparkleIcon, SyncIcon } from '../components/icons';
@@ -206,6 +206,27 @@ export function Settings() {
       </Card>
 
       <Card title="AI provider">
+        {data.aiPlatform ? (
+          <div className="col" style={{ gap: 12 }}>
+            <p style={{ margin: 0 }}>
+              Provided by the platform: <strong>{data.aiPlatform.provider}</strong> · <code>{data.aiPlatform.model}</code>. The operator chooses the model; there is nothing to set up here.
+            </p>
+            {data.aiPlatform.budget && (
+              <p className={`small ${data.aiPlatform.budget.exhausted ? '' : 'muted'}`} style={{ margin: 0 }}>
+                {aiBudgetLine(data.aiPlatform.budget)}
+              </p>
+            )}
+            <div className="grid g3">
+              <Field label="Run semantic review">
+                <select className="input" value={s.ai.runOn} onChange={(e) => set('ai.runOn', e.target.value)}>
+                  <option value="on_demand">On demand (AI review button per item)</option>
+                  <option value="every_analysis">On every analysis (cached per unchanged item)</option>
+                </select>
+              </Field>
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="grid g3" style={{ marginBottom: 14 }}>
           {PROVIDERS.map((p) => (
             <label key={p.id} className={`card card-pad check provider-option ${s.ai.provider === p.id ? 'selected' : ''}`} style={{ alignItems: 'flex-start' }}>
@@ -247,6 +268,8 @@ export function Settings() {
               {s.ai.provider === 'bedrock' && secret('AWS_CREDENTIALS')}
             </div>
           </div>
+        )}
+        </>
         )}
       </Card>
 
@@ -547,4 +570,13 @@ function Integration({ title, source, enabled, onToggle, badges, children }: { t
       {enabled && <div className="grid g3">{children}</div>}
     </div>
   );
+}
+
+/** This month's AI spend against the limit, in one sentence. */
+export function aiBudgetLine(b: NonNullable<AiPlatformInfo['budget']>): string {
+  const spent = `$${b.spentUsd.toFixed(2)}`;
+  if (b.limitUsd === undefined) return `AI this month (${b.month}): ${spent}, no limit.`;
+  if (b.exhausted) return `The monthly AI limit is reached (${spent} of $${b.limitUsd.toFixed(2)} in ${b.month}): analyses run without AI until next month or until the operator raises it.`;
+  const unpriced = b.unpricedCalls ? ` ${b.unpricedCalls} calls have no known price and are not counted.` : '';
+  return `AI this month (${b.month}): ${spent} of $${b.limitUsd.toFixed(2)}.${unpriced}`;
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { aiCallCost, analyzeProject, createSemanticAnalyzer, demoProject, priceOf, summarizeAiCalls, type AiAuditRecord, type SemanticAnalyzer, type SemanticInput } from '../src/index.js';
+import { aiCallCost, analyzeProject, bedrockClaudeModel, createSemanticAnalyzer, demoProject, priceOf, summarizeAiCalls, type AiAuditRecord, type SemanticAnalyzer, type SemanticInput } from '../src/index.js';
 
 // Telemetry of AI calls (docs/AI-QUALITY-PLAN.md, step 1): tokens, cost and time of every call that reached a model,
 // so the cost and latency of the AI layer are visible per model and comparable in the evaluation report.
@@ -15,14 +15,23 @@ describe('TEL: price and cost of one call', () => {
     const price = { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 };
     expect(aiCallCost({ inputTokens: 1000, outputTokens: 500, cacheReadTokens: 2000, cacheWriteTokens: 0 }, price)).toBeCloseTo(0.0144, 10);
   });
-  it('TEL-02: Claude on the Anthropic API has a default price; other providers only an organization rate', () => {
+  it('TEL-02: Claude on the Anthropic API (and on Bedrock, at the same list rates) has a default price; other providers only an organization rate', () => {
     expect(priceOf('anthropic', 'claude-opus-5-5')).toEqual({ input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 });
     expect(priceOf('anthropic', 'claude-haiku-5-5')?.input).toBe(0.1);
-    expect(priceOf('bedrock', 'anthropic.claude-opus-5-5')).toBeUndefined();
+    expect(priceOf('bedrock', 'anthropic.claude-opus-5-5')).toEqual(priceOf('anthropic', 'claude-opus-5-5'));
+    expect(priceOf('bedrock', 'unknown.model')).toBeUndefined();
     expect(priceOf('openai', 'gpt-5')).toBeUndefined();
     const own = { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 };
     expect(priceOf('openai', 'gpt-5', { 'openai/gpt-5': own })).toEqual(own);
     expect(priceOf('anthropic', 'claude-opus-5-5', { 'anthropic/claude-opus-5-5': own })).toEqual(own);
+  });
+  it.each([
+    ['anthropic.claude-opus-5-5', 'claude-opus-5-5'],
+    ['eu.anthropic.claude-sonnet-5-5-v1:0', 'claude-sonnet-5-5'],
+    ['global.anthropic.claude-haiku-5-5-20260101-v1:0', 'claude-haiku-5-5'],
+    ['meta.llama4-maverick-v1:0', undefined],
+  ])('TEL-02b: the Claude model behind the Bedrock id %s is %s', (id, base) => {
+    expect(bedrockClaudeModel(id)).toBe(base);
   });
   it('TEL-03: a call without a known price has no cost (unknown, not zero)', () => {
     expect(aiCallCost({ inputTokens: 10, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0 }, undefined)).toBeUndefined();

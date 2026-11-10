@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../App';
-import { api, errMsg, type BetaEnrollment } from '../api';
+import { api, ApiError, errMsg, type AiBudgetRow, type BetaEnrollment, type DeletedWorkspace } from '../api';
 import { Card, DateTime } from '../components/ui';
 import { betaNow } from '../lib/localBeta';
 import { STATUS_LABEL, surveysSummary, usageLines, workspaceIdFrom, type UsageReport } from '../lib/beta';
@@ -95,6 +95,22 @@ export function Operator() {
     } catch {
       toast('Copy failed — select the link and copy it by hand');
     }
+  };
+
+  /** On the team's request (T7): everything of its organization goes for good; the name is typed back. */
+  const eraseOrg = async (e: BetaEnrollment) => {
+    const org = e.application.org;
+    const typed = window.prompt(
+      `Erase ALL data of ${org} for good? Its workspaces, Atlassian connection, people, invitations, usage events, AI spend, application and survey answers are deleted now and cannot be restored (backups expire within 100 days).\nType the organization's name (${org}) to confirm:`,
+    );
+    if (typed === null) return;
+    try {
+      const r = await api.eraseOrg(e.orgId!, typed.trim());
+      toast(`${r.erased} erased: ${r.workspaces} workspaces, ${r.people} people`);
+    } catch (err) {
+      toast(errMsg(err));
+    }
+    await load();
   };
 
   const waiting = list?.filter((e) => e.status === 'applied') ?? [];
@@ -256,6 +272,11 @@ export function Operator() {
                         <button className="btn sm" onClick={() => void download(e)}>
                           Answers (JSON)
                         </button>
+                        {e.orgId && (
+                          <button className="btn sm ghost" onClick={() => void eraseOrg(e)}>
+                            Erase all data…
+                          </button>
+                        )}
                         {e.status !== 'ended' && (
                           <button className="btn sm" onClick={() => void withDays(e, 'No pause', 30, (d, r) => api.graceBeta(e.id, d, r), 'Pause held off')}>
                             No pause for…
@@ -278,6 +299,172 @@ export function Operator() {
           </table>
         )}
       </Card>
+      <DeletedWorkspaces />
+      <AiLimits />
     </div>
+  );
+}
+
+/**
+ * The platform's AI and each workspace's monthly limit (T4, docs/AI-PLATFORM.md). Hidden when workspaces choose their
+ * own AI (the server answers 404). A change applies to the next call to the model.
+ */
+function AiLimits() {
+  const { toast } = useApp();
+  const [data, setData] = useState<{ provider: string; model: string; defaultLimitUsd?: number; workspaces: AiBudgetRow[] } | null>();
+  const [edit, setEdit] = useState<Record<string, string>>({});
+  const load = useCallback(async () => {
+    try {
+      setData(await api.aiBudget());
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) setData(null);
+      else toast(errMsg(e));
+    }
+  }, [toast]);
+  useEffect(() => void load(), [load]);
+  if (!data) return null;
+
+  const save = async (row: AiBudgetRow, value: number | null | 'default') => {
+    try {
+      await api.setAiLimit(row.workspace, value);
+      toast(`AI limit of ${row.name} changed`);
+      setEdit((x) => ({ ...x, [row.workspace]: '' }));
+    } catch (e) {
+      toast(errMsg(e));
+    }
+    await load();
+  };
+  const fromInput = (row: AiBudgetRow) => {
+    const raw = (edit[row.workspace] ?? '').trim();
+    const n = Number(raw);
+    if (!raw || !Number.isFinite(n) || n < 0) return toast('Enter a limit in US dollars, 0 or more.');
+    return void save(row, n);
+  };
+  const usd = (n: number) => `$${n.toFixed(2)}`;
+
+  return (
+    <Card title="AI limits" pad={false}>
+      <p className="small muted card-pad" style={{ margin: 0 }}>
+        Every workspace uses <strong>{data.provider}</strong> · <code>{data.model}</code>, paid by the platform.{' '}
+        {data.defaultLimitUsd === undefined ? 'No default limit.' : `Default limit: ${usd(data.defaultLimitUsd)} per workspace per month (UTC).`} Past its limit a
+        workspace's analyses run without AI until next month.
+      </p>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Workspace</th>
+            <th>This month</th>
+            <th>Limit</th>
+            <th>Change</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.workspaces.map((row) => (
+            <tr key={row.workspace}>
+              <td>
+                <strong>{row.name}</strong>
+                <div className="small muted">
+                  {row.orgName ?? row.workspace}
+                  {row.removed && ' · removed'}
+                </div>
+              </td>
+              <td>
+                {usd(row.spentUsd)} · {row.calls} calls
+                {row.unpricedCalls > 0 && <div className="small">{row.unpricedCalls} without a known price (not counted; set CI_AI_PRICES)</div>}
+                {row.exhausted && <div className="small"><span className="badge">limit reached</span></div>}
+              </td>
+              <td>
+                {row.limitUsd === undefined ? 'none' : usd(row.limitUsd)}
+                <div className="small muted">{row.custom ? 'own' : 'default'}</div>
+              </td>
+              <td>
+                {!row.removed && (
+                  <div className="row wrap" style={{ gap: 6 }}>
+                    <input
+                      className="input"
+                      style={{ width: 90 }}
+                      inputMode="decimal"
+                      placeholder="USD"
+                      aria-label={`New monthly AI limit for ${row.name}`}
+                      value={edit[row.workspace] ?? ''}
+                      onChange={(e) => setEdit((x) => ({ ...x, [row.workspace]: e.target.value }))}
+                    />
+                    <button className="btn sm" onClick={() => fromInput(row)}>
+                      Set
+                    </button>
+                    {row.custom && (
+                      <button className="btn sm ghost" onClick={() => void save(row, 'default')}>
+                        Default
+                      </button>
+                    )}
+                    <button className="btn sm ghost" onClick={() => void save(row, null)}>
+                      No limit
+                    </button>
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+/** Deleted workspaces kept for 30 days (T7): restore one deleted by mistake, or erase it now on request. */
+function DeletedWorkspaces() {
+  const { toast } = useApp();
+  const [list, setList] = useState<DeletedWorkspace[]>();
+  const load = useCallback(async () => {
+    try {
+      setList(await api.deletedWorkspaces());
+    } catch (e) {
+      toast(errMsg(e));
+    }
+  }, [toast]);
+  useEffect(() => void load(), [load]);
+  if (!list?.length) return null;
+  const act = async (d: DeletedWorkspace, what: 'restore' | 'erase') => {
+    if (what === 'erase' && !window.confirm(`Erase workspace ${d.name} for good now? This cannot be undone.`)) return;
+    try {
+      if (what === 'restore') await api.restoreWorkspace(d.archivedAs);
+      else await api.eraseWorkspace(d.archivedAs);
+      toast(what === 'restore' ? `${d.name} restored; its Atlassian connection has to be made again` : `${d.name} erased`);
+    } catch (e) {
+      toast(errMsg(e));
+    }
+    await load();
+  };
+  return (
+    <Card title={`Deleted workspaces (${list.length})`} pad={false}>
+      <p className="small muted card-pad" style={{ margin: 0 }}>
+        Kept for 30 days after deletion, then erased for good by the hourly job.
+      </p>
+      <table className="table">
+        <tbody>
+          {list.map((d) => (
+            <tr key={d.archivedAs}>
+              <td>
+                <strong>{d.name}</strong>
+                <div className="small muted">{d.id}</div>
+              </td>
+              <td className="small">
+                Deleted <DateTime iso={d.deletedAt} />, erased <DateTime iso={d.eraseAfter} />
+              </td>
+              <td>
+                <div className="row wrap" style={{ gap: 6 }}>
+                  <button className="btn sm" onClick={() => void act(d, 'restore')}>
+                    Restore
+                  </button>
+                  <button className="btn sm ghost" onClick={() => void act(d, 'erase')}>
+                    Erase now
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
   );
 }

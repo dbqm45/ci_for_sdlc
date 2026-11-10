@@ -13,9 +13,7 @@
 - [x] **Poprawki bety z lokalnego przejścia** (`docs/BETA-LOCAL.md` §4): baner danych przykładowych z „Connect Jira”,
       link do formularza bety na ekranie logowania, „bez reakcji” jako liczby, nowa strona od góry, bez zapytań przed
       zalogowaniem. Język tekstów bety: zostaje angielski (decyzja właściciela 2026-11-09).
-- [ ] **`CI_TRUST_PROXY` dla limitu zgłoszeń do bety** (przy hostingu, T1): Fastify bez `trustProxy` widzi za load
-      balancerem adres proxy, więc limit 5 zgłoszeń na godzinę na adres działa na całą instalację
-      (`docs/SETUP-BETA.md` §4).
+- [x] **`CI_TRUST_PROXY`** — liczba pośredników przed serwerem (Render: `1`, `render.yaml`).
 - [ ] **MCP: sprawdzenie zlecenia przed pracą (prekontrola dla fabryki tf).** Cel (właściciel, 2026-11-09): gdy
       zlecam coś do zrobienia w fabryce tf, Quorum przez MCP wykrywa niejasności, sprzeczności i braki **zanim**
       persona zacznie pracę, a fabryka pokazuje je i pyta. Strona tf: `docs/todo.md` w dbqm45/tf („Prekontrola

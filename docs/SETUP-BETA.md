@@ -3,7 +3,8 @@
 Stan: 2026-11-09. Co ustawić, żeby zapisy, ankiety, wstrzymanie i maile bety działały na serwerze produkcyjnym.
 Jak beta działa: [`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md) (T10) i [`ORGANIZATIONS-PLAN.md`](ORGANIZATIONS-PLAN.md);
 po co jest i co mierzymy: [`BETA-PLAN.md`](BETA-PLAN.md); pytania ankiet: [`BETA-SURVEYS.md`](BETA-SURVEYS.md).
-Pozostałe prace przed pierwszym zespołem (hosting, kopie, monitoring…) to T1–T9 w `BETA-PLAN.md` §4.
+Pozostałe prace przed pierwszym zespołem (hosting, kopie, monitoring…) to T1–T9 w `BETA-PLAN.md` §4. Wdrożenie na Render
+(T1, krok po kroku, mapa wdrożenia i sprawdzenie bezpieczeństwa): [`DEPLOYMENT.md`](DEPLOYMENT.md).
 Przed wdrożeniem przejdź betę lokalnie: [`BETA-LOCAL.md`](BETA-LOCAL.md) (`npm run local -- --beta`).
 
 ## 1. Zmienne środowiskowe
@@ -24,6 +25,9 @@ Sekrety (oznaczone 🔒) trzymaj tylko w zmiennych środowiskowych platformy alb
 | `CI_ALLOWED_HOSTS` | `<domena>` | nagłówek `Host` spoza `localhost` (ochrona przed DNS rebinding) |
 | `HOST` | `0.0.0.0` | nasłuch poza loopbackiem (w kontenerze) |
 | `CI_ADMIN_TOKEN` 🔒 | długi losowy ciąg | maszyny (CLI, MCP, pdi); z tokenem administratora też widać panel operatora przez API |
+| `CI_AI_PROVIDER`, `CI_AI_MODEL`, `CI_AI_REGION` | `bedrock`, id modelu z konsoli Bedrock, `eu-central-1` | AI platformy dla każdej przestrzeni; zespół nie wybiera dostawcy ([`AI-PLATFORM.md`](AI-PLATFORM.md)) |
+| `CI_AI_MONTHLY_LIMIT_USD` | `50` | domyślny limit AI na przestrzeń i miesiąc; operator zmienia go dla przestrzeni na `#/operator` |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` 🔒 | użytkownik IAM tylko z `bedrock:InvokeModel` | dostęp do Bedrocka |
 
 Opcjonalne:
 
@@ -37,20 +41,17 @@ Opcjonalne:
 | `POSTHOG_HOST` | `https://eu.i.posthog.com` | region PostHog (zostaw UE; PostHog dopisz do listy podprzetwarzających i DPA, `BETA-PLAN.md` §5) |
 | `CI_USAGE_SECRET` 🔒 | losowy, zapisany raz w bazie | sekret pseudonimów osób, przestrzeni i organizacji; ustaw, jeśli pseudonimy mają przetrwać przeniesienie danych |
 | `CI_USAGE` | (włączony) | `off` wyłącza cały pomiar użycia |
+| `CI_ALERT_EMAILS` | `CI_OPERATOR_EMAILS` | kto dostaje alerty monitoringu (T6); `CI_ALERTS=off` je wyłącza |
+| `CI_HEARTBEAT_URL` 🔒 | (brak) | adres strażnika zadań wołany po każdym godzinnym przebiegu (`DEPLOYMENT.md` krok 11) |
 
 Bez `RESEND_API_KEY` i `CI_MAIL_FROM` serwer działa, ale maile trafiają tylko do logu (odbiorca i temat, nigdy treść
 z linkiem) — wtedy link zaproszenia przekazujesz sam z panelu operatora.
 
 ## 2. Kolejność pierwszego uruchomienia
 
-1. Aplikacja w Atlassian Developer Console z zakresem `read:me` i *Callback URL*
-   `https://<domena>/api/connections/atlassian/callback` ([`CONNECT-ATLASSIAN.md`](CONNECT-ATLASSIAN.md), krok 1).
-2. Domena nadawcy zweryfikowana w Resend, klucz API utworzony (uprawnienie *Sending access*).
-3. Zmienne z §1 ustawione, serwer uruchomiony (`npm start` albo obraz z `Dockerfile`).
-4. Zaloguj się kontem z `CI_BOOTSTRAP_EMAIL` — zostajesz Ownerem pierwszej organizacji (przestrzeń `default`).
-5. W menu pojawia się *Beta operator* (Twój e-mail jest w `CI_OPERATOR_EMAILS`).
-6. Wyślij zespołom adres formularza: `https://<domena>/#/beta`.
-7. Zgłoszenia zatwierdzasz na `#/operator` (*Approve* zakłada organizację, przestrzeń i wysyła zaproszenie Ownera).
+Na Render: krok po kroku w [`DEPLOYMENT.md`](DEPLOYMENT.md) §2 (konta, Blueprint, domena, pierwsze logowanie, AI,
+kopie). Na innym serwerze ta sama kolejność: aplikacja Atlassian, domena nadawcy w Resend, zmienne z §1, start
+(`npm start` albo obraz z `Dockerfile`), logowanie kontem z `CI_BOOTSTRAP_EMAIL`.
 
 ## 3. Sprawdzenie po wdrożeniu
 
@@ -62,9 +63,8 @@ z linkiem) — wtedy link zaproszenia przekazujesz sam z panelu operatora.
 
 ## 4. Znane ograniczenia (do zrobienia)
 
-- **Limit zgłoszeń za proxy:** limit 5 zgłoszeń na godzinę liczy się z `req.ip`. Fastify nie ma dziś włączonego
-  `trustProxy`, więc za load balancerem wszystkie zgłoszenia mają adres proxy i limit działa na całą instalację.
-  Do zrobienia przy hostingu (T1): zmienna `CI_TRUST_PROXY` przekazywana do Fastify (pozycja w `TODO.md`).
+- **Limit zgłoszeń za proxy:** `CI_TRUST_PROXY` = liczba pośredników przed serwerem (na Render `1`, ustawione w
+  `render.yaml`); bez niej limit 5 zgłoszeń na godzinę liczyłby się dla całej instalacji.
 - **Jeden serwer na bazę:** kolejka zapisów i zadanie bety działają w procesie — nie uruchamiaj dwóch instancji
   na tej samej bazie (`WORKSPACES-F5-PLAN.md`, „Ograniczenie”).
 - **pdi** należy do pierwszej organizacji; zespoły bety go nie widzą (`ORGANIZATIONS-PLAN.md`).

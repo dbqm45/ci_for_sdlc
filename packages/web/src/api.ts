@@ -113,6 +113,39 @@ export class ApiError extends Error {
 /** A readable message for anything caught. */
 export const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+/** The platform's AI as a workspace sees it (T4): set by the operator, with this month's spend against the limit. */
+export interface AiPlatformInfo {
+  provider: string;
+  model: string;
+  effort?: string;
+  budget?: { month: string; limitUsd?: number; spentUsd: number; exhausted: boolean; unpricedCalls: number };
+}
+
+/** A deleted workspace, restorable until `eraseAfter` (T7, GET /api/workspaces-deleted). */
+export interface DeletedWorkspace {
+  id: string;
+  name: string;
+  orgId?: string;
+  archivedAs: string;
+  deletedAt: string;
+  eraseAfter: string;
+}
+
+/** A workspace's AI spend this month, for the operator (GET /api/ai-budget). */
+export interface AiBudgetRow {
+  workspace: string;
+  name: string;
+  orgName?: string;
+  month: string;
+  limitUsd?: number;
+  custom: boolean;
+  spentUsd: number;
+  calls: number;
+  unpricedCalls: number;
+  exhausted: boolean;
+  removed?: boolean;
+}
+
 /** Settings as read, with the ETag to send back as If-Match so concurrent edits are not lost. */
 export interface SettingsResponse {
   settings: Settings;
@@ -220,7 +253,12 @@ export const api = {
   createWorkspace: (id: string, name: string) => req<{ id: string; name: string }>('POST', '/api/workspaces', { id, name, by: currentUser() }),
   renameWorkspace: (id: string, name: string) => req<{ id: string; name: string }>('PATCH', `/api/workspaces/${encodeURIComponent(id)}`, { name, by: currentUser() }),
   /** Deleting needs the id typed back (`confirm`). */
-  deleteWorkspace: (id: string, confirm: string) => req<{ deleted: string; archivedTo: string }>('DELETE', `/api/workspaces/${encodeURIComponent(id)}`, { confirm, by: currentUser() }),
+  deleteWorkspace: (id: string, confirm: string) => req<{ deleted: string; archivedTo: string; eraseAfter: string }>('DELETE', `/api/workspaces/${encodeURIComponent(id)}`, { confirm, by: currentUser() }),
+  deletedWorkspaces: () => req<DeletedWorkspace[]>('GET', '/api/workspaces-deleted'),
+  restoreWorkspace: (archivedAs: string) => req<{ id: string; name: string }>('POST', '/api/workspaces-deleted/restore', { archivedAs }),
+  eraseWorkspace: (archivedAs: string) => req<{ erased: string }>('POST', '/api/workspaces-deleted/erase', { archivedAs }),
+  /** Erases an organization for good, on its request; `confirm` is its name typed back. */
+  eraseOrg: (orgId: string, confirm: string) => req<{ erased: string; workspaces: number; people: number }>('POST', `/api/orgs/${encodeURIComponent(orgId)}/erase`, { confirm }),
   /** F4: pdi changes (stories labelled `change:CHG-n`) and whether the pdi link is on. */
   changes: () => req<{ pdi: boolean; changes: ChangeState[] }>('GET', '/api/changes'),
   /** F4: ask pdi to decide the approval of a change that is not ready. Returns undefined when the user cancels. */
@@ -236,7 +274,7 @@ export const api = {
   rules: () => req<{ id: string; name: string; description: string; appliesTo: string[] }[]>('GET', '/api/rules'),
   settings: async () => {
     const { json, res } = await send('GET', '/api/settings');
-    return { ...(json as { settings: Settings; secrets: Record<string, boolean>; defaultModels: Record<string, string>; connectMode: ConnectMode }), etag: res.headers.get('etag') ?? '' };
+    return { ...(json as { settings: Settings; secrets: Record<string, boolean>; defaultModels: Record<string, string>; connectMode: ConnectMode; aiPlatform?: AiPlatformInfo }), etag: res.headers.get('etag') ?? '' };
   },
   /** `etag` is the one returned with the settings being edited; a 412 means someone else saved in between. */
   saveSettings: async (patch: DeepPartial<Settings>, etag: string): Promise<SettingsResponse> => {
@@ -266,6 +304,9 @@ export const api = {
   applyForBeta: (body: ReturnType<typeof applicationBody>) => req<{ received: true }>('POST', '/api/beta/apply', body),
   /** Operator only. */
   betaEnrollments: () => req<BetaEnrollment[]>('GET', '/api/beta/enrollments'),
+  aiBudget: () => req<{ provider: string; model: string; defaultLimitUsd?: number; workspaces: AiBudgetRow[] }>('GET', '/api/ai-budget'),
+  /** A number of dollars, `null` for no limit, or `'default'`. */
+  setAiLimit: (ws: string, limitUsd: number | null | 'default') => req<AiBudgetRow>('PUT', `/api/ai-budget/${encodeURIComponent(ws)}`, { limitUsd }),
   /** The Owner's invitation link is returned only here. */
   approveBeta: (id: string, workspace: { id: string; name?: string }) => req<{ enrollment: BetaEnrollment; invitation: Invitation & { link: string } }>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/approve`, { workspace }),
   rejectBeta: (id: string, note: string) => req<BetaEnrollment>('POST', `/api/beta/enrollments/${encodeURIComponent(id)}/reject`, note.trim() ? { note: note.trim() } : {}),
@@ -290,6 +331,8 @@ export const api = {
 /** A beta application and what became of it (operator panel). */
 export interface BetaEnrollment extends BetaView {
   id: string;
+  /** The organization opened on approval. */
+  orgId?: string;
   application: {
     org: string;
     team: string;

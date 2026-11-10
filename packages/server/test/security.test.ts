@@ -43,6 +43,12 @@ describe('without CI_ADMIN_TOKEN (local self-hosted mode)', () => {
     expect((await call({ method: 'GET', url: '/api/analysis', headers: { host: 'evil.example' } })).status).toBe(403);
   });
 
+  it("answers the health check under any Host (a platform's check uses its own address), and nothing else", async () => {
+    await start({ allowedHosts: ['quorum.example.com'], authMode: 'accounts' });
+    expect((await call({ method: 'GET', url: '/api/health', headers: { host: 'quorum-abcd.onrender.com' } })).status).toBe(200);
+    expect((await call({ method: 'GET', url: '/api/auth/me', headers: { host: 'quorum-abcd.onrender.com' } })).status).toBe(403);
+  });
+
   it('accepts a Host listed in CI_ALLOWED_HOSTS', async () => {
     await start({ allowedHosts: ['ci.internal:4317'] });
     expect((await call({ method: 'GET', url: '/api/health', headers: { host: 'ci.internal:4317' } })).status).toBe(200);

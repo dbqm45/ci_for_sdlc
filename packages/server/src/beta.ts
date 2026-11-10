@@ -327,6 +327,17 @@ export class BetaEnrollments {
   }
 
   /** Every answer of one enrollment, oldest first (the operator reads them). */
+  /** Erases an organization's application, enrollment and survey answers for good (T7); returns how many answers. */
+  async eraseOrg(orgId: string): Promise<{ enrollments: number; answers: number }> {
+    return this.serial(async () => {
+      const ids = this.all.filter((e) => e.orgId === orgId).map((e) => e.id);
+      this.all = this.all.filter((e) => e.orgId !== orgId);
+      if (ids.length) await this.save();
+      const answers = await this.backend.dropEntries('beta-survey-answers', { orgId });
+      return { enrollments: ids.length, answers };
+    });
+  }
+
   async answersOf(enrollmentId: string): Promise<SurveyAnswer[]> {
     return ((await this.backend.tail('beta-survey-answers', 100_000)) as SurveyAnswer[]).filter((a) => a?.enrollmentId === enrollmentId);
   }

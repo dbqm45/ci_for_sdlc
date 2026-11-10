@@ -20,6 +20,9 @@ liczymy z pomiaru (§8), nie z deklaracji; ankieta je uzupełnia i sprawdza.
 ## 2. Kto
 - **3–5 zespołów** (design partners), nie więcej — każdy dostaje uwagę: ankietę co dwa tygodnie (§7) i odpowiedź
   na każde zgłoszenie w 1 dzień roboczy. Rozmowa tylko wtedy, gdy zespół jej chce albo ankieta tego wymaga.
+  **Najpierw jeden zespół:** betę zaczynamy od jednego zespołu, żeby sprawdzić przebieg (zapis, ankiety, pomiar,
+  hosting) na prawdziwych danych; kolejne dołączamy po decyzji właściciela. Wnioski z jednego zespołu mówią tylko, czy
+  Quorum sprawdza się u niego — progi z §1 oceniamy dopiero przy 3–5 zespołach.
 - **Profil:** zespół produktowy na Jira Cloud i Confluence (Figma mile widziana), 5–30 osób, z PO lub analitykiem,
   który pisze historyjki; najlepiej taki, który już narzeka na niejasne wymagania lub poprawki po review.
 - **Źródła kontaktów:** własna sieć, społeczności PO/QA, osoby z poprzednich projektów. Bez płatnej reklamy.
@@ -41,16 +44,16 @@ Każda pozycja to osobny PR z testami; kolejność według zależności.
 
 | # | Co | Dlaczego w becie | Stan dziś |
 |---|---|---|---|
-| T1 | **Hosting produkcyjny:** obraz z `Dockerfile`, usługa w regionie UE, zarządzany Postgres z odtwarzaniem do punktu w czasie, domena i HTTPS | dane klientów nie mogą leżeć na laptopie | obraz jest, wdrożenia brak |
+| T1 | **Hosting produkcyjny:** obraz z `Dockerfile`, usługa w regionie UE, zarządzany Postgres z odtwarzaniem do punktu w czasie, domena i HTTPS | dane klientów nie mogą leżeć na laptopie | `render.yaml` (Render, Frankfurt), instrukcja i mapa w `DEPLOYMENT.md`; założenie kont i domena — właściciel |
 | T2 | **Aplikacja Atlassian (OAuth 3LO) na domenie produkcyjnej**, logowanie i połączenie Jiry/Confluence per przestrzeń | każdy zespół łączy własną witrynę | kod jest (#104, OAuth Atlassian), rejestracja aplikacji na produkcji brak |
 | T3 | **Figma per przestrzeń:** token Figmy zapisany zaszyfrowany w przestrzeni (albo OAuth Figmy) zamiast `FIGMA_TOKEN` serwera | dziś jeden token na instalację — nie do przyjęcia przy kilku klientach | brak |
-| T4 | **AI z limitem per przestrzeń:** klucz platformy (Anthropic albo Bedrock w UE), licznik zużycia z telemetrii (#91) i twardy limit miesięczny; po przekroczeniu analiza bez AI | koszt AI to główny koszt zmienny | telemetria jest, limitu brak |
-| T5 | **Kopie i odtwarzanie:** dzienna kopia bazy poza dostawcą hostingu, próba odtworzenia przed startem i raz w becie | utrata decyzji klienta zabija zaufanie | brak |
-| T6 | **Monitoring i alerty:** `/api/health` w zewnętrznym monitorze, logi błędów z alertem, panel zużycia AI | dowiadujemy się o awarii przed klientem | health jest |
-| T7 | **Usunięcie danych klienta na żądanie:** usunięcie przestrzeni z kasowaniem (dziś archiwizacja) i odłączenie OAuth | wymóg RODO i DPA | archiwizacja jest, kasowania brak |
+| T4 | **AI z limitem per przestrzeń:** klucz platformy (Anthropic albo Bedrock w UE), licznik zużycia z telemetrii (#91) i twardy limit miesięczny; po przekroczeniu analiza bez AI | koszt AI to główny koszt zmienny | zrobione w kodzie: AI platformy (`CI_AI_PROVIDER`, w becie Claude przez Bedrock w UE), limit $50 na przestrzeń i miesiąc zmieniany przez operatora ([`AI-PLATFORM.md`](AI-PLATFORM.md)); konto AWS i dostęp do modelu — właściciel |
+| T5 | **Kopie i odtwarzanie:** dzienna kopia bazy poza dostawcą hostingu, próba odtworzenia przed startem i raz w becie | utrata decyzji klienta zabija zaufanie | zrobione w kodzie: zadanie `quorum-backup` do Backblaze B2 (UE) i `restore-check` ([`BACKUPS.md`](BACKUPS.md)); konfiguracja B2 i pierwsza próba odtworzenia — właściciel |
+| T6 | **Monitoring i alerty:** `/api/health` w zewnętrznym monitorze, logi błędów z alertem, panel zużycia AI | dowiadujemy się o awarii przed klientem | zrobione w kodzie: `/api/health` sprawdza bazę (503), alerty e-mail (5xx, zadania, baza, limit AI), strażnik zadań i kopii; monitor dostępności i Healthchecks.io zakłada właściciel (`DEPLOYMENT.md` krok 11) |
+| T7 | **Usunięcie danych klienta na żądanie:** usunięcie przestrzeni z kasowaniem (dziś archiwizacja) i odłączenie OAuth | wymóg RODO i DPA | zrobione: usunięta przestrzeń czeka 30 dni, potem jest kasowana; operator kasuje organizację na żądanie ([`DATA-DELETION.md`](DATA-DELETION.md)) |
 | T8 | **Pomiar użycia (§8):** zdarzenia wysyłane przez serwer (bez treści) do własnego logu i do PostHog, wyłącznik zespołu, ankiety w aplikacji, raport miar dla operatora | miary z §1 | zrobione (§8, „Zrobione”); ankiety w T10 |
 | T9 | **Przegląd bezpieczeństwa przed startem:** skan zależności, przegląd tras bez uwierzytelnienia, prosty test DAST (np. OWASP ZAP) na środowisku testowym | minimum przed prawdziwymi danymi | skan zależności w CI jest |
-| T10 | **Zapisy i uczestnictwo w becie ([`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md)):** formularz zgłoszenia, zatwierdzenie przez operatora, jednorazowe zaproszenie tworzące przestrzeń, okres bety z datą końca, ankiety w aplikacji z terminami, codzienne zadanie (przypomnienia, wstrzymanie, koniec bety), panel operatora | zapis, ankiety i czas bety bez ręcznego pilnowania | zaproszenia do istniejącej przestrzeni są (`accounts.ts`), reszty brak |
+| T10 | **Zapisy i uczestnictwo w becie ([`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md)):** formularz zgłoszenia, zatwierdzenie przez operatora, jednorazowe zaproszenie tworzące przestrzeń, okres bety z datą końca, ankiety w aplikacji z terminami, codzienne zadanie (przypomnienia, wstrzymanie, koniec bety), panel operatora | zapis, ankiety i czas bety bez ręcznego pilnowania | zrobione (#114–#117, #121–#124) |
 
 Świadomie odkładamy krok 5 z `SAAS.md` (kolejka i workery): przy 3–5 zespołach jeden serwer wystarcza, a analiza
 w procesie serwera jest już kolejkowana. Wracamy do tego, gdy analiza jednego zespołu zacznie blokować innych
@@ -59,7 +62,7 @@ w procesie serwera jest już kolejkowana. Wracamy do tego, gdy analiza jednego z
 ## 5. Prawo i zaufanie (minimum)
 - Podmiot, który zawiera umowy (działalność lub spółka) — decyzja właściciela, z doradcą.
 - Regulamin bety, polityka prywatności, **umowa powierzenia (DPA)** z listą podprzetwarzających (hosting, baza,
-  dostawca AI, poczta) i regionem danych.
+  kopie bazy — Backblaze B2, dostawca AI — AWS Bedrock w UE, poczta) i regionem danych.
 - Jasna informacja, co trafia do modelu AI (treść historyjek i stron, przycięta przez `maxCharsPerSource`, z
   `redactPersonalData`) i że dostawca AI nie trenuje na danych (sprawdzić w aktualnych warunkach dostawcy).
 - Kontakt w sprawie incydentu i czas reakcji (np. odpowiedź w 1 dzień roboczy).
@@ -176,7 +179,9 @@ Zasady:
 ## 10. Decyzje właściciela przed startem
 1. Hosting i region (rekomendacja: zarządzana platforma kontenerów w UE z zarządzanym Postgresem; ShipScope działa
    już na Render, co upraszcza obsługę — sprawdzić aktualny cennik i dostępność regionu UE).
-2. Dostawca AI dla bety (Anthropic API albo Bedrock w regionie UE) i limit miesięczny na przestrzeń.
+2. Dostawca AI dla bety (Anthropic API albo Bedrock w regionie UE) i limit miesięczny na przestrzeń. **Decyzja
+   (2026-11-09):** Claude przez Bedrock w UE, płaci platforma, $50 na przestrzeń i miesiąc, zmieniane w trakcie
+   bety; własny klucz zespołu (BYOK) po becie.
 3. Nazwa produktu i domena (potrzebne do aplikacji Atlassian, T2).
 4. Podmiot prawny i dokumenty z §5.
 5. Lista kandydatów do bety.

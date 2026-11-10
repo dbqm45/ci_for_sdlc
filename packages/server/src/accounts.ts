@@ -428,6 +428,30 @@ export class Accounts {
     });
   }
 
+  /**
+   * Erases an organization's people for good (T7): its memberships, invitations and the organization itself; a person
+   * in no other organization is erased with their sessions. The first organization is refused.
+   */
+  async eraseOrg(orgId: string): Promise<{ people: number; invitations: number }> {
+    return this.serial(async () => {
+      if (orgId === this.homeOrgId) throw httpError(409, 'The first organization cannot be erased.');
+      if (!this.orgs.some((o) => o.id === orgId)) throw httpError(404, 'No such organization.');
+      const members = new Set(this.memberships.filter((m) => m.orgId === orgId).map((m) => m.userId));
+      this.memberships = this.memberships.filter((m) => m.orgId !== orgId);
+      const gone = new Set([...members].filter((id) => !this.memberships.some((m) => m.userId === id)));
+      const invitations = this.invitations.filter((i) => i.orgId === orgId).length;
+      this.invitations = this.invitations.filter((i) => i.orgId !== orgId);
+      this.users = this.users.filter((u) => !gone.has(u.id));
+      this.orgs = this.orgs.filter((o) => o.id !== orgId);
+      await this.backend.write('memberships.json', this.memberships);
+      await this.backend.write('invitations.json', this.invitations);
+      await this.backend.write('users.json', this.users);
+      await this.backend.write('orgs.json', this.orgs);
+      await this.dropSessions((s) => gone.has(s.userId));
+      return { people: gone.size, invitations };
+    });
+  }
+
   private checkChange(actor: Role, id: string, orgId: string | undefined, role?: Role) {
     const m = this.memberships.find((x) => x.userId === id && x.orgId === orgId);
     if (!m || !this.users.some((u) => u.id === id)) throw httpError(404, 'No such member.');

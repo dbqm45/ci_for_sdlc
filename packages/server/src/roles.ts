@@ -44,6 +44,10 @@ const ROUTE_ROLES: Record<string, Role> = {
   'POST /beta/enrollments/:id/reinvite': 'viewer',
   'POST /beta/enrollments/:id/extend': 'viewer',
   'POST /beta/enrollments/:id/grace': 'viewer',
+  'PUT /ai-budget/:ws': 'viewer',
+  'POST /workspaces-deleted/restore': 'viewer',
+  'POST /workspaces-deleted/erase': 'viewer',
+  'POST /orgs/:id/erase': 'viewer',
   // A beta team's Admin switches usage measurement (T8).
   'PUT /beta/measurement': 'admin',
   // A person of a beta team answers its surveys, whatever their role.

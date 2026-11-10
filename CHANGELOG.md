@@ -4,6 +4,36 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.56] - 2026-11-10
+
+### Nowe
+
+- alert the operator by e-mail and check the database in health (#131)
+
+## [0.1.55] - 2026-11-10
+
+### Nowe
+
+- erase deleted workspaces after 30 days and organizations on request (#129)
+
+## [0.1.54] - 2026-11-09
+
+### Nowe
+
+- give workspaces the platform's AI with a monthly limit (#128)
+
+## [0.1.53] - 2026-11-09
+
+### Nowe
+
+- back up the database daily to Backblaze B2 with a restore check (#127)
+
+## [0.1.52] - 2026-11-09
+
+### Nowe
+
+- deploy to Render in the EU with security headers (#125)
+
 ## [0.1.51] - 2026-11-09
 
 ### Nowe

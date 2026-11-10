@@ -1,0 +1,139 @@
+# Render Blueprint for the closed beta (T1, docs/DEPLOYMENT.md): one web service from the repo's Dockerfile and one
+# Postgres, both in Frankfurt (Render's only EU region), the database reachable only over Render's private network.
+# Values of secrets never live here: `sync: false` makes Render ask for them when the Blueprint is created, and
+# `generateValue: true` makes Render create a random one once. Field names follow Render's Blueprint spec
+# (render.com/docs/blueprint-spec, checked 2026-11-09). Plans: the smallest paid ones, enough for the beta
+# (docs/DEPLOYMENT.md, "Plan i koszt"); never a free plan: a free web service sleeps (the beta's hourly job stops)
+# and free Postgres expires after 30 days, without point-in-time recovery.
+services:
+  - type: web
+    name: quorum
+    runtime: docker
+    region: frankfurt
+    # 0.5 CPU, 512 MB RAM. Move to 1c-2g when memory stays above ~400 MB (docs/DEPLOYMENT.md).
+    plan: 0.5c-512mb
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # One instance only: the write queue and the beta's job run in the process (docs/WORKSPACES-F5-PLAN.md).
+    numInstances: 1
+    healthCheckPath: /api/health
+    # Deploy a commit of main only after its GitHub checks passed.
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: CI_DATABASE_URL
+        fromDatabase:
+          name: quorum-db
+          property: connectionString
+      # People log in with Atlassian; each team connects its own Jira and Confluence by OAuth.
+      - key: CI_AUTH_MODE
+        value: accounts
+      - key: CI_CONNECT_MODE
+        value: oauth
+      # Render's load balancer stands in front of the service: one hop (docs/DEPLOYMENT.md, "Sprawdzenie").
+      - key: CI_TRUST_PROXY
+        value: "1"
+      # The public address, e.g. https://quorum.example.com (with the custom domain) and its host name.
+      - key: CI_PUBLIC_URL
+        sync: false
+      - key: CI_ALLOWED_HOSTS
+        sync: false
+      # The Atlassian OAuth 2.0 (3LO) app: login (read:me) and connecting Jira/Confluence (docs/CONNECT-ATLASSIAN.md).
+      - key: ATLASSIAN_CLIENT_ID
+        sync: false
+      - key: ATLASSIAN_CLIENT_SECRET
+        sync: false
+      # Created once by Render. Losing CI_ENCRYPTION_KEY makes stored connections unreadable: keep a copy in a
+      # password manager (docs/DEPLOYMENT.md).
+      - key: CI_ENCRYPTION_KEY
+        generateValue: true
+      - key: CI_ADMIN_TOKEN
+        generateValue: true
+      - key: CI_USAGE_SECRET
+        generateValue: true
+      # The first Owner and the operators of the beta: your Atlassian account's e-mail.
+      - key: CI_BOOTSTRAP_EMAIL
+        sync: false
+      - key: CI_OPERATOR_EMAILS
+        sync: false
+      # The beta's mail (docs/SETUP-BETA.md). Without them, mails only go to the log.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: CI_MAIL_FROM
+        sync: false
+      # Optional: usage measurement also to PostHog EU (docs/BETA-PLAN.md §8).
+      - key: POSTHOG_API_KEY
+        sync: false
+      # The platform's AI (T4, docs/AI-PLATFORM.md): Claude on Amazon Bedrock in the EU for every workspace, with a
+      # monthly limit per workspace that the operator changes on #/operator. Workspaces cannot pick another provider.
+      - key: CI_AI_PROVIDER
+        value: bedrock
+      - key: CI_AI_REGION
+        value: eu-central-1
+      # The Bedrock model or EU inference profile id, as the Bedrock console shows it (docs/AI-PLATFORM.md, step 2).
+      - key: CI_AI_MODEL
+        sync: false
+      - key: CI_AI_MONTHLY_LIMIT_USD
+        value: "50"
+      # An IAM user allowed only bedrock:InvokeModel on that model (docs/AI-PLATFORM.md, step 1).
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Monitoring (T6, docs/DEPLOYMENT.md step 11): the dead-man's switch pinged after every hourly run. Alerts by
+      # e-mail go to CI_OPERATOR_EMAILS (or CI_ALERT_EMAILS) through Resend.
+      - key: CI_HEARTBEAT_URL
+        sync: false
+
+  # T5 (docs/BACKUPS.md): a daily backup outside Render, to Backblaze B2 (EU Central, Amsterdam), locked in
+  # compliance mode. Same image as the app; the backup reads each workspace under its own row-level security scope
+  # with the app's role and seals the export with BACKUP_ENCRYPTION_KEY. A failed run makes Render notify.
+  - type: cron
+    name: quorum-backup
+    runtime: docker
+    region: frankfurt
+    plan: 0.5c-512mb
+    # Every day at 02:17 UTC.
+    schedule: "17 2 * * *"
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node --import tsx packages/server/src/backup-cli.ts
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CI_DATABASE_URL
+        fromDatabase:
+          name: quorum-db
+          property: connectionString
+      # Created by you (openssl rand -hex 32) and kept in the password manager first: without it no backup opens.
+      - key: BACKUP_ENCRYPTION_KEY
+        sync: false
+      # From Backblaze B2: the bucket's endpoint (https://s3.eu-central-003.backblazeb2.com), its name and an
+      # application key limited to that bucket.
+      - key: B2_ENDPOINT
+        sync: false
+      - key: B2_BUCKET
+        sync: false
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APPLICATION_KEY
+        sync: false
+      # Pinged after every successful backup (docs/DEPLOYMENT.md step 11).
+      - key: BACKUP_HEARTBEAT_URL
+        sync: false
+
+databases:
+  - name: quorum-db
+    databaseName: quorum
+    user: quorum_app
+    region: frankfurt
+    # 256 MB RAM, 100 connections; a disk can grow later but never shrink.
+    plan: 0.1c-256mb
+    diskSizeGB: 5
+    postgresMajorVersion: "17"
+    # No address on the internet: only services in this Render account reach it.
+    ipAllowList: []

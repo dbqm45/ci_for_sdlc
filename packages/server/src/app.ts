@@ -10,19 +10,22 @@ import { SURVEYS } from './beta-surveys.js';
 import { betaMails, runBetaJob } from './beta-job.js';
 import { PAUSE_AFTER_DAYS } from './beta-lifecycle.js';
 import { mailerFromEnv, type Mailer } from './mailer.js';
+import { checkRlsRole, securityHeaders, trustProxyFrom } from './production.js';
+import { AiBudget, aiPlatformFrom, type AiPlatformConfig, type BudgetStatus } from './ai-budget.js';
+import { Alerts, databaseResponds, heartbeat } from './monitoring.js';
 import { LOCAL_PEOPLE, MemoryMailer, localBetaMode, shiftedClock } from './beta-local.js';
 import { PostHogSink, Usage, triggerOf, usageReport, type UsageEventName, type UsageSink } from './usage.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
-import { guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
+import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { ensure, who, workspaceRoutes } from './routes-workspace.js';
 import { MUTATION, WORKSPACE_ID_PATTERN, approvalRequestBody, changeParams, errors, oauthCallbackQuery, problem, workspaceBody, workspaceDeleteBody, workspaceParams, workspaceRenameBody } from './schemas.js';
 import type { Store } from './store.js';
 import { APP_VERSION } from './version.js';
 import pg from 'pg';
 import { migrate } from './backend.js';
-import { DEFAULT_WORKSPACE, FileStorage, PgStorage, WorkspaceExistsError, WorkspaceRefusedError, Workspaces, type Workspace } from './workspaces.js';
+import { DEFAULT_WORKSPACE, ERASE_AFTER_DAYS, FileStorage, PgStorage, WorkspaceExistsError, WorkspaceRefusedError, Workspaces, type Workspace } from './workspaces.js';
 
 export { awsCredentialsConfigured } from './routes-workspace.js';
 
@@ -50,6 +53,10 @@ export interface AppOptions {
   bootstrapEmail?: string;
   /** Defaults to CI_OPERATOR_EMAILS (comma-separated): who may open organizations (docs/ORGANIZATIONS-PLAN.md). */
   operatorEmails?: string[];
+  /** Who gets the monitoring alerts (T6); defaults to CI_ALERT_EMAILS, else CI_OPERATOR_EMAILS. */
+  alertEmails?: string[];
+  /** The platform's AI and its limits (T4); defaults to CI_AI_PROVIDER and friends; `false` = none. */
+  aiPlatform?: AiPlatformConfig | false;
   /** Closed beta (docs/BETA-ENROLLMENT-PLAN.md): its length, default CI_BETA_WEEKS or 8. */
   betaWeeks?: number;
   /** Whether teams may apply; default true unless CI_BETA_APPLICATIONS=closed. */
@@ -75,7 +82,7 @@ interface ChangePart {
  * The server. `engine` and `store` are those of the `default` workspace (F5, docs/WORKSPACES-F5-PLAN.md); the others
  * are in `workspaces`.
  */
-export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts; betaJob: (now?: number) => Promise<void>; usage: Usage; settle: () => Promise<void> }> {
+export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts; betaJob: (now?: number) => Promise<void>; usage: Usage; alerts: Alerts; settle: () => Promise<void> }> {
   const authMode = opts.authMode ?? process.env.CI_AUTH_MODE ?? 'token';
   if (authMode !== 'token' && authMode !== 'accounts') throw new Error(`CI_AUTH_MODE must be "token" or "accounts", not "${authMode}".`);
   const connect = opts.connect ?? connectConfigFromEnv();
@@ -85,7 +92,17 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const clock = local.enabled ? shiftedClock() : undefined;
   const localMail = local.enabled && !opts.mailer ? new MemoryMailer() : undefined;
   // Strict bodies: unknown properties and wrong types are rejected, not silently dropped or coerced.
-  const app = Fastify({ logger: opts.logger ?? false, ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } } });
+  const app = Fastify({
+    logger: opts.logger ?? false,
+    // Behind the hosting's load balancer (CI_TRUST_PROXY = its number of hops), req.ip is the client's address.
+    trustProxy: trustProxyFrom(process.env.CI_TRUST_PROXY),
+    ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } },
+  });
+  // Security headers on every response (docs/DEPLOYMENT.md): no foreign scripts, no framing, HSTS over https.
+  const headers = securityHeaders(connect.publicUrl);
+  app.addHook('onSend', async (_req, reply) => {
+    for (const [k, v] of Object.entries(headers)) if (!reply.hasHeader(k)) reply.header(k, v);
+  });
   let pdi!: PdiLink;
 
   /** The pdi changes with the stories of every workspace (F5): each workspace is analysed first. */
@@ -100,13 +117,26 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
 
   const databaseUrl = opts.databaseUrl ?? process.env.CI_DATABASE_URL ?? '';
   const pool = databaseUrl ? new pg.Pool({ connectionString: databaseUrl, max: 10 }) : undefined;
-  if (pool) await migrate(pool);
+  if (pool) {
+    // Row-level security keeps workspaces apart only for a role it applies to: refuse to serve people otherwise.
+    const problem = await checkRlsRole(pool);
+    if (problem && process.env.NODE_ENV === 'production') throw new Error(`CI_DATABASE_URL: ${problem}. Use a role without SUPERUSER and BYPASSRLS (docs/DEPLOYMENT.md).`);
+    if (problem) console.warn(`Warning — CI_DATABASE_URL: ${problem}. Fine for a local test, never in production.`);
+    await migrate(pool);
+  }
   const storage = pool ? new PgStorage(pool) : new FileStorage(opts.dataDir);
   /** Resolves when the background work (e.g. the beta job after a join) is done; set below. */
   let settle: () => Promise<void> = async () => undefined;
   /** Usage measurement after each analysis (T8); set once the beta and the accounts are known. */
   let afterAnalysis: ((w: Workspace) => Promise<void>) | undefined;
+  // The platform's AI and the monthly limit per workspace (T4, docs/AI-PLATFORM.md); none = each workspace's own AI.
+  const aiPlatform = opts.aiPlatform !== undefined ? opts.aiPlatform || undefined : aiPlatformFrom(process.env);
+  /** Set once the mailer is known: an alert to the operator when a workspace reaches its limit (T6). */
+  let onAiLimit: (s: BudgetStatus) => void = () => undefined;
+  const aiBudget = aiPlatform ? new AiBudget(storage.backend('_platform'), aiPlatform.defaultLimitUsd, (s) => onAiLimit(s)) : undefined;
+  await aiBudget?.init();
   const workspaces = new Workspaces(storage, connect, async (w) => {
+    if (aiPlatform) w.engine.aiPlatform = { config: aiPlatform, budget: aiBudget, workspace: w.id };
     /** A2b: decided A2a steps go to pdi's registry as decision.recorded, with the item's CHG from its `change:` label. */
     w.sink = async (steps) => {
       if (!pdi.enabled) return;
@@ -167,6 +197,15 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   usageTimer?.unref();
   const mailer = opts.mailer ?? localMail ?? mailerFromEnv((o, msg) => app.log.info(o, msg));
   const operatorEmails = opts.operatorEmails ?? (process.env.CI_OPERATOR_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean);
+
+  // ------------------------------------------------------------------ monitoring (T6)
+  const alertEmails = process.env.CI_ALERTS === 'off' ? [] : (opts.alertEmails ?? (process.env.CI_ALERT_EMAILS ? process.env.CI_ALERT_EMAILS.split(',').map((e) => e.trim()).filter(Boolean) : operatorEmails));
+  const alerts = new Alerts(mailer, { to: alertEmails, publicUrl: connect.publicUrl, log: (o, msg) => app.log.warn(o, msg) });
+  const alert = (...a: Parameters<Alerts['notify']>) => void alerts.notify(...a);
+  onAiLimit = (s) => alert('ai_limit_reached', s.workspace, { month: s.month, limitUsd: s.limitUsd, spentUsd: s.spentUsd, change: 'the operator page → AI limits' });
+  app.addHook('onResponse', async (req, reply) => {
+    if (reply.statusCode >= 500 && req.url.split('?')[0] !== '/api/health') alert('server_error', `${req.method} ${req.routeOptions.url ?? req.url.split('?')[0]}`, { status: reply.statusCode, requestId: req.id });
+  });
   /** A beta mail that must not fail the request: a failure is logged (the job retries its own mails). */
   const mailNow = (m: Parameters<Mailer['send']>[0]) => void mailer.send(m).catch((err) => app.log.warn({ err: String(err), subject: m.subject }, 'beta mail failed'));
   if (accounts.enabled) await beta.init();
@@ -199,6 +238,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   /** When each finding and drift event was first seen, per workspace (for `finding_shown` once and `age_hours`). */
   const seenDoc = (w: Workspace) => `usage-seen-${w.id}.json`;
   const platform = storage.backend('_platform');
+  await platform.init();
   const seenOf = async (w: Workspace) => ((await platform.read(seenDoc(w))) as Record<string, string> | undefined) ?? {};
   afterAnalysis = async (w) => {
     const orgId = orgOf(w);
@@ -325,7 +365,16 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   });
 
   app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
-  app.get('/api/health', async () => ({ ok: true, version: APP_VERSION, storage: storage.kind, running: main.engine.state.running, lastError: main.engine.state.lastError }));
+  // For uptime monitors and Render's health check: 503 when the database does not answer within 2 s (T6). No error
+  // text: the endpoint is public under any Host.
+  app.get('/api/health', async (_req, reply) => {
+    const database = pool ? ((await databaseResponds(() => pool.query('select 1'))) ? 'ok' : 'down') : 'none';
+    if (database === 'down') {
+      alert('database_down', 'GET /api/health', { storage: storage.kind });
+      reply.status(503);
+    }
+    return { ok: database !== 'down', version: APP_VERSION, storage: storage.kind, database, running: main.engine.state.running, analysisFailed: !!main.engine.state.lastError };
+  });
   app.get('/api/rules', async () => RULES.map(({ id, name, description, appliesTo }) => ({ id, name, description, appliesTo })));
 
   // ------------------------------------------------------------------ workspaces (F5, docs/WORKSPACES-F5-PLAN.md)
@@ -364,10 +413,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     },
   );
 
-  /** Deleting moves the workspace's data aside (nothing is erased); the id must be typed back. */
+  /** Deleting moves the workspace's data aside for ERASE_AFTER_DAYS, then it is erased (T7); the id must be typed back. */
   app.delete<{ Params: { ws: string }; Body: { confirm: string; by?: string } }>(
     '/api/workspaces/:ws',
-    { schema: { summary: 'Delete a workspace: it stops and its data moves to workspaces-deleted/ in the data directory', params: workspaceParams, body: workspaceDeleteBody, response: errors(400, 404, 409, 422), ...MUTATION } },
+    { schema: { summary: `Delete a workspace: it stops, its Atlassian connection is dropped, and its data is erased after ${ERASE_AFTER_DAYS} days (until then an operator can restore it)`, params: workspaceParams, body: workspaceDeleteBody, response: errors(400, 404, 409, 422), ...MUTATION } },
     async (req) => {
       const id = req.params.ws;
       visibleWorkspace(req, id);
@@ -375,9 +424,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       if (req.body.confirm !== id) throw httpError(400, `Type the workspace id (${id}) in confirm to delete it.`);
       const at = new Date().toISOString();
       try {
-        const { archivedTo } = await workspaces.remove(id, at);
-        await auditOf(orgOfReq(req)).audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${id} deleted; its data moved to ${archivedTo}` });
-        return { deleted: id, archivedTo };
+        const { archivedTo, eraseAfter } = await workspaces.remove(id, at);
+        await auditOf(orgOfReq(req)).audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${id} deleted; its data is erased for good on ${eraseAfter.slice(0, 10)} (until then an operator can restore it)` });
+        return { deleted: id, archivedTo, eraseAfter };
       } catch (e) {
         if (e instanceof WorkspaceRefusedError) throw httpError(409, e.message);
         throw e;
@@ -620,6 +669,153 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     }));
   });
 
+  // ------------------------------------------------------------------ the platform's AI and its limits (T4)
+  /**
+   * With accounts, an operator (CI_OPERATOR_EMAILS) or the admin token. Without them the installation is one
+   * organization: whoever may read sees the limits, and a change needs the admin token (or this machine without one).
+   */
+  const requirePlatformOperator = (req: FastifyRequest, change = false) => {
+    if (accounts.enabled ? req.principal === 'admin_token' || req.account?.operator : !change || req.principal === 'admin_token' || req.principal === 'loopback') return;
+    throw httpError(403, 'Only an operator of this installation (CI_OPERATOR_EMAILS) may do this.');
+  };
+  const noPlatformAi = () => httpError(404, 'Workspaces choose their own AI here: set CI_AI_PROVIDER for the platform\'s AI and its limits (docs/AI-PLATFORM.md).');
+
+  app.get('/api/ai-budget', { schema: { summary: "The platform's AI and every workspace's spend this month against its limit (operator)", response: errors(403, 404) } }, async (req) => {
+    requirePlatformOperator(req);
+    if (!aiPlatform || !aiBudget) throw noPlatformAi();
+    const ws = new Map(workspaces.all().map((w) => [w.id, w]));
+    return {
+      provider: aiPlatform.provider.provider,
+      model: aiPlatform.provider.model,
+      ...(aiPlatform.defaultLimitUsd !== undefined && { defaultLimitUsd: aiPlatform.defaultLimitUsd }),
+      workspaces: aiBudget.all([...ws.keys()]).map((b) => {
+        const w = ws.get(b.workspace);
+        const org = w && orgOf(w);
+        return { ...b, name: w?.name ?? b.workspace, ...(org && { orgId: org, orgName: accounts.allOrgs().find((o) => o.id === org)?.name }), ...(!w && { removed: true }) };
+      }),
+    };
+  });
+
+  const aiLimitBody = {
+    type: 'object',
+    required: ['limitUsd'],
+    additionalProperties: false,
+    properties: {
+      // A number of dollars; null = no limit; "default" = back to CI_AI_MONTHLY_LIMIT_USD.
+      limitUsd: { anyOf: [{ type: 'number', minimum: 0, maximum: 100000 }, { type: 'null' }, { type: 'string', enum: ['default'] }] },
+    },
+  } as const;
+
+  app.put<{ Params: { ws: string }; Body: { limitUsd: number | null | 'default' } }>(
+    '/api/ai-budget/:ws',
+    { schema: { summary: "Change a workspace's monthly AI limit; it applies to the next call (operator)", params: workspaceParams, body: aiLimitBody, response: errors(403, 404, 422), ...MUTATION } },
+    async (req) => {
+      requirePlatformOperator(req, true);
+      if (!aiPlatform || !aiBudget) throw noPlatformAi();
+      const w = workspaces.get(req.params.ws);
+      if (!w) throw httpError(404, `No workspace ${req.params.ws}`);
+      const before = aiBudget.status(w.id);
+      const limit = req.body.limitUsd === 'default' ? undefined : req.body.limitUsd;
+      await aiBudget.setLimit(w.id, limit);
+      const after = aiBudget.status(w.id);
+      const shown = (s: typeof after) => (s.limitUsd === undefined ? 'no limit' : `$${s.limitUsd.toFixed(2)}`);
+      await w.store.audit({ at: new Date().toISOString(), kind: 'settings', ...who(req), summary: `Monthly AI limit changed by the operator: ${shown(before)} → ${shown(after)}${after.custom ? '' : ' (the default)'}` });
+      return after;
+    },
+  );
+
+  // ------------------------------------------------------------------ erasing data (T7, docs/DATA-DELETION.md)
+  /** What was erased, for the operator's record: names and counts, never a person's data. */
+  const recordErasure = (entry: Record<string, unknown>) => platform.append('erasures', entry);
+
+  app.get('/api/workspaces-deleted', { schema: { summary: `Deleted workspaces that can still be restored before they are erased (${ERASE_AFTER_DAYS} days; operator)`, response: errors(403) } }, async (req) => {
+    requirePlatformOperator(req);
+    return workspaces.deleted();
+  });
+
+  const archivedBody = { type: 'object', required: ['archivedAs'], additionalProperties: false, properties: { archivedAs: { type: 'string', minLength: 1, maxLength: 200 } } } as const;
+
+  app.post<{ Body: { archivedAs: string } }>(
+    '/api/workspaces-deleted/restore',
+    { schema: { summary: 'Restore a deleted workspace under its id; its Atlassian connection has to be made again (operator)', body: archivedBody, response: errors(403, 404, 409, 422), ...MUTATION } },
+    async (req) => {
+      requirePlatformOperator(req, true);
+      try {
+        const at = new Date().toISOString();
+        const w = await workspaces.restore(req.body.archivedAs, at);
+        await auditOf(orgOf(w)).audit({ at, kind: 'workspace', ...who(req), summary: `Workspace ${w.id} restored by the operator` });
+        return { id: w.id, name: w.name };
+      } catch (e) {
+        if (e instanceof WorkspaceRefusedError) throw httpError(404, e.message);
+        if (e instanceof WorkspaceExistsError) throw httpError(409, e.message);
+        throw e;
+      }
+    },
+  );
+
+  /** Erases a deleted workspace's data and what the platform keeps about it (AI spend, usage notes). */
+  const eraseDeleted = async (archivedAs: string, at: string, by: string, reason: 'operator' | 'expired') => {
+    const d = await workspaces.erase(archivedAs);
+    await aiBudget?.forget(d.id);
+    await platform.remove(`usage-seen-${d.id}.json`);
+    await recordErasure({ at, kind: 'workspace_erased', workspace: d.id, deletedAt: d.deletedAt, reason, by });
+    return d;
+  };
+
+  app.post<{ Body: { archivedAs: string } }>(
+    '/api/workspaces-deleted/erase',
+    { schema: { summary: 'Erase a deleted workspace for good now, before its date (operator)', body: archivedBody, response: errors(403, 404, 422), ...MUTATION } },
+    async (req) => {
+      requirePlatformOperator(req, true);
+      try {
+        const d = await eraseDeleted(req.body.archivedAs, new Date().toISOString(), actorOf(req) ?? 'operator', 'operator');
+        return { erased: d.id };
+      } catch (e) {
+        if (e instanceof WorkspaceRefusedError) throw httpError(404, e.message);
+        throw e;
+      }
+    },
+  );
+
+  const eraseOrgBody = { type: 'object', required: ['confirm'], additionalProperties: false, properties: { confirm: { type: 'string', maxLength: 100 } } } as const;
+
+  app.post<{ Params: { id: string }; Body: { confirm: string } }>(
+    '/api/orgs/:id/erase',
+    {
+      schema: {
+        summary: "Erase an organization for good on its request: workspaces, Atlassian connections, people, invitations, usage events, AI spend, beta application and survey answers (operator; the organization's name typed back)",
+        params: { type: 'object', required: ['id'], properties: { id: { type: 'string', maxLength: 100 } } },
+        body: eraseOrgBody,
+        response: errors(400, 403, 404, 409, 422),
+        ...MUTATION,
+      },
+    },
+    async (req) => {
+      requireOperator(req);
+      const org = accounts.allOrgs().find((o) => o.id === req.params.id);
+      if (!org) throw httpError(404, 'No such organization.');
+      if (org.id === accounts.homeOrgId) throw httpError(409, 'The first organization cannot be erased.');
+      if (req.body.confirm !== org.name) throw httpError(400, `Type the organization's name (${org.name}) in confirm to erase it.`);
+      const at = new Date().toISOString();
+      const by = actorOf(req) ?? 'operator';
+      const live = workspaces.all().filter((w) => orgOf(w) === org.id);
+      for (const w of live) await workspaces.remove(w.id, at);
+      const archived = (await workspaces.deleted()).filter((d) => d.orgId === org.id);
+      for (const d of archived) await eraseDeleted(d.archivedAs, at, by, 'operator');
+      const events = await usage.eraseOrg(org.id, archived.map((d) => d.id));
+      const enrollment = await beta.eraseOrg(org.id);
+      const people = await accounts.eraseOrg(org.id);
+      const summary = { workspaces: archived.length, people: people.people, invitations: people.invitations, usageEvents: events, surveyAnswers: enrollment.answers, betaEnrollments: enrollment.enrollments };
+      await recordErasure({ at, kind: 'org_erased', org: org.name, by, ...summary });
+      return { erased: org.name, ...summary };
+    },
+  );
+
+  app.get('/api/erasures', { schema: { summary: 'What was erased and when: names and counts only (operator)', response: errors(403) } }, async (req) => {
+    requirePlatformOperator(req);
+    return (await platform.tail('erasures', 1000)).reverse();
+  });
+
   const orgBody = {
     type: 'object',
     required: ['name', 'workspace', 'ownerEmail'],
@@ -649,9 +845,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     const at = new Date().toISOString();
     const w = await workspaces.create(o.workspace.id, o.workspace.name ?? o.name, at, org.id);
     const invitation = await accounts.invite(actor ?? 'operator', 'owner', o.ownerEmail, org.id);
-    const summary = `Organization ${org.name} opened with workspace ${w.id}; Owner invitation for ${invitation.email}`;
-    await w.store.audit({ at, kind: 'member', actor, via, summary });
-    await main.store.audit({ at, kind: 'member', actor, via, summary });
+    const summary = `Organization ${org.name} opened with workspace ${w.id}`;
+    await w.store.audit({ at, kind: 'member', actor, via, summary: `${summary}; Owner invitation for ${invitation.email}` });
+    // The first organization's record keeps no e-mail of another one: erasing that organization must leave none (T7).
+    await main.store.audit({ at, kind: 'member', actor, via, summary: `${summary}; Owner invited` });
     return { org, workspace: { id: w.id, name: w.name }, invitation };
   }
 
@@ -891,10 +1088,33 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
           now,
         )
       : Promise.resolve();
-  const betaTimer = accounts.enabled && process.env.CI_BETA_JOB !== 'off' && process.env.CI_DISABLE_SCHEDULE !== 'true' ? setInterval(() => void betaJob().catch((e) => app.log.error(e)), 3_600_000) : undefined;
+  const jobFailed = (job: string) => (e: unknown) => {
+    app.log.error(e);
+    alert('job_failed', job, { error: e instanceof Error ? e.name : 'error' });
+  };
+  const betaTimer = accounts.enabled && process.env.CI_BETA_JOB !== 'off' && process.env.CI_DISABLE_SCHEDULE !== 'true' ? setInterval(() => void betaJob().catch(jobFailed('beta job')), 3_600_000) : undefined;
   betaTimer?.unref();
-  if (betaTimer) void betaJob().catch((e) => app.log.error(e));
+  if (betaTimer) void betaJob().catch(jobFailed('beta job'));
+  // Deleted workspaces past their date are erased for good, hourly and once at start (T7).
+  const purge = async () => {
+    for (const d of await workspaces.purge(new Date())) {
+      await aiBudget?.forget(d.id);
+      await platform.remove(`usage-seen-${d.id}.json`);
+      await recordErasure({ at: new Date().toISOString(), kind: 'workspace_erased', workspace: d.id, deletedAt: d.deletedAt, reason: 'expired', by: 'system' });
+      app.log.info({ workspace: d.id }, 'deleted workspace erased for good');
+    }
+  };
+  // The hourly run also calls the heartbeat: when it stops coming, the dead-man's switch alerts (T6).
+  const hourly = () =>
+    purge().then(
+      () => heartbeat(process.env.CI_HEARTBEAT_URL, (o, msg) => app.log.warn(o, msg)),
+      jobFailed('erasing deleted workspaces'),
+    );
+  const purgeTimer = process.env.CI_DISABLE_SCHEDULE !== 'true' ? setInterval(() => void hourly(), 3_600_000) : undefined;
+  purgeTimer?.unref();
+  void hourly();
   app.addHook('onClose', async () => {
+    if (purgeTimer) clearInterval(purgeTimer);
     if (betaTimer) clearInterval(betaTimer);
     if (usageTimer) clearInterval(usageTimer);
     await usage.idle();
@@ -1044,5 +1264,5 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       await usage.idle().catch(() => undefined);
       await pool.end();
     });
-  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts, betaJob, usage, settle: () => settle() };
+  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts, betaJob, usage, alerts, settle: () => settle() };
 }
