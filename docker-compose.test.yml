@@ -1,0 +1,30 @@
+# Postgres for the storage tests on this computer (packages/server/test/postgres.test.ts), the same as the `test`
+# job in .github/workflows/ci.yml. Separate from docker-compose.yml, which needs CI_ADMIN_TOKEN and runs the app.
+#
+#   npm run db:test:up      start and wait for the healthcheck
+#   npm run test:pg         run the Postgres tests against it
+#   npm run db:test:down    stop (no data is kept)
+#
+# The passwords are throwaway values of a container that keeps its data in memory only.
+
+name: ci_for_sdlc_test
+
+services:
+  postgres-test:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ci_admin
+      POSTGRES_PASSWORD: ci-throwaway
+      POSTGRES_DB: postgres
+    ports:
+      # Bound to loopback, on a port that does not clash with a Postgres already running on 5432.
+      - '127.0.0.1:55432:5432'
+    volumes:
+      - ./scripts/postgres-test-init.sql:/docker-entrypoint-initdb.d/01-ci-test.sql:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ci_admin -d postgres']
+      interval: 2s
+      timeout: 5s
+      retries: 30

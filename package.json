@@ -42,7 +42,10 @@
     "sandbox:figma-plugin": "tsx packages/sandbox/src/figma-plugin.ts",
     "lint:commit": "node scripts/check-commit-message.mjs",
     "hooks:install": "git config core.hooksPath .githooks",
-    "db:import": "npm run db:import -w @ci/server"
+    "db:import": "npm run db:import -w @ci/server",
+    "db:test:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "db:test:down": "docker compose -f docker-compose.test.yml down",
+    "test:pg": "node scripts/test-pg.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
