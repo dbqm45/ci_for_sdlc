@@ -27,6 +27,7 @@ kopie w Backblaze B2 (UE), maile przez Resend.
 | Logowanie i Jira/Confluence | aplikacja OAuth w Atlassian Developer Console | logowanie kontem Atlassian, połączenie stron zespołów |
 | Maile | Resend | zgłoszenia, zaproszenia, przypomnienia o ankietach |
 | AI | Amazon Bedrock, eu-central-1 | przegląd historyjek modelem Claude |
+| Monitoring | alerty e-mail z aplikacji, monitor dostępności (np. UptimeRobot), strażnik zadań (np. Healthchecks.io) | wiesz o awarii przed zespołem |
 
 Konfiguracja Render jest w repo: [`render.yaml`](../render.yaml) (Blueprint). Sekrety nie mają w nim wartości —
 Render pyta o nie przy zakładaniu (`sync: false`) albo sam je losuje (`generateValue: true`). Render wdraża każdy commit
@@ -148,6 +149,7 @@ ok. 400 MB (pomiar lokalny po starcie: ok. 160 MB); dysk → więcej GB (da się
    | `quorum` | `POSTHOG_API_KEY` | opcjonalnie (pomiar użycia także w PostHog UE); puste = tylko własny log |
    | `quorum-backup` | `BACKUP_ENCRYPTION_KEY` | krok 0.3 |
    | `quorum-backup` | `B2_ENDPOINT`, `B2_BUCKET`, `B2_KEY_ID`, `B2_APPLICATION_KEY` | krok 4.3, 4.5 |
+   | `quorum`, `quorum-backup` | `CI_HEARTBEAT_URL`, `BACKUP_HEARTBEAT_URL` | krok 11.3; do tego czasu puste |
 
    Pozostałe zmienne są już w `render.yaml`: `NODE_ENV=production`, `CI_AUTH_MODE=accounts`, `CI_CONNECT_MODE=oauth`,
    `CI_TRUST_PROXY=1`, `CI_AI_PROVIDER=bedrock`, `CI_AI_REGION=eu-central-1`, `CI_AI_MONTHLY_LIMIT_USD=50`, adres bazy
@@ -212,7 +214,31 @@ ok. 400 MB (pomiar lokalny po starcie: ok. 160 MB); dysk → więcej GB (da się
    i ustawienia widoczne. `docker stop quorum-restore`, a datę próby wpisz w tabeli w [`BACKUPS.md`](BACKUPS.md) §3.
    Powtórz raz w trakcie bety.
 
-### Krok 11. Sprawdzenie bezpieczeństwa (15 min)
+### Krok 11. Monitoring i alerty (20 min)
+Cel: o awarii dowiadujesz się przed zespołem. Trzy warstwy, wszystkie w darmowych planach:
+
+1. **Alerty z aplikacji (e-mail)** — działają same, gdy działa Resend (krok 2): błąd serwera (5xx), nieudane zadanie
+   w tle, baza nie odpowiada, przestrzeń osiągnęła limit AI. Idą na `CI_OPERATOR_EMAILS` (albo `CI_ALERT_EMAILS`, jeśli
+   ustawisz), najwyżej jeden mail tego samego rodzaju na godzinę, z nazwą trasy i identyfikatorem żądania (szukasz go
+   w *Logs*), nigdy z treścią. Wyłączenie: `CI_ALERTS=off`.
+2. **Monitor dostępności** — zewnętrzna usługa co kilka minut pyta `https://<domena>/api/health`; odpowiedź 503 albo
+   jej brak = alert. Np. UptimeRobot albo Better Stack (darmowe plany; wybierz lokalizacje sprawdzania w Europie, jeśli
+   panel pozwala). Ustaw: adres `https://<domena>/api/health`, co 5 minut, oczekiwany kod 200, alert e-mailem (i SMS/
+   aplikacją, jeśli chcesz). Zapisz konto w menedżerze haseł, włącz 2FA.
+3. **Strażnik zadań (dead man's switch)** — usługa, która alarmuje, gdy coś **przestaje** się zgłaszać, np.
+   Healthchecks.io (darmowy plan). Utwórz dwa sprawdzenia:
+   - „Quorum hourly” — okres 1 godzina, tolerancja 30 minut → jego adres pingowania wpisz w `quorum` jako
+     `CI_HEARTBEAT_URL` (serwer woła go po każdym godzinnym przebiegu zadań);
+   - „Quorum backup” — okres 1 dzień, tolerancja 2 godziny → adres wpisz w `quorum-backup` jako
+     `BACKUP_HEARTBEAT_URL` (zadanie kopii woła go po udanym wysłaniu kopii).
+
+   Adresy pingowania to sekrety (kto je zna, może udawać, że wszystko działa) — menedżer haseł.
+4. **Sprawdź:** w Render zatrzymaj na chwilę `quorum` (*Suspend*) → w kilka minut przychodzi alert monitora
+   dostępności; wznów (*Resume*). W Healthchecks.io oba sprawdzenia mają status „up” po pierwszym przebiegu (kopię
+   wywołaj *Trigger Run*).
+5. Zapisz w mapie (§3), gdzie są monitory i kto dostaje alerty.
+
+### Krok 12. Sprawdzenie bezpieczeństwa (15 min)
 
 | # | Co | Jak sprawdzić |
 |---|---|---|
@@ -228,8 +254,9 @@ ok. 400 MB (pomiar lokalny po starcie: ok. 160 MB); dysk → więcej GB (da się
 | 10 | Kopie | Render *Recovery* (odtwarzanie z 3 dni) + udany `quorum-backup` + próba odtworzenia z kroku 10 |
 | 11 | Dostępy | Render → *Members*, AWS → IAM, Backblaze → klucze: tylko to, co ma tam być |
 | 12 | Limity kosztów | limit AI w aplikacji (krok 9.3) i budżet AWS (krok 3.6) |
+| 13 | Monitoring | alert monitora dostępności przyszedł przy *Suspend*, strażnik zadań „up” (krok 11) |
 
-### Krok 12. Zanim wpuścisz pierwszy zespół
+### Krok 13. Zanim wpuścisz pierwszy zespół
 1. Dokumenty z [`BETA-PLAN.md`](BETA-PLAN.md) §5: regulamin bety, polityka prywatności, **DPA** z listą
    podprzetwarzających i regionem: Render (hosting, baza), Backblaze B2 (kopie), AWS Bedrock (AI), Resend (poczta),
    PostHog (jeśli włączony).
@@ -253,6 +280,7 @@ ok. 400 MB (pomiar lokalny po starcie: ok. 160 MB); dysk → więcej GB (da się
 | Resend (domena nadawcy) | _do uzupełnienia_ |
 | Sekrety (tylko nazwy) | `CI_ENCRYPTION_KEY`, `CI_ADMIN_TOKEN`, `CI_USAGE_SECRET` (Render), `ATLASSIAN_CLIENT_SECRET`, `RESEND_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `POSTHOG_API_KEY`, `BACKUP_ENCRYPTION_KEY`, `B2_KEY_ID`, `B2_APPLICATION_KEY` — wszystkie także w menedżerze haseł |
 | Osoby z dostępem (Render, AWS, B2) | _do uzupełnienia_ |
+| Monitoring | monitor dostępności: _do uzupełnienia_; strażnik zadań: _do uzupełnienia_; alerty do: _do uzupełnienia_ |
 
 ## 4. Codzienna obsługa
 - **Nowa wersja:** merge do `main` → testy → Render wdraża sam (*Deploys*).
@@ -277,6 +305,8 @@ ok. 400 MB (pomiar lokalny po starcie: ok. 160 MB); dysk → więcej GB (da się
 | AI review: `AccessDenied` | polityka IAM (krok 3.4) albo brak dostępu do modelu (krok 3.2) |
 | „AI paused: … monthly AI limit” | przestrzeń wyczerpała limit — podnieś go na `#/operator` albo poczekaj do 1. dnia miesiąca |
 | `quorum-backup` nieudany | log zadania podaje kod S3; najczęściej Object Lock wyłączony albo zły klucz/endpoint |
+| Mail „[Quorum] Server error: …” | otwórz *Logs*, szukaj `requestId` z maila; powtarzające się → zgłoś (z requestId) |
+| `/api/health` → 503, `"database":"down"` | baza nie odpowiada: `quorum-db` w Render (status, *Metrics*); Render może też restartować usługę |
 
 ## 6. Jak to działa (tło)
 - [`SETUP-BETA.md`](SETUP-BETA.md) — wszystkie zmienne aplikacji i bety, w tym opcjonalne.

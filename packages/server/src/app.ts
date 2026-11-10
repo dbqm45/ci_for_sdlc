@@ -11,7 +11,8 @@ import { betaMails, runBetaJob } from './beta-job.js';
 import { PAUSE_AFTER_DAYS } from './beta-lifecycle.js';
 import { mailerFromEnv, type Mailer } from './mailer.js';
 import { checkRlsRole, securityHeaders, trustProxyFrom } from './production.js';
-import { AiBudget, aiPlatformFrom, type AiPlatformConfig } from './ai-budget.js';
+import { AiBudget, aiPlatformFrom, type AiPlatformConfig, type BudgetStatus } from './ai-budget.js';
+import { Alerts, databaseResponds, heartbeat } from './monitoring.js';
 import { LOCAL_PEOPLE, MemoryMailer, localBetaMode, shiftedClock } from './beta-local.js';
 import { PostHogSink, Usage, triggerOf, usageReport, type UsageEventName, type UsageSink } from './usage.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
@@ -52,6 +53,8 @@ export interface AppOptions {
   bootstrapEmail?: string;
   /** Defaults to CI_OPERATOR_EMAILS (comma-separated): who may open organizations (docs/ORGANIZATIONS-PLAN.md). */
   operatorEmails?: string[];
+  /** Who gets the monitoring alerts (T6); defaults to CI_ALERT_EMAILS, else CI_OPERATOR_EMAILS. */
+  alertEmails?: string[];
   /** The platform's AI and its limits (T4); defaults to CI_AI_PROVIDER and friends; `false` = none. */
   aiPlatform?: AiPlatformConfig | false;
   /** Closed beta (docs/BETA-ENROLLMENT-PLAN.md): its length, default CI_BETA_WEEKS or 8. */
@@ -79,7 +82,7 @@ interface ChangePart {
  * The server. `engine` and `store` are those of the `default` workspace (F5, docs/WORKSPACES-F5-PLAN.md); the others
  * are in `workspaces`.
  */
-export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts; betaJob: (now?: number) => Promise<void>; usage: Usage; settle: () => Promise<void> }> {
+export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance; engine: Engine; store: Store; pdi: PdiLink; workspaces: Workspaces; accounts: Accounts; betaJob: (now?: number) => Promise<void>; usage: Usage; alerts: Alerts; settle: () => Promise<void> }> {
   const authMode = opts.authMode ?? process.env.CI_AUTH_MODE ?? 'token';
   if (authMode !== 'token' && authMode !== 'accounts') throw new Error(`CI_AUTH_MODE must be "token" or "accounts", not "${authMode}".`);
   const connect = opts.connect ?? connectConfigFromEnv();
@@ -128,7 +131,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   let afterAnalysis: ((w: Workspace) => Promise<void>) | undefined;
   // The platform's AI and the monthly limit per workspace (T4, docs/AI-PLATFORM.md); none = each workspace's own AI.
   const aiPlatform = opts.aiPlatform !== undefined ? opts.aiPlatform || undefined : aiPlatformFrom(process.env);
-  const aiBudget = aiPlatform ? new AiBudget(storage.backend('_platform'), aiPlatform.defaultLimitUsd) : undefined;
+  /** Set once the mailer is known: an alert to the operator when a workspace reaches its limit (T6). */
+  let onAiLimit: (s: BudgetStatus) => void = () => undefined;
+  const aiBudget = aiPlatform ? new AiBudget(storage.backend('_platform'), aiPlatform.defaultLimitUsd, (s) => onAiLimit(s)) : undefined;
   await aiBudget?.init();
   const workspaces = new Workspaces(storage, connect, async (w) => {
     if (aiPlatform) w.engine.aiPlatform = { config: aiPlatform, budget: aiBudget, workspace: w.id };
@@ -192,6 +197,15 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   usageTimer?.unref();
   const mailer = opts.mailer ?? localMail ?? mailerFromEnv((o, msg) => app.log.info(o, msg));
   const operatorEmails = opts.operatorEmails ?? (process.env.CI_OPERATOR_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean);
+
+  // ------------------------------------------------------------------ monitoring (T6)
+  const alertEmails = process.env.CI_ALERTS === 'off' ? [] : (opts.alertEmails ?? (process.env.CI_ALERT_EMAILS ? process.env.CI_ALERT_EMAILS.split(',').map((e) => e.trim()).filter(Boolean) : operatorEmails));
+  const alerts = new Alerts(mailer, { to: alertEmails, publicUrl: connect.publicUrl, log: (o, msg) => app.log.warn(o, msg) });
+  const alert = (...a: Parameters<Alerts['notify']>) => void alerts.notify(...a);
+  onAiLimit = (s) => alert('ai_limit_reached', s.workspace, { month: s.month, limitUsd: s.limitUsd, spentUsd: s.spentUsd, change: 'the operator page → AI limits' });
+  app.addHook('onResponse', async (req, reply) => {
+    if (reply.statusCode >= 500 && req.url.split('?')[0] !== '/api/health') alert('server_error', `${req.method} ${req.routeOptions.url ?? req.url.split('?')[0]}`, { status: reply.statusCode, requestId: req.id });
+  });
   /** A beta mail that must not fail the request: a failure is logged (the job retries its own mails). */
   const mailNow = (m: Parameters<Mailer['send']>[0]) => void mailer.send(m).catch((err) => app.log.warn({ err: String(err), subject: m.subject }, 'beta mail failed'));
   if (accounts.enabled) await beta.init();
@@ -351,7 +365,16 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   });
 
   app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
-  app.get('/api/health', async () => ({ ok: true, version: APP_VERSION, storage: storage.kind, running: main.engine.state.running, lastError: main.engine.state.lastError }));
+  // For uptime monitors and Render's health check: 503 when the database does not answer within 2 s (T6). No error
+  // text: the endpoint is public under any Host.
+  app.get('/api/health', async (_req, reply) => {
+    const database = pool ? ((await databaseResponds(() => pool.query('select 1'))) ? 'ok' : 'down') : 'none';
+    if (database === 'down') {
+      alert('database_down', 'GET /api/health', { storage: storage.kind });
+      reply.status(503);
+    }
+    return { ok: database !== 'down', version: APP_VERSION, storage: storage.kind, database, running: main.engine.state.running, analysisFailed: !!main.engine.state.lastError };
+  });
   app.get('/api/rules', async () => RULES.map(({ id, name, description, appliesTo }) => ({ id, name, description, appliesTo })));
 
   // ------------------------------------------------------------------ workspaces (F5, docs/WORKSPACES-F5-PLAN.md)
@@ -1065,9 +1088,13 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
           now,
         )
       : Promise.resolve();
-  const betaTimer = accounts.enabled && process.env.CI_BETA_JOB !== 'off' && process.env.CI_DISABLE_SCHEDULE !== 'true' ? setInterval(() => void betaJob().catch((e) => app.log.error(e)), 3_600_000) : undefined;
+  const jobFailed = (job: string) => (e: unknown) => {
+    app.log.error(e);
+    alert('job_failed', job, { error: e instanceof Error ? e.name : 'error' });
+  };
+  const betaTimer = accounts.enabled && process.env.CI_BETA_JOB !== 'off' && process.env.CI_DISABLE_SCHEDULE !== 'true' ? setInterval(() => void betaJob().catch(jobFailed('beta job')), 3_600_000) : undefined;
   betaTimer?.unref();
-  if (betaTimer) void betaJob().catch((e) => app.log.error(e));
+  if (betaTimer) void betaJob().catch(jobFailed('beta job'));
   // Deleted workspaces past their date are erased for good, hourly and once at start (T7).
   const purge = async () => {
     for (const d of await workspaces.purge(new Date())) {
@@ -1077,9 +1104,15 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       app.log.info({ workspace: d.id }, 'deleted workspace erased for good');
     }
   };
-  const purgeTimer = process.env.CI_DISABLE_SCHEDULE !== 'true' ? setInterval(() => void purge().catch((e) => app.log.error(e)), 3_600_000) : undefined;
+  // The hourly run also calls the heartbeat: when it stops coming, the dead-man's switch alerts (T6).
+  const hourly = () =>
+    purge().then(
+      () => heartbeat(process.env.CI_HEARTBEAT_URL, (o, msg) => app.log.warn(o, msg)),
+      jobFailed('erasing deleted workspaces'),
+    );
+  const purgeTimer = process.env.CI_DISABLE_SCHEDULE !== 'true' ? setInterval(() => void hourly(), 3_600_000) : undefined;
   purgeTimer?.unref();
-  void purge().catch((e) => app.log.error(e));
+  void hourly();
   app.addHook('onClose', async () => {
     if (purgeTimer) clearInterval(purgeTimer);
     if (betaTimer) clearInterval(betaTimer);
@@ -1231,5 +1264,5 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       await usage.idle().catch(() => undefined);
       await pool.end();
     });
-  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts, betaJob, usage, settle: () => settle() };
+  return { app, engine: main.engine, store: main.store, pdi, workspaces, accounts, betaJob, usage, alerts, settle: () => settle() };
 }

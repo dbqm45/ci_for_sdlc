@@ -2,6 +2,7 @@ import pg from 'pg';
 import { errorMessage } from '@ci/core';
 import { retentionFrom } from './backup.js';
 import { runBackup } from './backup-run.js';
+import { heartbeat } from './monitoring.js';
 import { s3ConfigFrom } from './s3.js';
 import { PgStorage } from './workspaces.js';
 
@@ -20,6 +21,8 @@ try {
   pool = new pg.Pool({ connectionString: url, max: 2 });
   const r = await runBackup({ storage: new PgStorage(pool), s3, secret, retention: retentionFrom(process.env) });
   log('info', 'backup uploaded', { keys: r.keys, bytes: r.bytes, ...r.summary });
+  // A dead-man's switch (T6): it alerts when a day passes without this call.
+  await heartbeat(process.env.BACKUP_HEARTBEAT_URL, (o, msg) => log('error', msg, o));
 } catch (e) {
   log('error', 'backup failed', { err: errorMessage(e) });
   process.exitCode = 1;

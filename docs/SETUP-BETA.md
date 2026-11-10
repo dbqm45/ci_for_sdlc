@@ -41,6 +41,8 @@ Opcjonalne:
 | `POSTHOG_HOST` | `https://eu.i.posthog.com` | region PostHog (zostaw UE; PostHog dopisz do listy podprzetwarzających i DPA, `BETA-PLAN.md` §5) |
 | `CI_USAGE_SECRET` 🔒 | losowy, zapisany raz w bazie | sekret pseudonimów osób, przestrzeni i organizacji; ustaw, jeśli pseudonimy mają przetrwać przeniesienie danych |
 | `CI_USAGE` | (włączony) | `off` wyłącza cały pomiar użycia |
+| `CI_ALERT_EMAILS` | `CI_OPERATOR_EMAILS` | kto dostaje alerty monitoringu (T6); `CI_ALERTS=off` je wyłącza |
+| `CI_HEARTBEAT_URL` 🔒 | (brak) | adres strażnika zadań wołany po każdym godzinnym przebiegu (`DEPLOYMENT.md` krok 11) |
 
 Bez `RESEND_API_KEY` i `CI_MAIL_FROM` serwer działa, ale maile trafiają tylko do logu (odbiorca i temat, nigdy treść
 z linkiem) — wtedy link zaproszenia przekazujesz sam z panelu operatora.
