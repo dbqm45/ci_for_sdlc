@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { appendFile, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Pool, PoolClient } from 'pg';
 
@@ -20,7 +20,16 @@ export interface Backend {
   tail(log: string, limit: number): Promise<unknown[]>;
   /** Every document and log of the workspace (for `db:import`). */
   names(): Promise<{ documents: string[]; logs: string[] }>;
+  /** Deletes one document (T7); nothing when there is none. */
+  remove(name: string): Promise<void>;
+  /** Deletes the entries of a log whose top-level fields equal every field of `match` (T7); returns how many. */
+  dropEntries(log: string, match: Record<string, string>): Promise<number>;
+  /** Erases every document and log of this space for good (T7). */
+  erase(): Promise<void>;
 }
+
+const matches = (entry: unknown, match: Record<string, string>) =>
+  !!entry && typeof entry === 'object' && Object.entries(match).every(([k, v]) => (entry as Record<string, unknown>)[k] === v);
 
 const isEncrypted = (v: unknown) => !!v && typeof v === 'object' && '__enc' in v;
 
@@ -75,6 +84,32 @@ export class FileBackend implements Backend {
     const plain = files.filter((f) => f.isFile() && !f.name.endsWith('.tmp')).map((f) => f.name);
     return { documents: plain.filter((n) => n.endsWith('.json')), logs: plain.filter((n) => n.endsWith('.jsonl')).map((n) => n.slice(0, -'.jsonl'.length)) };
   }
+
+  async remove(name: string) {
+    await rm(join(this.dir, name), { force: true });
+  }
+
+  async dropEntries(log: string, match: Record<string, string>) {
+    const p = join(this.dir, `${log}.jsonl`);
+    if (!existsSync(p)) return 0;
+    const lines = (await readFile(p, 'utf8')).split('\n').filter(Boolean);
+    const kept = lines.filter((l) => {
+      try {
+        return !matches(JSON.parse(l), match);
+      } catch {
+        return true;
+      }
+    });
+    if (kept.length === lines.length) return 0;
+    const tmp = `${p}.${randomBytes(6).toString('hex')}.tmp`;
+    await writeFile(tmp, kept.map((l) => `${l}\n`).join(''));
+    await rename(tmp, p);
+    return lines.length - kept.length;
+  }
+
+  async erase() {
+    await rm(this.dir, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -128,6 +163,21 @@ export class PgBackend implements Backend {
       const d = await c.query<{ name: string }>('select name from ci_documents where workspace = $1 order by name', [this.workspace]);
       const l = await c.query<{ log: string }>('select distinct log from ci_log_entries where workspace = $1 order by log', [this.workspace]);
       return { documents: d.rows.map((x) => x.name), logs: l.rows.map((x) => x.log) };
+    });
+  }
+
+  async remove(name: string) {
+    await this.scoped((c) => c.query('delete from ci_documents where workspace = $1 and name = $2', [this.workspace, name]));
+  }
+
+  async dropEntries(log: string, match: Record<string, string>) {
+    return this.scoped(async (c) => (await c.query('delete from ci_log_entries where workspace = $1 and log = $2 and value @> $3::jsonb', [this.workspace, log, JSON.stringify(match)])).rowCount ?? 0);
+  }
+
+  async erase() {
+    await this.scoped(async (c) => {
+      await c.query('delete from ci_documents where workspace = $1', [this.workspace]);
+      await c.query('delete from ci_log_entries where workspace = $1', [this.workspace]);
     });
   }
 }

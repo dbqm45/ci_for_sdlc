@@ -28,11 +28,11 @@ export function WorkspaceAdmin({ toast }: { toast: (m: string) => void }) {
     }
   };
   const remove = async () => {
-    const typed = window.prompt(`Delete workspace "${saved}"? Its analysis stops and its data moves to workspaces-deleted/ on the server.\nType its id (${ws}) to confirm:`);
+    const typed = window.prompt(`Delete workspace "${saved}"? Its analysis stops, its Atlassian connection is removed, and its data is erased for good after 30 days (until then the operator can restore it).\nType its id (${ws}) to confirm:`);
     if (typed === null) return;
     try {
-      await api.deleteWorkspace(ws, typed.trim());
-      toast(`Workspace ${saved} deleted`);
+      const r = await api.deleteWorkspace(ws, typed.trim());
+      toast(`Workspace ${saved} deleted; erased for good on ${r.eraseAfter.slice(0, 10)}`);
       location.hash = `/w/${DEFAULT_WORKSPACE}/overview`;
     } catch (e) {
       toast(errMsg(e));

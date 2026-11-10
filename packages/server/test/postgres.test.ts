@@ -163,4 +163,26 @@ describe.skipIf(!url)('Postgres storage', () => {
     expect(r.summary).toEqual({ spaces: 3, documents: 3, entries: 2 });
     expect(await storage.backend('mobile').read('settings.json')).toEqual({ project: { key: 'MOB', name: 'Mobile', nested: { a: 2, b: 1 } } });
   });
+
+  it('PG-08: T7 erases in the database too: a document, matching log entries, an archived workspace, and a restore', async () => {
+    const storage = new PgStorage(pool);
+    const b = storage.backend('mobile');
+    await b.write('settings.json', { project: { name: 'Mobile' } });
+    await b.write('other.json', { x: 1 });
+    await b.append('events', { orgId: 'o1' });
+    await b.append('events', { orgId: 'o2' });
+    await b.remove('other.json');
+    expect(await b.dropEntries('events', { orgId: 'o1' })).toBe(1);
+    expect(await b.names()).toEqual({ documents: ['settings.json'], logs: ['events'] });
+
+    const archivedAs = await storage.archive('mobile', '2026-11-10T00:00:00.000Z');
+    await storage.unarchive(archivedAs, 'mobile');
+    expect(await b.read('settings.json')).toEqual({ project: { name: 'Mobile' } });
+    const again = await storage.archive('mobile', '2026-11-10T01:00:00.000Z');
+    // Another workspace's rows are untouched by the erase.
+    await storage.backend('web').write('settings.json', { project: { name: 'Web' } });
+    await storage.archived(again).erase();
+    expect(await storage.archived(again).names()).toEqual({ documents: [], logs: [] });
+    expect(await storage.backend('web').read('settings.json')).toEqual({ project: { name: 'Web' } });
+  });
 });
