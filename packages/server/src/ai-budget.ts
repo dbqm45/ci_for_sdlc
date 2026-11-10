@@ -130,6 +130,8 @@ export class AiBudget {
   constructor(
     private readonly backend: Backend,
     readonly defaultLimitUsd: number | undefined,
+    /** Called once when a call takes a workspace's spend to or past its limit (an alert to the operator, T6). */
+    private readonly onReached?: (status: BudgetStatus) => void,
   ) {}
 
   async init() {
@@ -167,11 +169,14 @@ export class AiBudget {
       const month = monthOf(at);
       const m = (this.doc.months[month] ??= {});
       const s = (m[workspace] ??= { ...EMPTY });
+      const before = this.status(workspace, at);
       s.calls++;
       if (costUsd === undefined) s.unpricedCalls++;
       else s.costUsd += costUsd;
       for (const old of Object.keys(this.doc.months).sort().slice(0, -KEEP_MONTHS)) delete this.doc.months[old];
       await this.save();
+      const after = this.status(workspace, at);
+      if (!before.exhausted && after.exhausted) this.onReached?.(after);
     });
   }
 

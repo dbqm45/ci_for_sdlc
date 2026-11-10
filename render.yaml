@@ -83,6 +83,10 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
+      # Monitoring (T6, docs/DEPLOYMENT.md step 11): the dead-man's switch pinged after every hourly run. Alerts by
+      # e-mail go to CI_OPERATOR_EMAILS (or CI_ALERT_EMAILS) through Resend.
+      - key: CI_HEARTBEAT_URL
+        sync: false
 
   # T5 (docs/BACKUPS.md): a daily backup outside Render, to Backblaze B2 (EU Central, Amsterdam), locked in
   # compliance mode. Same image as the app; the backup reads each workspace under its own row-level security scope
@@ -117,6 +121,9 @@ services:
       - key: B2_KEY_ID
         sync: false
       - key: B2_APPLICATION_KEY
+        sync: false
+      # Pinged after every successful backup (docs/DEPLOYMENT.md step 11).
+      - key: BACKUP_HEARTBEAT_URL
         sync: false
 
 databases:

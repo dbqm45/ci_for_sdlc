@@ -57,7 +57,7 @@ describe.skipIf(!url)('Postgres storage', () => {
 
   it('PG-02: decisions, settings and audit live in the database, survive a restart, and no state file is written', async () => {
     await start();
-    expect((await call('GET', '/api/health')).body.storage).toBe('postgres');
+    expect((await call('GET', '/api/health')).body).toMatchObject({ storage: 'postgres', database: 'ok' });
     expect((await call('POST', '/api/decisions', { questionId: 'q-pg', itemKey: 'PAY-123', answer: 'In Postgres' })).status).toBe(200);
     const etag = (await call('GET', '/api/settings')).headers.etag as string;
     expect((await call('PUT', '/api/settings', { project: { key: 'PG', name: 'In the database' } }, { 'if-match': etag })).status).toBe(200);
