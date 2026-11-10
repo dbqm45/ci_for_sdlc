@@ -50,6 +50,16 @@ npm test
 npm run typecheck
 ```
 
+Testy przechowywania w Postgresie (`packages/server/test/postgres.test.ts`) bez bazy są pomijane. Przed pushem zmian w `packages/server/src/backend.ts` albo w schemacie uruchom je lokalnie — ta sama rola i baza co w CI (`docker-compose.test.yml`, Docker):
+
+```bash
+npm run db:test:up
+npm run test:pg
+npm run db:test:down
+```
+
+`test:pg` używa `CI_TEST_DATABASE_URL`, jeśli jest ustawione, a bez działającej bazy kończy się podpowiedzią zamiast cichego pominięcia testów.
+
 Pokrycie testów jednostkowych (raport w `packages/*/coverage/`):
 
 ```bash
