@@ -121,6 +121,16 @@ export interface AiPlatformInfo {
   budget?: { month: string; limitUsd?: number; spentUsd: number; exhausted: boolean; unpricedCalls: number };
 }
 
+/** A deleted workspace, restorable until `eraseAfter` (T7, GET /api/workspaces-deleted). */
+export interface DeletedWorkspace {
+  id: string;
+  name: string;
+  orgId?: string;
+  archivedAs: string;
+  deletedAt: string;
+  eraseAfter: string;
+}
+
 /** A workspace's AI spend this month, for the operator (GET /api/ai-budget). */
 export interface AiBudgetRow {
   workspace: string;
@@ -243,7 +253,12 @@ export const api = {
   createWorkspace: (id: string, name: string) => req<{ id: string; name: string }>('POST', '/api/workspaces', { id, name, by: currentUser() }),
   renameWorkspace: (id: string, name: string) => req<{ id: string; name: string }>('PATCH', `/api/workspaces/${encodeURIComponent(id)}`, { name, by: currentUser() }),
   /** Deleting needs the id typed back (`confirm`). */
-  deleteWorkspace: (id: string, confirm: string) => req<{ deleted: string; archivedTo: string }>('DELETE', `/api/workspaces/${encodeURIComponent(id)}`, { confirm, by: currentUser() }),
+  deleteWorkspace: (id: string, confirm: string) => req<{ deleted: string; archivedTo: string; eraseAfter: string }>('DELETE', `/api/workspaces/${encodeURIComponent(id)}`, { confirm, by: currentUser() }),
+  deletedWorkspaces: () => req<DeletedWorkspace[]>('GET', '/api/workspaces-deleted'),
+  restoreWorkspace: (archivedAs: string) => req<{ id: string; name: string }>('POST', '/api/workspaces-deleted/restore', { archivedAs }),
+  eraseWorkspace: (archivedAs: string) => req<{ erased: string }>('POST', '/api/workspaces-deleted/erase', { archivedAs }),
+  /** Erases an organization for good, on its request; `confirm` is its name typed back. */
+  eraseOrg: (orgId: string, confirm: string) => req<{ erased: string; workspaces: number; people: number }>('POST', `/api/orgs/${encodeURIComponent(orgId)}/erase`, { confirm }),
   /** F4: pdi changes (stories labelled `change:CHG-n`) and whether the pdi link is on. */
   changes: () => req<{ pdi: boolean; changes: ChangeState[] }>('GET', '/api/changes'),
   /** F4: ask pdi to decide the approval of a change that is not ready. Returns undefined when the user cancels. */
@@ -316,6 +331,8 @@ export const api = {
 /** A beta application and what became of it (operator panel). */
 export interface BetaEnrollment extends BetaView {
   id: string;
+  /** The organization opened on approval. */
+  orgId?: string;
   application: {
     org: string;
     team: string;

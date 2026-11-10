@@ -17,14 +17,14 @@ import { PostHogSink, Usage, triggerOf, usageReport, type UsageEventName, type U
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
-import { guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
+import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { ensure, who, workspaceRoutes } from './routes-workspace.js';
 import { MUTATION, WORKSPACE_ID_PATTERN, approvalRequestBody, changeParams, errors, oauthCallbackQuery, problem, workspaceBody, workspaceDeleteBody, workspaceParams, workspaceRenameBody } from './schemas.js';
 import type { Store } from './store.js';
 import { APP_VERSION } from './version.js';
 import pg from 'pg';
 import { migrate } from './backend.js';
-import { DEFAULT_WORKSPACE, FileStorage, PgStorage, WorkspaceExistsError, WorkspaceRefusedError, Workspaces, type Workspace } from './workspaces.js';
+import { DEFAULT_WORKSPACE, ERASE_AFTER_DAYS, FileStorage, PgStorage, WorkspaceExistsError, WorkspaceRefusedError, Workspaces, type Workspace } from './workspaces.js';
 
 export { awsCredentialsConfigured } from './routes-workspace.js';
 
@@ -224,6 +224,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   /** When each finding and drift event was first seen, per workspace (for `finding_shown` once and `age_hours`). */
   const seenDoc = (w: Workspace) => `usage-seen-${w.id}.json`;
   const platform = storage.backend('_platform');
+  await platform.init();
   const seenOf = async (w: Workspace) => ((await platform.read(seenDoc(w))) as Record<string, string> | undefined) ?? {};
   afterAnalysis = async (w) => {
     const orgId = orgOf(w);
@@ -389,10 +390,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     },
   );
 
-  /** Deleting moves the workspace's data aside (nothing is erased); the id must be typed back. */
+  /** Deleting moves the workspace's data aside for ERASE_AFTER_DAYS, then it is erased (T7); the id must be typed back. */
   app.delete<{ Params: { ws: string }; Body: { confirm: string; by?: string } }>(
     '/api/workspaces/:ws',
-    { schema: { summary: 'Delete a workspace: it stops and its data moves to workspaces-deleted/ in the data directory', params: workspaceParams, body: workspaceDeleteBody, response: errors(400, 404, 409, 422), ...MUTATION } },
+    { schema: { summary: `Delete a workspace: it stops, its Atlassian connection is dropped, and its data is erased after ${ERASE_AFTER_DAYS} days (until then an operator can restore it)`, params: workspaceParams, body: workspaceDeleteBody, response: errors(400, 404, 409, 422), ...MUTATION } },
     async (req) => {
       const id = req.params.ws;
       visibleWorkspace(req, id);
@@ -400,9 +401,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       if (req.body.confirm !== id) throw httpError(400, `Type the workspace id (${id}) in confirm to delete it.`);
       const at = new Date().toISOString();
       try {
-        const { archivedTo } = await workspaces.remove(id, at);
-        await auditOf(orgOfReq(req)).audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${id} deleted; its data moved to ${archivedTo}` });
-        return { deleted: id, archivedTo };
+        const { archivedTo, eraseAfter } = await workspaces.remove(id, at);
+        await auditOf(orgOfReq(req)).audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${id} deleted; its data is erased for good on ${eraseAfter.slice(0, 10)} (until then an operator can restore it)` });
+        return { deleted: id, archivedTo, eraseAfter };
       } catch (e) {
         if (e instanceof WorkspaceRefusedError) throw httpError(409, e.message);
         throw e;
@@ -650,14 +651,14 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
    * With accounts, an operator (CI_OPERATOR_EMAILS) or the admin token. Without them the installation is one
    * organization: whoever may read sees the limits, and a change needs the admin token (or this machine without one).
    */
-  const requireAiOperator = (req: FastifyRequest, change = false) => {
+  const requirePlatformOperator = (req: FastifyRequest, change = false) => {
     if (accounts.enabled ? req.principal === 'admin_token' || req.account?.operator : !change || req.principal === 'admin_token' || req.principal === 'loopback') return;
     throw httpError(403, 'Only an operator of this installation (CI_OPERATOR_EMAILS) may do this.');
   };
   const noPlatformAi = () => httpError(404, 'Workspaces choose their own AI here: set CI_AI_PROVIDER for the platform\'s AI and its limits (docs/AI-PLATFORM.md).');
 
   app.get('/api/ai-budget', { schema: { summary: "The platform's AI and every workspace's spend this month against its limit (operator)", response: errors(403, 404) } }, async (req) => {
-    requireAiOperator(req);
+    requirePlatformOperator(req);
     if (!aiPlatform || !aiBudget) throw noPlatformAi();
     const ws = new Map(workspaces.all().map((w) => [w.id, w]));
     return {
@@ -686,7 +687,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     '/api/ai-budget/:ws',
     { schema: { summary: "Change a workspace's monthly AI limit; it applies to the next call (operator)", params: workspaceParams, body: aiLimitBody, response: errors(403, 404, 422), ...MUTATION } },
     async (req) => {
-      requireAiOperator(req, true);
+      requirePlatformOperator(req, true);
       if (!aiPlatform || !aiBudget) throw noPlatformAi();
       const w = workspaces.get(req.params.ws);
       if (!w) throw httpError(404, `No workspace ${req.params.ws}`);
@@ -699,6 +700,98 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       return after;
     },
   );
+
+  // ------------------------------------------------------------------ erasing data (T7, docs/DATA-DELETION.md)
+  /** What was erased, for the operator's record: names and counts, never a person's data. */
+  const recordErasure = (entry: Record<string, unknown>) => platform.append('erasures', entry);
+
+  app.get('/api/workspaces-deleted', { schema: { summary: `Deleted workspaces that can still be restored before they are erased (${ERASE_AFTER_DAYS} days; operator)`, response: errors(403) } }, async (req) => {
+    requirePlatformOperator(req);
+    return workspaces.deleted();
+  });
+
+  const archivedBody = { type: 'object', required: ['archivedAs'], additionalProperties: false, properties: { archivedAs: { type: 'string', minLength: 1, maxLength: 200 } } } as const;
+
+  app.post<{ Body: { archivedAs: string } }>(
+    '/api/workspaces-deleted/restore',
+    { schema: { summary: 'Restore a deleted workspace under its id; its Atlassian connection has to be made again (operator)', body: archivedBody, response: errors(403, 404, 409, 422), ...MUTATION } },
+    async (req) => {
+      requirePlatformOperator(req, true);
+      try {
+        const at = new Date().toISOString();
+        const w = await workspaces.restore(req.body.archivedAs, at);
+        await auditOf(orgOf(w)).audit({ at, kind: 'workspace', ...who(req), summary: `Workspace ${w.id} restored by the operator` });
+        return { id: w.id, name: w.name };
+      } catch (e) {
+        if (e instanceof WorkspaceRefusedError) throw httpError(404, e.message);
+        if (e instanceof WorkspaceExistsError) throw httpError(409, e.message);
+        throw e;
+      }
+    },
+  );
+
+  /** Erases a deleted workspace's data and what the platform keeps about it (AI spend, usage notes). */
+  const eraseDeleted = async (archivedAs: string, at: string, by: string, reason: 'operator' | 'expired') => {
+    const d = await workspaces.erase(archivedAs);
+    await aiBudget?.forget(d.id);
+    await platform.remove(`usage-seen-${d.id}.json`);
+    await recordErasure({ at, kind: 'workspace_erased', workspace: d.id, deletedAt: d.deletedAt, reason, by });
+    return d;
+  };
+
+  app.post<{ Body: { archivedAs: string } }>(
+    '/api/workspaces-deleted/erase',
+    { schema: { summary: 'Erase a deleted workspace for good now, before its date (operator)', body: archivedBody, response: errors(403, 404, 422), ...MUTATION } },
+    async (req) => {
+      requirePlatformOperator(req, true);
+      try {
+        const d = await eraseDeleted(req.body.archivedAs, new Date().toISOString(), actorOf(req) ?? 'operator', 'operator');
+        return { erased: d.id };
+      } catch (e) {
+        if (e instanceof WorkspaceRefusedError) throw httpError(404, e.message);
+        throw e;
+      }
+    },
+  );
+
+  const eraseOrgBody = { type: 'object', required: ['confirm'], additionalProperties: false, properties: { confirm: { type: 'string', maxLength: 100 } } } as const;
+
+  app.post<{ Params: { id: string }; Body: { confirm: string } }>(
+    '/api/orgs/:id/erase',
+    {
+      schema: {
+        summary: "Erase an organization for good on its request: workspaces, Atlassian connections, people, invitations, usage events, AI spend, beta application and survey answers (operator; the organization's name typed back)",
+        params: { type: 'object', required: ['id'], properties: { id: { type: 'string', maxLength: 100 } } },
+        body: eraseOrgBody,
+        response: errors(400, 403, 404, 409, 422),
+        ...MUTATION,
+      },
+    },
+    async (req) => {
+      requireOperator(req);
+      const org = accounts.allOrgs().find((o) => o.id === req.params.id);
+      if (!org) throw httpError(404, 'No such organization.');
+      if (org.id === accounts.homeOrgId) throw httpError(409, 'The first organization cannot be erased.');
+      if (req.body.confirm !== org.name) throw httpError(400, `Type the organization's name (${org.name}) in confirm to erase it.`);
+      const at = new Date().toISOString();
+      const by = actorOf(req) ?? 'operator';
+      const live = workspaces.all().filter((w) => orgOf(w) === org.id);
+      for (const w of live) await workspaces.remove(w.id, at);
+      const archived = (await workspaces.deleted()).filter((d) => d.orgId === org.id);
+      for (const d of archived) await eraseDeleted(d.archivedAs, at, by, 'operator');
+      const events = await usage.eraseOrg(org.id, archived.map((d) => d.id));
+      const enrollment = await beta.eraseOrg(org.id);
+      const people = await accounts.eraseOrg(org.id);
+      const summary = { workspaces: archived.length, people: people.people, invitations: people.invitations, usageEvents: events, surveyAnswers: enrollment.answers, betaEnrollments: enrollment.enrollments };
+      await recordErasure({ at, kind: 'org_erased', org: org.name, by, ...summary });
+      return { erased: org.name, ...summary };
+    },
+  );
+
+  app.get('/api/erasures', { schema: { summary: 'What was erased and when: names and counts only (operator)', response: errors(403) } }, async (req) => {
+    requirePlatformOperator(req);
+    return (await platform.tail('erasures', 1000)).reverse();
+  });
 
   const orgBody = {
     type: 'object',
@@ -729,9 +822,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     const at = new Date().toISOString();
     const w = await workspaces.create(o.workspace.id, o.workspace.name ?? o.name, at, org.id);
     const invitation = await accounts.invite(actor ?? 'operator', 'owner', o.ownerEmail, org.id);
-    const summary = `Organization ${org.name} opened with workspace ${w.id}; Owner invitation for ${invitation.email}`;
-    await w.store.audit({ at, kind: 'member', actor, via, summary });
-    await main.store.audit({ at, kind: 'member', actor, via, summary });
+    const summary = `Organization ${org.name} opened with workspace ${w.id}`;
+    await w.store.audit({ at, kind: 'member', actor, via, summary: `${summary}; Owner invitation for ${invitation.email}` });
+    // The first organization's record keeps no e-mail of another one: erasing that organization must leave none (T7).
+    await main.store.audit({ at, kind: 'member', actor, via, summary: `${summary}; Owner invited` });
     return { org, workspace: { id: w.id, name: w.name }, invitation };
   }
 
@@ -974,7 +1068,20 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const betaTimer = accounts.enabled && process.env.CI_BETA_JOB !== 'off' && process.env.CI_DISABLE_SCHEDULE !== 'true' ? setInterval(() => void betaJob().catch((e) => app.log.error(e)), 3_600_000) : undefined;
   betaTimer?.unref();
   if (betaTimer) void betaJob().catch((e) => app.log.error(e));
+  // Deleted workspaces past their date are erased for good, hourly and once at start (T7).
+  const purge = async () => {
+    for (const d of await workspaces.purge(new Date())) {
+      await aiBudget?.forget(d.id);
+      await platform.remove(`usage-seen-${d.id}.json`);
+      await recordErasure({ at: new Date().toISOString(), kind: 'workspace_erased', workspace: d.id, deletedAt: d.deletedAt, reason: 'expired', by: 'system' });
+      app.log.info({ workspace: d.id }, 'deleted workspace erased for good');
+    }
+  };
+  const purgeTimer = process.env.CI_DISABLE_SCHEDULE !== 'true' ? setInterval(() => void purge().catch((e) => app.log.error(e)), 3_600_000) : undefined;
+  purgeTimer?.unref();
+  void purge().catch((e) => app.log.error(e));
   app.addHook('onClose', async () => {
+    if (purgeTimer) clearInterval(purgeTimer);
     if (betaTimer) clearInterval(betaTimer);
     if (usageTimer) clearInterval(usageTimer);
     await usage.idle();

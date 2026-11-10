@@ -184,6 +184,15 @@ export class AiBudget {
     });
   }
 
+  /** Forgets a workspace's limit and spend (T7). */
+  forget(workspace: string) {
+    return this.serial(async () => {
+      delete this.doc.limits[workspace];
+      for (const m of Object.values(this.doc.months)) delete m[workspace];
+      await this.save();
+    });
+  }
+
   private save() {
     return this.backend.write('ai-budget.json', this.doc);
   }

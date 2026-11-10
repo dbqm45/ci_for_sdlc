@@ -205,7 +205,7 @@ describe('workspaces', () => {
     expect(existsSync(join(dir, del.body.archivedTo))).toBe(true);
     expect(existsSync(join(dir, 'workspaces', 'mobile'))).toBe(false);
     expect((await call('GET', '/api/w/mobile/analysis')).status).toBe(404);
-    expect((await call('GET', '/api/audit')).body.map((a: { summary: string }) => a.summary)).toContain(`Workspace mobile deleted; its data moved to ${del.body.archivedTo}`);
+    expect((await call('GET', '/api/audit')).body.map((a: { summary: string }) => a.summary)).toContain(`Workspace mobile deleted; its data is erased for good on ${del.body.eraseAfter.slice(0, 10)} (until then an operator can restore it)`);
 
     await ctx!.app.close();
     await start({ keepDir: true });

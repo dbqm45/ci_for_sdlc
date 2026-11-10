@@ -157,6 +157,17 @@ export class Usage {
     return this.flushing;
   }
 
+  /**
+   * Erases an organization's events for good (T7): from our log, from what waits to be sent, and the per-workspace
+   * "first seen" notes. Events already sent to PostHog carry only pseudonyms; deleting them there is a step of its own
+   * (docs/DATA-DELETION.md).
+   */
+  async eraseOrg(orgId: string, workspaces: string[]): Promise<number> {
+    this.buffer = this.buffer.filter((e) => e.orgId !== orgId);
+    for (const w of workspaces) await this.backend.remove(`usage-seen-${w}.json`);
+    return this.backend.dropEntries('usage-events', { orgId });
+  }
+
   /** Every event of one organization, oldest first. */
   async eventsOf(orgId: string): Promise<UsageEvent[]> {
     return ((await this.backend.tail('usage-events', 200_000)) as UsageEvent[]).filter((e) => e?.orgId === orgId);

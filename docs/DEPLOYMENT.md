@@ -261,6 +261,8 @@ ok. 400 MB (pomiar lokalny po starcie: ok. 160 MB); dysk → więcej GB (da się
 - **Logi:** Render → *Logs* (linie JSON; nigdy treść historyjek ani linki zaproszeń).
 - **Zmiana sekretu:** Render → *Environment*; zapis restartuje usługę.
 - **Limit AI zespołu:** `#/operator` → *AI limits*.
+- **Zespół prosi o usunięcie danych:** `#/operator` → *Erase all data…*, potem kroki poza serwerem z
+  [`DATA-DELETION.md`](DATA-DELETION.md) §3–4. Usunięte przestrzenie czekają 30 dni (*Deleted workspaces*).
 - **Nie skaluj do 2+ instancji** — kolejka zapisów, zadanie bety i licznik AI działają w procesie (`numInstances: 1`).
 - **Odtworzenie po awarii:** [`BACKUPS.md`](BACKUPS.md) §4.
 
@@ -280,5 +282,6 @@ ok. 400 MB (pomiar lokalny po starcie: ok. 160 MB); dysk → więcej GB (da się
 - [`SETUP-BETA.md`](SETUP-BETA.md) — wszystkie zmienne aplikacji i bety, w tym opcjonalne.
 - [`AI-PLATFORM.md`](AI-PLATFORM.md) — AI platformy, limit, stawki.
 - [`BACKUPS.md`](BACKUPS.md) — kopie, próba odtworzenia, odtworzenie po awarii.
+- [`DATA-DELETION.md`](DATA-DELETION.md) — usuwanie przestrzeni i danych zespołu na żądanie.
 - [`CONNECT-ATLASSIAN.md`](CONNECT-ATLASSIAN.md) — OAuth Atlassiana.
 - [`BETA-PLAN.md`](BETA-PLAN.md), [`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md) — po co beta i jak przebiega.

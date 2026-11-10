@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../App';
-import { api, ApiError, errMsg, type AiBudgetRow, type BetaEnrollment } from '../api';
+import { api, ApiError, errMsg, type AiBudgetRow, type BetaEnrollment, type DeletedWorkspace } from '../api';
 import { Card, DateTime } from '../components/ui';
 import { betaNow } from '../lib/localBeta';
 import { STATUS_LABEL, surveysSummary, usageLines, workspaceIdFrom, type UsageReport } from '../lib/beta';
@@ -95,6 +95,22 @@ export function Operator() {
     } catch {
       toast('Copy failed — select the link and copy it by hand');
     }
+  };
+
+  /** On the team's request (T7): everything of its organization goes for good; the name is typed back. */
+  const eraseOrg = async (e: BetaEnrollment) => {
+    const org = e.application.org;
+    const typed = window.prompt(
+      `Erase ALL data of ${org} for good? Its workspaces, Atlassian connection, people, invitations, usage events, AI spend, application and survey answers are deleted now and cannot be restored (backups expire within 100 days).\nType the organization's name (${org}) to confirm:`,
+    );
+    if (typed === null) return;
+    try {
+      const r = await api.eraseOrg(e.orgId!, typed.trim());
+      toast(`${r.erased} erased: ${r.workspaces} workspaces, ${r.people} people`);
+    } catch (err) {
+      toast(errMsg(err));
+    }
+    await load();
   };
 
   const waiting = list?.filter((e) => e.status === 'applied') ?? [];
@@ -256,6 +272,11 @@ export function Operator() {
                         <button className="btn sm" onClick={() => void download(e)}>
                           Answers (JSON)
                         </button>
+                        {e.orgId && (
+                          <button className="btn sm ghost" onClick={() => void eraseOrg(e)}>
+                            Erase all data…
+                          </button>
+                        )}
                         {e.status !== 'ended' && (
                           <button className="btn sm" onClick={() => void withDays(e, 'No pause', 30, (d, r) => api.graceBeta(e.id, d, r), 'Pause held off')}>
                             No pause for…
@@ -278,6 +299,7 @@ export function Operator() {
           </table>
         )}
       </Card>
+      <DeletedWorkspaces />
       <AiLimits />
     </div>
   );
@@ -380,6 +402,64 @@ function AiLimits() {
                     </button>
                   </div>
                 )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+/** Deleted workspaces kept for 30 days (T7): restore one deleted by mistake, or erase it now on request. */
+function DeletedWorkspaces() {
+  const { toast } = useApp();
+  const [list, setList] = useState<DeletedWorkspace[]>();
+  const load = useCallback(async () => {
+    try {
+      setList(await api.deletedWorkspaces());
+    } catch (e) {
+      toast(errMsg(e));
+    }
+  }, [toast]);
+  useEffect(() => void load(), [load]);
+  if (!list?.length) return null;
+  const act = async (d: DeletedWorkspace, what: 'restore' | 'erase') => {
+    if (what === 'erase' && !window.confirm(`Erase workspace ${d.name} for good now? This cannot be undone.`)) return;
+    try {
+      if (what === 'restore') await api.restoreWorkspace(d.archivedAs);
+      else await api.eraseWorkspace(d.archivedAs);
+      toast(what === 'restore' ? `${d.name} restored; its Atlassian connection has to be made again` : `${d.name} erased`);
+    } catch (e) {
+      toast(errMsg(e));
+    }
+    await load();
+  };
+  return (
+    <Card title={`Deleted workspaces (${list.length})`} pad={false}>
+      <p className="small muted card-pad" style={{ margin: 0 }}>
+        Kept for 30 days after deletion, then erased for good by the hourly job.
+      </p>
+      <table className="table">
+        <tbody>
+          {list.map((d) => (
+            <tr key={d.archivedAs}>
+              <td>
+                <strong>{d.name}</strong>
+                <div className="small muted">{d.id}</div>
+              </td>
+              <td className="small">
+                Deleted <DateTime iso={d.deletedAt} />, erased <DateTime iso={d.eraseAfter} />
+              </td>
+              <td>
+                <div className="row wrap" style={{ gap: 6 }}>
+                  <button className="btn sm" onClick={() => void act(d, 'restore')}>
+                    Restore
+                  </button>
+                  <button className="btn sm ghost" onClick={() => void act(d, 'erase')}>
+                    Erase now
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

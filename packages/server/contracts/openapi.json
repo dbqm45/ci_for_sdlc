@@ -213,7 +213,7 @@
         }
       },
       "delete": {
-        "summary": "Delete a workspace: it stops and its data moves to workspaces-deleted/ in the data directory",
+        "summary": "Delete a workspace: it stops, its Atlassian connection is dropped, and its data is erased after 30 days (until then an operator can restore it)",
         "requestBody": {
           "required": true,
           "content": {
@@ -4034,6 +4034,269 @@
             }
           },
           "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces-deleted": {
+      "get": {
+        "summary": "Deleted workspaces that can still be restored before they are erased (30 days; operator)",
+        "responses": {
+          "403": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces-deleted/restore": {
+      "post": {
+        "summary": "Restore a deleted workspace under its id; its Atlassian connection has to be made again (operator)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "archivedAs"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "archivedAs": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces-deleted/erase": {
+      "post": {
+        "summary": "Erase a deleted workspace for good now, before its date (operator)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "archivedAs"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "archivedAs": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{id}/erase": {
+      "post": {
+        "summary": "Erase an organization for good on its request: workspaces, Atlassian connections, people, invitations, usage events, AI spend, beta application and survey answers (operator; the organization's name typed back)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "confirm"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "confirm": {
+                    "type": "string",
+                    "maxLength": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "adminToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Problem details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/erasures": {
+      "get": {
+        "summary": "What was erased and when: names and counts only (operator)",
+        "responses": {
+          "403": {
             "description": "Problem details",
             "content": {
               "application/json": {
