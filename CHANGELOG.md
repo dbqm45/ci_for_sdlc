@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.57] - 2026-11-14
+
+### Poprawione
+
+- **core:** skip tf task folders when reading changes from a repository (#134)
+
 ## [0.1.56] - 2026-11-10
 
 ### Nowe
