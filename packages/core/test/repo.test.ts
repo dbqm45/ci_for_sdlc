@@ -141,6 +141,28 @@ describe('reading docs/project/changes from a checkout', () => {
     expect((await readRepoChanges(root)).requirements.every((r) => r.url === undefined)).toBe(true);
   });
 
+  it('REPO-04a: a task folder of the factory (task.json, no intent.md) is not a change and is skipped without a problem', async () => {
+    const root = repo({
+      'CHG-12/intent.md': INTENT,
+      'CHG-12/plan.md': PLAN,
+      'CHG-12/release.yaml': RELEASE,
+      // tf keeps one folder per task next to the changes: ticket, plan, spec, report and task.json
+      'PROJ-123/task.json': '{"schema": 1, "key": "PROJ-123"}',
+      'PROJ-123/ticket.md': '# Daily limit',
+      'PROJ-123/plan.md': '# Plan\n- [ ] K1 — limit',
+      'CHG-12-TSK-57/task.json': '{"schema": 1, "key": "CHG-12-TSK-57", "change": "CHG-12", "cut": "TSK-57"}',
+      'CHG-12-TSK-57/plan.md': '# Plan\n- [ ] K1 — retry',
+      // a change that also carries a task.json stays a change
+      'CHG-13/intent.md': INTENT.replaceAll('CHG-12', 'CHG-13').replace('# Retry failed payments', '# Saved cards'),
+      'CHG-13/task.json': '{"schema": 1, "key": "CHG-13"}',
+      // a folder with neither is still a change without its intent
+      'CHG-15/plan.md': PLAN.replaceAll('CHG-12', 'CHG-15'),
+    });
+    const { requirements, problems } = await readRepoChanges(root);
+    expect(requirements.filter((r) => r.type === 'epic').map((r) => r.key)).toEqual(['CHG-12', 'CHG-13']);
+    expect(problems).toEqual([{ path: `${CHANGES_DIR}/CHG-15/intent.md`, message: 'missing: a change needs its intent.md' }]);
+  });
+
   it('REPO-05: limits and a missing folder', async () => {
     const big = repo({ 'CHG-12/intent.md': INTENT + 'x'.repeat(MAX_CHANGE_FILE_BYTES) });
     expect((await readRepoChanges(big)).problems).toEqual([{ path: `${CHANGES_DIR}/CHG-12/intent.md`, message: expect.stringMatching(/larger than/) }]);

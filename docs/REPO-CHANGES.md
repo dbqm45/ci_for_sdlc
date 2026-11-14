@@ -7,6 +7,10 @@ so a pull request that changes a plan gets a red check when the plan is not read
 
 ## What is read
 
+A folder is a change when its name is a key (`CHG-12`) and it is not a task folder of tf. tf keeps one folder per
+task next to the changes (`PROJ-123/`, `CHG-12-TSK-57/`) with `task.json`, the ticket, plan, specification and
+report; a folder with `task.json` and no `intent.md` is skipped without a problem.
+
 | File | Becomes |
 | --- | --- |
 | `intent.md` (required) | The change as an epic: title from its first `# ` heading, its text as the description, the header's `status`. Without `release.yaml` the "Metryki sukcesu" / "Success metrics" section is the MVP's outcome and metric. |
