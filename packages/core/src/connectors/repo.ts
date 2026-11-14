@@ -16,6 +16,8 @@ import { parseRepoDecisions } from './repo-decisions.js';
  * `repo`, read by REL-007 and REL-008 (step G1.4). Every
  * item is labelled `change:CHG-n`, so the change's readiness goes to pdi as in Jira mode (F4). A file that cannot be
  * read is a problem naming the file and why, never its content, and only that change is left out.
+ * tf also keeps one folder per task next to the changes (`PROJ-123/`, `CHG-12-TSK-57/`: `task.json`, ticket, plan,
+ * spec, report). Such a folder — `task.json` and no `intent.md` — is not a change and is skipped without a problem.
  */
 
 export const CHANGES_DIR = 'docs/project/changes';
@@ -338,6 +340,12 @@ async function readSmall(path: string): Promise<string | undefined> {
   return readFile(path, 'utf8');
 }
 
+/** A task folder of tf: it has `task.json` and no `intent.md`, so it is not a change (a change always has its intent). */
+async function isTaskFolder(folder: string): Promise<boolean> {
+  const has = (file: string) => stat(join(folder, file)).then((s) => s.isFile(), () => false);
+  return (await has('task.json')) && !(await has('intent.md'));
+}
+
 /**
  * Every change under `<root>/docs/project/changes`, in key order. `repoUrl` (e.g. https://github.com/acme/pay) links
  * each item to its file on the default branch.
@@ -353,7 +361,9 @@ export async function readRepoChanges(root: string, opts: { repoUrl?: string } =
     throw new Error(`no ${CHANGES_DIR} folder in ${root}`);
   }
   const base = opts.repoUrl?.replace(/\/+$/, '');
-  const folders = entries.filter((e) => e.isDirectory() && KEY.test(e.name)).map((e) => e.name);
+  const named = entries.filter((e) => e.isDirectory() && KEY.test(e.name)).map((e) => e.name);
+  const folders: string[] = [];
+  for (const name of named) if (!(await isTaskFolder(join(dir, name)))) folders.push(name);
   folders.sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
   const requirements: RequirementItem[] = [];
   const problems: RepoProblem[] = [];
