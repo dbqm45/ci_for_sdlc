@@ -56,8 +56,14 @@ test('BETA-E2E-01: apply, approve, join, entry survey, overdue, pause, answer, r
   await page.getByLabel(/real data/).selectOption('yes');
   for (const c of await page.getByRole('group', { name: /Consents/ }).getByRole('checkbox').all()) await c.check();
   await page.getByRole('button', { name: 'Apply for the beta' }).click();
-  await expect(page.getByRole('status')).toContainText('Thank you');
-  await expect(await mailbox(page)).toHaveText(['Quorum beta: new application from Beta Corp', 'Quorum beta: we have your application']);
+  await expect(page.getByRole('status')).toContainText('Check your e-mail');
+
+  // Only a confirmation link goes out (F5); the application reaches the operator once it is used.
+  await expect(await mailbox(page)).toHaveText(['Quorum beta: confirm your application']);
+  await page.getByRole('button', { name: /confirm your application/ }).click();
+  await page.getByRole('link', { name: /#\/beta\/confirm\// }).click();
+  await expect(page.getByRole('status')).toContainText('Application confirmed');
+  await expect(await mailbox(page)).toHaveText(['Quorum beta: new application from Beta Corp', 'Quorum beta: we have your application', 'Quorum beta: confirm your application']);
 
   // The operator approves; the invitation goes by mail.
   await page.goto('/#/operator');

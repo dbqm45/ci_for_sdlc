@@ -361,7 +361,7 @@ export function App() {
 
   const [section, param, focus] = path.split('/').filter(Boolean);
   // The beta application form is public: no login, no workspace (docs/BETA-ENROLLMENT-PLAN.md).
-  if (section === 'beta') return <BetaApply />;
+  if (section === 'beta') return <BetaApply confirmToken={param === 'confirm' && focus ? focus : undefined} />;
   // The local walkthrough's own pages, and its login instead of Atlassian's (docs/BETA-LOCAL.md).
   if (!me)
     return (

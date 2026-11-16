@@ -301,7 +301,9 @@ export const api = {
   revokeInvitation: (id: string) => send('DELETE', `/api/invitations/${encodeURIComponent(id)}`).then(() => undefined),
   /** Closed beta (docs/BETA-ENROLLMENT-PLAN.md): public, whether teams may apply. */
   betaInfo: () => req<{ open: boolean; weeks: number }>('GET', '/api/beta'),
-  applyForBeta: (body: ReturnType<typeof applicationBody>) => req<{ received: true }>('POST', '/api/beta/apply', body),
+  applyForBeta: (body: ReturnType<typeof applicationBody>) => req<{ received: true; confirm?: boolean }>('POST', '/api/beta/apply', body),
+  /** The link in the confirmation mail (F5). */
+  confirmBeta: (token: string) => req<{ confirmed: true }>('POST', '/api/beta/confirm', { token }),
   /** Operator only. */
   betaEnrollments: () => req<BetaEnrollment[]>('GET', '/api/beta/enrollments'),
   aiBudget: () => req<{ provider: string; model: string; defaultLimitUsd?: number; workspaces: AiBudgetRow[] }>('GET', '/api/ai-budget'),

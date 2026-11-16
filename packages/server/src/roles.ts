@@ -48,6 +48,8 @@ const ROUTE_ROLES: Record<string, Role> = {
   'POST /workspaces-deleted/restore': 'viewer',
   'POST /workspaces-deleted/erase': 'viewer',
   'POST /orgs/:id/erase': 'viewer',
+  // Public: the beta form's confirmation link (F5); the guard lets it through without a session.
+  'POST /beta/confirm': 'viewer',
   // A beta team's Admin switches usage measurement (T8).
   'PUT /beta/measurement': 'admin',
   // A person of a beta team answers its surveys, whatever their role.

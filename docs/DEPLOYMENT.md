@@ -177,8 +177,9 @@ ok. 400 MB (pomiar lokalny po starcie: ok. 160 MB); dysk → więcej GB (da się
 1. Otwórz `https://<domena>` → zaloguj się kontem Atlassian z `CI_BOOTSTRAP_EMAIL`. Zostajesz Ownerem pierwszej
    organizacji (przestrzeń `default`), a w menu pojawia się **Beta operator**.
 2. `https://<domena>/api/beta` (bez logowania) zwraca `{"open":true,"weeks":8}`.
-3. Test formularza: z innego adresu e-mail wyślij zgłoszenie na `https://<domena>/#/beta`. Mają przyjść dwa maile
-   („we have your application” do zgłaszającego i powiadomienie do operatora), a zgłoszenie ma być na `#/operator`.
+3. Test formularza: z innego adresu e-mail wyślij zgłoszenie na `https://<domena>/#/beta`. Najpierw przychodzi mail
+   „confirm your application” z linkiem; po jego otwarciu dwa maile („we have your application” do zgłaszającego i
+   powiadomienie do operatora), a zgłoszenie ma być na `#/operator`.
    Odrzuć je potem (*Reject*).
 4. W logu Render (*Logs*) nie ma `mail not sent: RESEND_API_KEY is not set` ani `beta mail failed`, a `remoteAddress`
    żądania zgłoszenia to Twój adres, nie adres Render.

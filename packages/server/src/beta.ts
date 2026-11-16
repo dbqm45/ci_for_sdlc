@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Backend } from './backend.js';
 import { httpError } from './http.js';
 import { PAUSE_AFTER_DAYS, judgeEnrollment } from './beta-lifecycle.js';
@@ -161,8 +161,29 @@ export interface BetaConfig {
 
 const list = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
+/**
+ * An application waiting for its contact to confirm the e-mail address (T9, F5): until then nothing reaches the
+ * operator and no mail carries the applicant's own text. Only a SHA-256 of the link's token is kept; it lapses after
+ * `CONFIRM_HOURS`.
+ */
+interface PendingApplication {
+  hash: string;
+  application: BetaApplication;
+  at: string;
+  expiresAt: string;
+}
+
+/** How long a confirmation link works. */
+export const CONFIRM_HOURS = 24;
+/** One confirmation mail per address within this time, so the form cannot flood an inbox. */
+const RESEND_AFTER_MS = 10 * 60_000;
+/** Applications that may wait for confirmation at once. */
+const MAX_UNCONFIRMED = 500;
+const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
+
 export class BetaEnrollments {
   private all: BetaEnrollment[] = [];
+  private pending: PendingApplication[] = [];
   private queue: Promise<unknown> = Promise.resolve();
 
   constructor(
@@ -173,6 +194,7 @@ export class BetaEnrollments {
   async init() {
     await this.backend.init();
     this.all = list(await this.backend.read('beta-enrollments.json'));
+    this.pending = list(await this.backend.read('beta-pending.json'));
   }
 
   /** Newest first. */
@@ -207,6 +229,55 @@ export class BetaEnrollments {
       await this.save();
       return { stored: true, enrollment: structuredClone(e) };
     });
+  }
+
+  /**
+   * The form's first step (F5): the application waits for its contact to confirm the address. Returns the token for
+   * the confirmation link, or nothing when no mail should go (the contact already has an open application, or a link
+   * went to this address less than 10 minutes ago) — the caller answers the same either way.
+   */
+  async request(application: BetaApplication, at: string): Promise<{ token?: string }> {
+    return this.serial(async () => {
+      if (!this.cfg.open) throw httpError(410, 'Applications for the beta are closed.');
+      const now = Date.parse(at);
+      this.pending = this.pending.filter((p) => Date.parse(p.expiresAt) > now);
+      const email = application.contactEmail.trim().toLowerCase();
+      if (this.all.some((e) => OPEN.includes(e.status) && e.application.contactEmail.toLowerCase() === email)) return {};
+      const earlier = this.pending.find((p) => p.application.contactEmail.toLowerCase() === email);
+      if (earlier && now - Date.parse(earlier.at) < RESEND_AFTER_MS) return {};
+      this.pending = this.pending.filter((p) => p !== earlier);
+      if (this.pending.length >= MAX_UNCONFIRMED) throw httpError(503, 'Too many applications are waiting. Please try again later.');
+      const token = randomBytes(24).toString('base64url');
+      this.pending.push({ hash: sha256(token), application: { ...application, contactEmail: application.contactEmail.trim() }, at, expiresAt: new Date(now + CONFIRM_HOURS * 3_600_000).toISOString() });
+      await this.savePending();
+      return { token };
+    });
+  }
+
+  /** The link in the confirmation mail: the application becomes one for the operator. 404 for an unknown or lapsed link. */
+  async confirm(token: string, at: string): Promise<{ stored: boolean; enrollment?: BetaEnrollment }> {
+    const hash = sha256(token);
+    const p = await this.serial(async () => {
+      const found = this.pending.find((x) => x.hash.length === hash.length && timingSafeEqual(Buffer.from(x.hash), Buffer.from(hash)));
+      if (!found || Date.parse(found.expiresAt) <= Date.parse(at)) throw httpError(404, 'This confirmation link is not valid any more. Apply again on the form.');
+      this.pending = this.pending.filter((x) => x !== found);
+      await this.savePending();
+      return found;
+    });
+    return this.apply(p.application, at);
+  }
+
+  /** Unconfirmed applications past their link's lifetime are dropped (the beta job; data minimization). */
+  async dropUnconfirmed(at: string) {
+    await this.serial(async () => {
+      const before = this.pending.length;
+      this.pending = this.pending.filter((p) => Date.parse(p.expiresAt) > Date.parse(at));
+      if (this.pending.length !== before) await this.savePending();
+    });
+  }
+
+  private savePending() {
+    return this.backend.write('beta-pending.json', this.pending);
   }
 
   /** Checks that the enrollment exists and is in one of `allowed`; returns it (not a copy). */

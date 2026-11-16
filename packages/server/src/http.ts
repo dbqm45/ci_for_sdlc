@@ -70,7 +70,7 @@ const bearerOf = (req: FastifyRequest) => {
 /** Reads reachable without the read token: liveness for monitors, and the OAuth redirect a browser follows without headers. */
 const OPEN_READS = new Set(['/api/health', '/api/connections/atlassian/callback', '/api/auth/me', '/api/beta']);
 /** Changes anyone may send: the beta application form (validated, rate limited and stored for an operator only). */
-const PUBLIC_WRITES = new Set(['/api/beta/apply']);
+const PUBLIC_WRITES = new Set(['/api/beta/apply', '/api/beta/confirm']);
 /** Accounts mode: reachable without a session, so a browser can log in. */
 const LOGIN_READS = new Set([...OPEN_READS, '/api/auth/login']);
 

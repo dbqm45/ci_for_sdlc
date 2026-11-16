@@ -4,16 +4,25 @@ import { EMPTY_FORM, SOURCES, applicationBody, formProblems, type ApplicationFor
 
 /**
  * The public beta application form at `#/beta` (docs/BETA-ENROLLMENT-PLAN.md, docs/BETA-SURVEYS.md A). Shown without
- * logging in; an operator decides each application and sends the Owner invitation.
+ * logging in; the contact confirms the e-mail address from a link (`#/beta/confirm/<token>`), then an operator decides
+ * each application and sends the Owner invitation.
  */
-export function BetaApply() {
+export function BetaApply({ confirmToken }: { confirmToken?: string } = {}) {
   const [info, setInfo] = useState<{ open: boolean; weeks: number } | null>();
   const [f, setF] = useState<ApplicationForm>(EMPTY_FORM);
   const [tried, setTried] = useState(false);
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState<false | 'done' | 'confirm'>(false);
   const [error, setError] = useState('');
+  const [confirmed, setConfirmed] = useState<'pending' | 'ok' | string>('pending');
   useEffect(() => void api.betaInfo().then(setInfo).catch(() => setInfo(null)), []);
+  useEffect(() => {
+    if (!confirmToken) return;
+    api.confirmBeta(confirmToken).then(
+      () => setConfirmed('ok'),
+      (err) => setConfirmed(errMsg(err)),
+    );
+  }, [confirmToken]);
 
   const set = <K extends keyof ApplicationForm>(k: K, v: ApplicationForm[K]) => setF((x) => ({ ...x, [k]: v }));
   const toggle = (id: SourceId) => set('sources', f.sources.includes(id) ? f.sources.filter((s) => s !== id) : [...f.sources, id]);
@@ -26,8 +35,8 @@ export function BetaApply() {
     setSending(true);
     setError('');
     try {
-      await api.applyForBeta(applicationBody(f));
-      setSent(true);
+      const r = await api.applyForBeta(applicationBody(f));
+      setSent(r.confirm ? 'confirm' : 'done');
     } catch (err) {
       setError(errMsg(err));
     } finally {
@@ -43,9 +52,34 @@ export function BetaApply() {
   );
 
   let body;
-  if (info === undefined) body = <p className="muted">Loading…</p>;
+  if (confirmToken)
+    body =
+      confirmed === 'pending' ? (
+        <p className="muted">Confirming…</p>
+      ) : confirmed === 'ok' ? (
+        <div role="status">
+          <h2>Application confirmed</h2>
+          <p>Thank you. We read every application and answer by e-mail. If your team is chosen, the Owner gets a one-time invitation link to log in with Atlassian.</p>
+        </div>
+      ) : (
+        <div role="alert">
+          <h2>This link does not work</h2>
+          <p>{confirmed}</p>
+          <p>
+            <a href="#/beta">Apply again</a>
+          </p>
+        </div>
+      );
+  else if (info === undefined) body = <p className="muted">Loading…</p>;
   else if (info === null) body = <p>The beta is not offered on this server.</p>;
   else if (!info.open) body = <p>Applications for the beta are closed. Thank you for your interest.</p>;
+  else if (sent === 'confirm')
+    body = (
+      <div role="status">
+        <h2>Check your e-mail</h2>
+        <p>We sent a link to the address you gave. Open it within 24 hours to confirm the application; only then does it reach us.</p>
+      </div>
+    );
   else if (sent)
     body = (
       <div role="status">
