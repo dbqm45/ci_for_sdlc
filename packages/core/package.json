@@ -13,8 +13,8 @@
     "eval:ai": "tsx evals/run.ts"
   },
   "dependencies": {
-    "@anthropic-ai/bedrock-sdk": "^1.1.1",
-    "@anthropic-ai/sdk": "^1.6.0",
+    "@anthropic-ai/bedrock-sdk": "^1.1.2",
+    "@anthropic-ai/sdk": "^1.8.0",
     "yaml": "2.9.1"
   },
   "devDependencies": {
