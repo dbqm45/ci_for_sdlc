@@ -79,6 +79,11 @@ export class Engine extends EventEmitter {
    * workspace's own AI settings are used as they are, without a limit.
    */
   aiPlatform?: { config?: AiPlatformConfig; budget?: AiBudget; workspace: string };
+  /**
+   * Whether this workspace's settings may name files on the server (code reconstruction, test reports, OpenAPI). Off
+   * when people log in (accounts mode): a team's Admin must not make the server read or list its disk (T9).
+   */
+  allowServerFiles = true;
 
   /** `atlassian`: set in CI_CONNECT_MODE=oauth; Jira and Confluence then use its token instead of JIRA_API_TOKEN. */
   constructor(
@@ -114,13 +119,13 @@ export class Engine extends EventEmitter {
     const api = this.api ?? (await this.loadApi(settings)) ?? [];
     // tf's reconstruction from code is the current state of the code, next to the specification in either mode.
     const { code } = settings.integrations;
-    const reconstructed = code.enabled ? await readReconstruction(code.reconstructionPath, { repoUrl: code.repoUrl }) : [];
+    const reconstructed = code.enabled && this.allowServerFiles ? await readReconstruction(code.reconstructionPath, { repoUrl: code.repoUrl }) : [];
     return api.length || reconstructed.length ? { ...ctx, documents: [...ctx.documents, ...reconstructed, ...api] } : ctx;
   }
 
   private async loadApi(settings: Settings): Promise<DocumentItem[] | undefined> {
     const o = settings.integrations.openapi;
-    if (!o?.enabled) return undefined;
+    if (!o?.enabled || !this.allowServerFiles) return undefined;
     const { documents, problems } = await readOpenApi([o.specPath]);
     if (problems.length) throw new Error(`API contract: ${problems.map((p) => `${p.path}: ${p.message}`).join('; ')}`);
     return documents;
@@ -128,7 +133,7 @@ export class Engine extends EventEmitter {
 
   private async loadTests(settings: Settings): Promise<TestCase[] | undefined> {
     const t = settings.integrations.tests;
-    if (!t?.enabled) return undefined;
+    if (!t?.enabled || !this.allowServerFiles) return undefined;
     const { tests, problems } = await readTestResults([t.reportsPath]);
     if (problems.length) throw new Error(`Test results: ${problems.map((p) => `${p.path}: ${p.message}`).join('; ')}`);
     return tests;

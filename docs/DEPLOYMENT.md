@@ -254,6 +254,7 @@ Cel: o awarii dowiadujesz się przed zespołem. Trzy warstwy, wszystkie w darmow
 | 10 | Kopie | Render *Recovery* (odtwarzanie z 3 dni) + udany `quorum-backup` + próba odtworzenia z kroku 10 |
 | 11 | Dostępy | Render → *Members*, AWS → IAM, Backblaze → klucze: tylko to, co ma tam być |
 | 12 | Limity kosztów | limit AI w aplikacji (krok 9.3) i budżet AWS (krok 3.6) |
+| 14 | Skan ZAP | pasywny na produkcji bez alertów High, wpis w [`SECURITY-REVIEW.md`](SECURITY-REVIEW.md) §4 |
 | 13 | Monitoring | alert monitora dostępności przyszedł przy *Suspend*, strażnik zadań „up” (krok 11) |
 
 ### Krok 13. Zanim wpuścisz pierwszy zespół

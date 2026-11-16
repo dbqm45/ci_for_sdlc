@@ -274,7 +274,7 @@ export const api = {
   rules: () => req<{ id: string; name: string; description: string; appliesTo: string[] }[]>('GET', '/api/rules'),
   settings: async () => {
     const { json, res } = await send('GET', '/api/settings');
-    return { ...(json as { settings: Settings; secrets: Record<string, boolean>; defaultModels: Record<string, string>; connectMode: ConnectMode; aiPlatform?: AiPlatformInfo }), etag: res.headers.get('etag') ?? '' };
+    return { ...(json as { settings: Settings; secrets: Record<string, boolean>; defaultModels: Record<string, string>; connectMode: ConnectMode; aiPlatform?: AiPlatformInfo; serverFiles?: boolean; webhooks?: { jira: string; confluence: string; figma: string } }), etag: res.headers.get('etag') ?? '' };
   },
   /** `etag` is the one returned with the settings being edited; a 412 means someone else saved in between. */
   saveSettings: async (patch: DeepPartial<Settings>, etag: string): Promise<SettingsResponse> => {

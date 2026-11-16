@@ -41,6 +41,8 @@ Opcjonalne:
 | `POSTHOG_HOST` | `https://eu.i.posthog.com` | region PostHog (zostaw UE; PostHog dopisz do listy podprzetwarzających i DPA, `BETA-PLAN.md` §5) |
 | `CI_USAGE_SECRET` 🔒 | losowy, zapisany raz w bazie | sekret pseudonimów osób, przestrzeni i organizacji; ustaw, jeśli pseudonimy mają przetrwać przeniesienie danych |
 | `CI_USAGE` | (włączony) | `off` wyłącza cały pomiar użycia |
+| `CI_MAX_WORKSPACES_PER_ORG` | `3` | ile przestrzeni może mieć organizacja poza pierwszą (limit AI jest na przestrzeń; T9) |
+| `CI_WEBHOOK_SECRET` 🔒 | losowany przez Render | sekret powiadomień o zmianach; każda przestrzeń dostaje własny, wyliczony z niego (Ustawienia → adresy webhooków); bez niego na produkcji powiadomienia są odrzucane |
 | `CI_ALERT_EMAILS` | `CI_OPERATOR_EMAILS` | kto dostaje alerty monitoringu (T6); `CI_ALERTS=off` je wyłącza |
 | `CI_HEARTBEAT_URL` 🔒 | (brak) | adres strażnika zadań wołany po każdym godzinnym przebiegu (`DEPLOYMENT.md` krok 11) |
 
