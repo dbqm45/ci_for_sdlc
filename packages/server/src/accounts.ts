@@ -129,6 +129,11 @@ export class Accounts {
   private memberships: Membership[] = [];
   private sessions: Session[] = [];
   private invitations: Invitation[] = [];
+  /**
+   * Operator e-mail → the Atlassian account (`subject`) that first logged in with it (T9, F6). An operator is that
+   * account, not whoever has the e-mail later: an e-mail can move to another Atlassian account.
+   */
+  private operators: Record<string, string> = {};
   private readonly pending = new Map<string, Pending>();
   private readonly bootstrapCode = randomBytes(24).toString('base64url');
   private queue: Promise<unknown> = Promise.resolve();
@@ -149,6 +154,8 @@ export class Accounts {
     this.memberships = list(await this.backend.read('memberships.json'));
     this.sessions = list(await this.backend.read('sessions.json'));
     this.invitations = list(await this.backend.read('invitations.json'));
+    const ops = await this.backend.read('operators.json');
+    this.operators = ops && typeof ops === 'object' && !Array.isArray(ops) ? (ops as Record<string, string>) : {};
   }
 
   /** The one-time link for the first Owner, while there is nobody and no CI_BOOTSTRAP_EMAIL. */
@@ -243,6 +250,12 @@ export class Accounts {
         throw new ConnectError('not_invited', ASK_FOR_INVITATION);
       }
       await this.backend.write('users.json', this.users);
+      // The first account to log in with an operator e-mail becomes that operator for good (F6).
+      const opEmail = user.email.trim().toLowerCase();
+      if (this.isOperatorEmail(opEmail) && !this.operators[opEmail]) {
+        this.operators[opEmail] = user.subject;
+        await this.backend.write('operators.json', this.operators);
+      }
       const id = token();
       this.sessions.push({ hash: sha256(id), userId: user.id, createdAt: now, lastSeenAt: now });
       await this.backend.write('sessions.json', this.sessions);
@@ -365,12 +378,18 @@ export class Accounts {
       s.lastSeenAt = new Date(now).toISOString();
       await this.serial(() => this.backend.write('sessions.json', this.sessions));
     }
-    return { userId: user.id, name: user.name, email: user.email, role: membership.role, orgId: membership.orgId, operator: this.isOperator(user.email) };
+    return { userId: user.id, name: user.name, email: user.email, role: membership.role, orgId: membership.orgId, operator: this.isOperator(user) };
   }
 
-  private isOperator(email: string) {
+  private isOperatorEmail(email: string) {
     const e = email.trim().toLowerCase();
     return !!e && (this.cfg.operatorEmails ?? []).some((x) => x.trim().toLowerCase() === e);
+  }
+
+  /** An operator: an e-mail in CI_OPERATOR_EMAILS, held by the Atlassian account bound to it at its first login (F6). */
+  private isOperator(user: { email: string; subject: string }) {
+    const e = user.email.trim().toLowerCase();
+    return this.isOperatorEmail(e) && this.operators[e] === user.subject;
   }
 
   async logout(id: string | undefined) {

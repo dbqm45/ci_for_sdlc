@@ -26,6 +26,12 @@ const day = (iso: string) => iso.slice(0, 10);
 
 /** The mails of the beta, plain text. `link` is the app's address for the team's workspace or the survey. */
 export const betaMails = {
+  /** To an address nobody has confirmed yet: a fixed text, nothing the applicant typed (F5). */
+  confirm: (to: string, link: string, hours: number): Mail => ({
+    to: [to],
+    subject: 'Quorum beta: confirm your application',
+    text: `Someone applied for the Quorum closed beta with this e-mail address. If it was you, confirm the application within ${hours} hours:\n\n${link}\n\nIf it was not you, ignore this mail: nothing is kept after ${hours} hours.\n`,
+  }),
   applied: (e: BetaEnrollment): Mail => ({
     to: [e.application.contactEmail],
     subject: 'Quorum beta: we have your application',

@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { APPROVE_GATE, RULES, changeKeyOf, changeReadiness, mergeChangeReadiness, parseGateDecided, workspacePath, type AnalysisResult, type ChangeReadiness } from '@ci/core';
 import { Accounts, SESSION_COOKIE, LOGIN_COOKIE, type InvitedRole } from './accounts.js';
 import { ROLES, type Role } from './roles.js';
-import { BETA_REAL_DATA, BETA_REFERENCE, BETA_SOURCES, BetaEnrollments, applicationLimiter, betaView, entrySurveyPending, measured, statusAt, surveyStates, type BetaApplication } from './beta.js';
+import { BETA_REAL_DATA, BETA_REFERENCE, BETA_SOURCES, BetaEnrollments, CONFIRM_HOURS, applicationLimiter, betaView, entrySurveyPending, measured, statusAt, surveyStates, type BetaApplication, type BetaEnrollment } from './beta.js';
 import { SURVEYS } from './beta-surveys.js';
 import { betaMails, runBetaJob } from './beta-job.js';
 import { PAUSE_AFTER_DAYS } from './beta-lifecycle.js';
@@ -61,6 +61,8 @@ export interface AppOptions {
   betaWeeks?: number;
   /** Whether teams may apply; default true unless CI_BETA_APPLICATIONS=closed. */
   betaApplicationsOpen?: boolean;
+  /** The beta form asks the contact to confirm the e-mail address first (F5; default on). */
+  betaConfirm?: boolean;
   /** Days a survey may be past due before analyses pause; default CI_BETA_PAUSE_AFTER_DAYS or 7. */
   betaPauseAfterDays?: number;
   /** Where the beta's mails go; default Resend with RESEND_API_KEY and CI_MAIL_FROM, else the log. */
@@ -191,6 +193,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     pauseAfterDays: opts.betaPauseAfterDays ?? (Number(process.env.CI_BETA_PAUSE_AFTER_DAYS) || PAUSE_AFTER_DAYS),
   });
   const pauseAfterDays = beta.cfg.pauseAfterDays!;
+  const betaConfirm = opts.betaConfirm ?? process.env.CI_BETA_CONFIRM !== 'off';
 
   // ------------------------------------------------------------------ usage measurement (T8, docs/BETA-PLAN.md §8)
   const usage = new Usage(storage.backend('_platform'), {
@@ -911,14 +914,33 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       if (!allowApplication(req.ip, Date.now())) throw httpError(429, 'Too many applications from this address. Please try again in an hour.', { 'retry-after': '3600' });
       const { consents: _c, website, ...application } = req.body;
       if (!website) {
-        const r = await beta.apply({ ...application, sources: [...application.sources] }, new Date().toISOString());
-        if (r.enrollment) {
-          await main.store.audit({ at: r.enrollment.appliedAt, kind: 'member', actor: 'beta form', summary: `Beta application from ${application.org} (${application.team})` });
-          mailNow(betaMails.applied(r.enrollment));
-          if (operatorEmails.length) mailNow(betaMails.newApplication(r.enrollment, operatorEmails, connect.publicUrl));
-        }
+        const at = new Date().toISOString();
+        if (betaConfirm) {
+          // F5: first the contact confirms the address; only then the operator hears of it.
+          const r = await beta.request({ ...application, sources: [...application.sources] }, at);
+          if (r.token) mailNow(betaMails.confirm(application.contactEmail.trim(), `${connect.publicUrl}/#/beta/confirm/${r.token}`, CONFIRM_HOURS));
+        } else await applicationStored(await beta.apply({ ...application, sources: [...application.sources] }, at));
       }
-      return reply.code(202).send({ received: true });
+      return reply.code(202).send({ received: true, confirm: betaConfirm });
+    },
+  );
+
+  /** A confirmed application: audited, a receipt to the contact, a note to the operators. */
+  const applicationStored = async (r: { enrollment?: BetaEnrollment }) => {
+    if (!r.enrollment) return;
+    const { org, team } = r.enrollment.application;
+    await main.store.audit({ at: r.enrollment.appliedAt, kind: 'member', actor: 'beta form', summary: `Beta application from ${org} (${team})` });
+    mailNow(betaMails.applied(r.enrollment));
+    if (operatorEmails.length) mailNow(betaMails.newApplication(r.enrollment, operatorEmails, connect.publicUrl));
+  };
+
+  app.post<{ Body: { token: string } }>(
+    '/api/beta/confirm',
+    { schema: { summary: 'Confirm a beta application from the link in its mail (public)', body: { type: 'object', required: ['token'], additionalProperties: false, properties: { token: { type: 'string', minLength: 10, maxLength: 100 } } }, response: errors(404, 422) } },
+    async (req) => {
+      if (!accounts.enabled) throw betaOff();
+      await applicationStored(await beta.confirm(req.body.token, new Date().toISOString()));
+      return { confirmed: true };
     },
   );
 
@@ -1111,6 +1133,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   if (betaTimer) void betaJob().catch(jobFailed('beta job'));
   // Deleted workspaces past their date are erased for good, hourly and once at start (T7).
   const purge = async () => {
+    // Applications nobody confirmed within the link's lifetime are dropped (F5).
+    await beta.dropUnconfirmed(new Date().toISOString());
     for (const d of await workspaces.purge(new Date())) {
       if (!workspaces.get(d.id)) {
         await aiBudget?.forget(d.id);

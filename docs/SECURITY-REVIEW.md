@@ -22,9 +22,11 @@ logowaniu, rolach, webhookach lub trasach publicznych.
 | F2 | średnia | **Obejście ról zakodowanym adresem**: Viewer pod `/api/member%73` dostawał listę członków z e-mailami (router dekoduje ścieżkę, sprawdzenie roli patrzyło na surowy adres); tak samo `/api/invitation%73` | **poprawione**: role i listy dozwolonych tras sprawdzane na ścieżce zdekodowanej jak w routerze; błędne kodowanie = 400 (SEC-F2) |
 | F3 | średnia | **Limit AI obchodzony mnożeniem przestrzeni**: Admin zespołu mógł założyć N przestrzeni × $50 | **złagodzone**: najwyżej 3 przestrzenie na organizację poza pierwszą (`CI_MAX_WORKSPACES_PER_ORG`) (SEC-F3); limit na organizację — do decyzji po becie |
 | F4 | niska | Id przestrzeni są globalne: po skasowaniu archiwum organizacji A kasowany był wydatek AI i limit nowej przestrzeni organizacji B o tym samym id | **poprawione**: dane platformy kasowane tylko, gdy żadna żywa przestrzeń nie ma tego id. Zostaje: 409 przy zakładaniu zdradza, że id jest zajęte |
-| F5 | niska–średnia | **Formularz bety** wysyła mail na dowolny adres z tekstem zgłaszającego (ryzyko phishingu/reputacji domeny); 200 miejsc w kolejce da się zapchać z wielu adresów IP | **otwarte**: limit 5 zgłoszeń/h na IP i 200 oczekujących działa; do zrobienia: potwierdzenie adresu przed zapisaniem zgłoszenia, bez wolnego tekstu w mailu do niepotwierdzonego adresu. Do tego czasu: `CI_BETA_APPLICATIONS=closed`, gdy nie zbierasz zgłoszeń |
-| F6 | niska (nie potwierdzone) | Operator i pierwszy Owner rozpoznawani po e-mailu Atlassian, który przy zmianie konta może przejść na kogoś innego | **otwarte**: przywiązać operatora do `account_id` po pierwszym logowaniu. W becie: operatorem jest tylko Twój adres; nie dodawaj adresów z domen, których nie kontrolujesz |
+| F5 | niska–średnia | **Formularz bety** wysyłał mail na dowolny adres z tekstem zgłaszającego (ryzyko phishingu/reputacji domeny); 200 miejsc w kolejce dało się zapchać z wielu adresów IP | **poprawione**: najpierw tylko mail z linkiem potwierdzającym, o stałej treści (bez niczego, co wpisał zgłaszający), najwyżej jeden na adres na 10 minut; zgłoszenie trafia do operatora i liczy się do kolejki dopiero po potwierdzeniu; link działa 24 godziny, potem dane znikają; w bazie tylko skrót tokenu (BC-01…03, e2e bety) |
+| F6 | niska | Operator i pierwszy Owner rozpoznawani po e-mailu Atlassian, który przy zmianie konta może przejść na kogoś innego | **poprawione**: operatorem jest konto Atlassian (`account_id`), które pierwsze zalogowało się z adresem z `CI_OPERATOR_EMAILS`; inne konto z tym samym adresem nim nie jest (BC-04). Pierwszy Owner powstaje tylko przy pustej instalacji, więc nie wymaga zmian |
 | F7 | niska (tylko gdy ustawione) | `CI_READ_TOKEN` w trybie kont czytał przestrzenie wszystkich organizacji | **poprawione**: token tylko do odczytu widzi tylko pierwszą organizację (SEC-F7). `FIGMA_TOKEN`/`JIRA_API_TOKEN` na serwerze byłyby wspólne dla wszystkich zespołów — **nie ustawiaj ich na produkcji** |
+
+Stan po poprawkach: wszystkie ustalenia F0–F7 poprawione (F3 złagodzone limitem przestrzeni; limit AI na organizację — do decyzji po becie).
 
 **Sprawdzone i w porządku:** ciasteczko sesji `HttpOnly; SameSite=Lax; Secure`, w bazie tylko SHA-256, sesje wygasają;
 OAuth (`state` losowy, po stronie serwera i w ciasteczku, 10 minut, przekierowania na stałe ścieżki); CSRF (zmiany z
@@ -41,7 +43,7 @@ organizacji na trasach przestrzeni, członków, zaproszeń; trasy operatora wyma
 |---|---|---|
 | `GET /api/health` | monitor dostępności, health check Render | tylko wersja i wartości logiczne, bez tekstu błędów; odpowiada pod każdym hostem |
 | `GET /api/auth/me`, `GET /api/auth/login`, `GET /api/connections/atlassian/callback` | logowanie | bez danych bez sesji; `state` OAuth |
-| `GET /api/beta`, `POST /api/beta/apply` | formularz bety | walidacja, limit na IP, kolejka dla operatora (F5) |
+| `GET /api/beta`, `POST /api/beta/apply`, `POST /api/beta/confirm` | formularz bety i link potwierdzający | walidacja, limit na IP, mail o stałej treści, jednorazowy token na 24 h (F5) |
 | `POST /api/webhooks/:source`, `POST /api/w/:ws/webhooks/:source` | powiadomienia o zmianach | sekret przestrzeni (F0) |
 | `POST /api/webhooks/pdi` | zdarzenia pdi | podpis HMAC; bez połączenia z pdi trasa nie istnieje |
 

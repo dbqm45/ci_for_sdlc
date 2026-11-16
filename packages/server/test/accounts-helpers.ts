@@ -58,7 +58,8 @@ export function removeDir(dir: string) {
 }
 
 export async function startAccounts(dataDir: string, opts: Partial<AppOptions> = {}): Promise<App> {
-  return buildApp({ dataDir, adminToken: '', readToken: '', allowedHosts: [], allowedOrigins: [], connect: loginCfg, authMode: 'accounts', ...opts });
+  // Most tests apply and decide at once; the address confirmation (F5) has its own tests (beta-confirm.test.ts).
+  return buildApp({ dataDir, adminToken: '', readToken: '', allowedHosts: [], allowedOrigins: [], connect: loginCfg, authMode: 'accounts', betaConfirm: false, ...opts });
 }
 
 export const cookies = (h: unknown): string[] => (h === undefined ? [] : Array.isArray(h) ? h.map(String) : [String(h)]);

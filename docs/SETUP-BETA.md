@@ -36,6 +36,7 @@ Opcjonalne:
 | `CI_BETA_WEEKS` | `8` | długość bety od pierwszego logowania Ownera zespołu |
 | `CI_BETA_PAUSE_AFTER_DAYS` | `7` | po ilu dniach zaległej ankiety analizy zespołu są wstrzymane |
 | `CI_BETA_APPLICATIONS` | (otwarte) | `closed` zamyka formularz `#/beta` (410), gdy masz już 3–5 zespołów |
+| `CI_BETA_CONFIRM` | (włączone) | `off` wyłącza potwierdzanie adresu w formularzu (tylko do diagnozy; bez niego formularz wysyła maile na dowolny adres) |
 | `CI_BETA_JOB` | (włączone) | `off` wyłącza zadanie bety (przypomnienia, wstrzymanie, koniec) — tylko do diagnozy |
 | `POSTHOG_API_KEY` 🔒 | (brak) | pomiar użycia (T8) wysyłany też do PostHog; bez klucza zdarzenia są tylko we własnym logu, a miary liczy panel operatora (*Usage*) |
 | `POSTHOG_HOST` | `https://eu.i.posthog.com` | region PostHog (zostaw UE; PostHog dopisz do listy podprzetwarzających i DPA, `BETA-PLAN.md` §5) |
@@ -59,8 +60,8 @@ kopie). Na innym serwerze ta sama kolejność: aplikacja Atlassian, domena nadaw
 
 - `GET /api/health` → `ok: true`, `storage: postgres`.
 - `GET /api/beta` → `{ "open": true, "weeks": 8 }` (bez logowania).
-- Testowe zgłoszenie z własnym drugim adresem → mail „we have your application” i mail do operatora; zgłoszenie na
-  `#/operator`. Odrzuć je potem (*Reject*).
+- Testowe zgłoszenie z własnym drugim adresem → mail „confirm your application”; po kliknięciu linku mail „we have
+  your application” i mail do operatora; zgłoszenie na `#/operator`. Odrzuć je potem (*Reject*).
 - W logu serwera brak wpisów `mail not sent: RESEND_API_KEY is not set` i `beta mail failed`.
 
 ## 4. Znane ograniczenia (do zrobienia)

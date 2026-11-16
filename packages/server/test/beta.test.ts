@@ -77,7 +77,7 @@ describe('the application form', () => {
 
     const r = await apply(APPLICATION);
     expect(r.statusCode).toBe(202);
-    expect(r.json()).toEqual({ received: true });
+    expect(r.json()).toEqual({ received: true, confirm: false });
     const [e] = await enrollments();
     expect(e).toMatchObject({ status: 'applied', application: { org: 'Beta Corp', team: 'Payments', contactEmail: 'bea@beta.example', sources: ['jira', 'confluence'] }, consents: { terms: true, measurement: true, surveys: true } });
     expect(e.history).toEqual([expect.objectContaining({ status: 'applied', by: 'Bea Beta' })]);
