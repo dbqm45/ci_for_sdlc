@@ -161,7 +161,8 @@ ok. 400 MB (pomiar lokalny po starcie: ok. 160 MB); dysk → więcej GB (da się
 4. **Apply.** Pierwsza budowa trwa kilka minut. Gotowe, gdy `quorum` ma status *Live*, a adres techniczny z panelu
    `https://quorum-….onrender.com/api/health` zwraca `"ok":true` i `"storage":"postgres"`.
 5. **Skopiuj do menedżera haseł** wartości wylosowane przez Render (usługa `quorum` → *Environment* → pokaż):
-   `CI_ENCRYPTION_KEY` (bez niego zaszyfrowane dane i połączenia są nie do odczytania, także z kopii),
+   `CI_ENCRYPTION_KEY` (szyfruje dane każdej przestrzeni; bez niego dane i połączenia są nie do odczytania, także
+   z kopii, a usługa nie wystartuje),
    `CI_ADMIN_TOKEN` (dostęp maszyn: CLI, MCP, API operatora), `CI_USAGE_SECRET`.
 6. Panel Render → *Account Settings → Notifications*: powiadomienia o nieudanych wdrożeniach i przebiegach cron na
    Twój e-mail.
@@ -315,5 +316,6 @@ Cel: o awarii dowiadujesz się przed zespołem. Trzy warstwy, wszystkie w darmow
 - [`AI-PLATFORM.md`](AI-PLATFORM.md) — AI platformy, limit, stawki.
 - [`BACKUPS.md`](BACKUPS.md) — kopie, próba odtworzenia, odtworzenie po awarii.
 - [`DATA-DELETION.md`](DATA-DELETION.md) — usuwanie przestrzeni i danych zespołu na żądanie.
+- [`TRUST.md`](TRUST.md) — bezpieczeństwo i poufność dla klientów (co czytamy, gdzie leży, kto ma dostęp).
 - [`CONNECT-ATLASSIAN.md`](CONNECT-ATLASSIAN.md) — OAuth Atlassiana.
 - [`BETA-PLAN.md`](BETA-PLAN.md), [`BETA-ENROLLMENT-PLAN.md`](BETA-ENROLLMENT-PLAN.md) — po co beta i jak przebiega.

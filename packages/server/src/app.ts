@@ -142,7 +142,12 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   await aiBudget?.init();
   /** Workspaces an organization other than the first may have (CI_MAX_WORKSPACES_PER_ORG, default 3; T9). */
   const maxWorkspacesPerOrg = Number(process.env.CI_MAX_WORKSPACES_PER_ORG) > 0 ? Number(process.env.CI_MAX_WORKSPACES_PER_ORG) : 3;
+  // The hosted service (accounts mode) encrypts every workspace's stored context at rest (docs/TRUST.md).
+  const encryptAll = authMode === 'accounts' && !!process.env.CI_ENCRYPTION_KEY;
+  if (authMode === 'accounts' && !process.env.CI_ENCRYPTION_KEY && process.env.NODE_ENV === 'production')
+    throw new Error('CI_ENCRYPTION_KEY is required in production with CI_AUTH_MODE=accounts: every workspace is encrypted at rest.');
   const workspaces = new Workspaces(storage, connect, async (w) => {
+    w.store.alwaysEncrypt = encryptAll;
     // People log in: a workspace's settings may not name files on the server (T9).
     w.engine.allowServerFiles = authMode !== 'accounts';
     if (aiPlatform) w.engine.aiPlatform = { config: aiPlatform, budget: aiBudget, workspace: w.id };
@@ -213,6 +218,21 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const alerts = new Alerts(mailer, { to: alertEmails, publicUrl: connect.publicUrl, log: (o, msg) => app.log.warn(o, msg) });
   const alert = (...a: Parameters<Alerts['notify']>) => void alerts.notify(...a);
   onAiLimit = (s) => alert('ai_limit_reached', s.workspace, { month: s.month, limitUsd: s.limitUsd, spentUsd: s.spentUsd, change: 'the operator page → AI limits' });
+  // A team sees in its own audit when the platform operator reached its workspace with the admin token (docs/TRUST.md):
+  // once per route and hour, never what was read.
+  const operatorAccessNoted = new Map<string, number>();
+  app.addHook('onResponse', async (req) => {
+    if (req.principal !== 'admin_token' || !accounts.enabled) return;
+    const ws = /^\/api\/w\/([^/?]+)/.exec(req.url)?.[1];
+    const w = ws ? workspaces.get(decodeURIComponent(ws)) : undefined;
+    if (!w || orgOf(w) === accounts.homeOrgId) return;
+    const route = `${req.method} ${req.routeOptions.url ?? req.url.split('?')[0]}`;
+    const key = `${w.id} ${route}`;
+    const now = Date.now();
+    if (now - (operatorAccessNoted.get(key) ?? 0) < 3_600_000) return;
+    operatorAccessNoted.set(key, now);
+    await w.store.audit({ at: new Date(now).toISOString(), kind: 'access', actor: 'platform operator', via: 'admin_token', summary: `The platform operator used ${route} on this workspace (admin token)` }).catch(() => undefined);
+  });
   app.addHook('onResponse', async (req, reply) => {
     if (reply.statusCode >= 500 && req.url.split('?')[0] !== '/api/health') alert('server_error', `${req.method} ${req.routeOptions.url ?? req.url.split('?')[0]}`, { status: reply.statusCode, requestId: req.id });
   });

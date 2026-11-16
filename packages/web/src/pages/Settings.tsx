@@ -225,6 +225,7 @@ export function Settings() {
                 <select className="input" value={s.ai.runOn} onChange={(e) => set('ai.runOn', e.target.value)}>
                   <option value="on_demand">On demand (AI review button per item)</option>
                   <option value="every_analysis">On every analysis (cached per unchanged item)</option>
+                  <option value="never">Never (nothing of this workspace is sent to a model)</option>
                 </select>
               </Field>
             </div>
@@ -262,6 +263,7 @@ export function Settings() {
               <select className="input" value={s.ai.runOn} onChange={(e) => set('ai.runOn', e.target.value)}>
                 <option value="on_demand">On demand (AI review button per item)</option>
                 <option value="every_analysis">On every analysis (cached per unchanged item)</option>
+                <option value="never">Never (nothing of this workspace is sent to a model)</option>
               </select>
             </Field>
             <div className="row" style={{ alignSelf: 'end' }}>
@@ -283,7 +285,11 @@ export function Settings() {
             <Check label="Organization-managed AI provider" v={s.security.organizationManagedAi} on={(v) => set('security.organizationManagedAi', v)} />
             <Check label="Redact personal data (e-mails, card numbers, secrets) before AI calls" v={s.security.redactPersonalData} on={(v) => set('security.redactPersonalData', v)} />
             <Check label="Local cache only (context is never stored outside this server)" v={s.security.localCacheOnly} on={(v) => set('security.localCacheOnly', v)} />
-            <Check label={<>Encrypt stored context (AES-256-GCM) {secret('CI_ENCRYPTION_KEY')}</>} v={s.security.encryptStoredContext} on={(v) => set('security.encryptStoredContext', v)} />
+            {data.encryptionForced ? (
+              <div className="small">Stored context is always encrypted at rest (AES-256-GCM) in this service.</div>
+            ) : (
+              <Check label={<>Encrypt stored context (AES-256-GCM) {secret('CI_ENCRYPTION_KEY')}</>} v={s.security.encryptStoredContext} on={(v) => set('security.encryptStoredContext', v)} />
+            )}
             <Check label="Audit AI decisions" v={s.security.auditAiDecisions} on={(v) => set('security.auditAiDecisions', v)} />
             <Check label="Record evidence sources sent to AI" v={s.security.recordEvidenceSources} on={(v) => set('security.recordEvidenceSources', v)} />
             <div className="small muted row" style={{ gap: 6 }}>

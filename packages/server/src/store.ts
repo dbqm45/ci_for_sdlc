@@ -87,7 +87,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export interface AuditEntry {
   at: string;
-  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection' | 'pdi' | 'auto_close' | 'workspace' | 'member';
+  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection' | 'pdi' | 'auto_close' | 'workspace' | 'member' | 'access';
   /** A display name; `via` is how the change was authorized (admin token or a loopback client). */
   actor: string;
   via?: Principal;
@@ -131,6 +131,11 @@ export class Store {
   private queue: Promise<unknown> = Promise.resolve();
 
   private readonly backend: Backend;
+  /**
+   * Encryption at rest regardless of the workspace's setting: the hosted service (accounts mode) turns it on for every
+   * workspace (docs/TRUST.md). Needs CI_ENCRYPTION_KEY.
+   */
+  alwaysEncrypt = false;
 
   /** A directory of JSON files, or any backend (Postgres, F5). */
   constructor(target: string | Backend) {
@@ -226,7 +231,22 @@ export class Store {
   }
 
   private get encrypt() {
-    return this.settings().then((s) => s.security.encryptStoredContext);
+    return this.alwaysEncrypt ? Promise.resolve(true) : this.settings().then((s) => s.security.encryptStoredContext);
+  }
+
+  /** One log entry sealed like a document, when encryption at rest is on. */
+  private seal(entry: unknown): unknown {
+    const key = this.key();
+    if (!key) throw new Error('Refusing to write a log entry unencrypted: encryption at rest is on but CI_ENCRYPTION_KEY is not set');
+    const iv = randomBytes(12);
+    const c = createCipheriv('aes-256-gcm', key, iv);
+    const data = Buffer.concat([c.update(JSON.stringify(entry), 'utf8'), c.final()]);
+    return { __enc: 1, iv: iv.toString('base64'), tag: c.getAuthTag().toString('base64'), data: data.toString('base64') };
+  }
+
+  /** Whether stored context is encrypted at rest for this workspace (its setting, or the service's rule). */
+  encrypted(): Promise<boolean> {
+    return this.encrypt;
   }
 
   /** All decision versions, including superseded and withdrawn ones. */
@@ -288,7 +308,7 @@ export class Store {
     return this.readJson('drift.json', [], listOf<DriftEvent>());
   }
   appendDriftLog(events: DriftEvent[]) {
-    return this.update('drift.json', [], listOf<DriftEvent>(), (d) => [...d, ...events].slice(-1000), false);
+    return this.update('drift.json', [], listOf<DriftEvent>(), (d) => [...d, ...events].slice(-1000), true);
   }
   history() {
     return this.readJson('history.json', [], listOf<HistoryPoint>());
@@ -316,10 +336,10 @@ export class Store {
     return this.readJson('auto-close.json', [], listOf<AutoCloseEvent>());
   }
   appendAutoClose(events: AutoCloseEvent[]) {
-    return this.update('auto-close.json', [], listOf<AutoCloseEvent>(), (all) => [...all, ...events].slice(-5000), false);
+    return this.update('auto-close.json', [], listOf<AutoCloseEvent>(), (all) => [...all, ...events].slice(-5000), true);
   }
   updateAutoCloseLog(fn: (all: AutoCloseEvent[]) => AutoCloseEvent[] | void) {
-    return this.update('auto-close.json', [], listOf<AutoCloseEvent>(), fn, false);
+    return this.update('auto-close.json', [], listOf<AutoCloseEvent>(), fn, true);
   }
   /** Events waiting for delivery to pdi, with their retry state. */
   pdiOutbox() {
@@ -330,12 +350,21 @@ export class Store {
   }
 
   async audit(e: AuditEntry) {
-    await this.backend.append('audit', e);
+    // Audit summaries name stories and decisions: sealed one by one when encryption at rest is on.
+    await this.backend.append('audit', (await this.encrypt) ? this.seal(e) : e);
   }
   /** The latest entries first; an entry that is not an audit entry is skipped. */
   async auditLog(limit = 300): Promise<AuditEntry[]> {
     const entries = await this.backend.tail('audit', limit);
-    return entries.reverse().flatMap((entry) => (isRecord(entry) && typeof entry.at === 'string' && typeof entry.kind === 'string' ? [entry as unknown as AuditEntry] : []));
+    return entries.reverse().flatMap((stored) => {
+      let entry: unknown;
+      try {
+        entry = this.decrypt(stored);
+      } catch {
+        return [];
+      }
+      return isRecord(entry) && typeof entry.at === 'string' && typeof entry.kind === 'string' ? [entry as unknown as AuditEntry] : [];
+    });
   }
   /**
    * Tokens, cost and time of the audited AI calls among the last `limit` audit entries, per provider and model
