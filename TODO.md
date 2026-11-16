@@ -7,6 +7,16 @@
       danych, raport użycia, przegląd bezpieczeństwa), potem 3–5 zespołów przez ok. 12 tygodni. Czeka na decyzje
       właściciela z §10 planu. T10 (zapisy, ankiety, wstrzymanie, maile) zrobione (#114–#117); uruchomienie na
       serwerze: [`docs/SETUP-BETA.md`](docs/SETUP-BETA.md).
+- [ ] **Sprawdzenia przed wysłaniem [`docs/TRUST.md`](docs/TRUST.md) klientowi** (właściciel):
+  - [ ] warunki AWS Bedrock: dane wejściowe i wyniki nie są używane do trenowania modeli ani udostępniane dostawcy
+        modelu (Anthropic); gdzie dokładnie są przetwarzane dla profilu `eu.`; jak długo AWS je przechowuje;
+  - [ ] cennik Bedrocka dla eu-central-1 i profilu `eu.` — jeśli inny niż cennik Anthropic, ustawić `CI_AI_PRICES`
+        ([`docs/AI-PLATFORM.md`](docs/AI-PLATFORM.md));
+  - [ ] czy Render szyfruje dysk Postgresa i kopie (PITR) — wpisać do `TRUST.md` §3;
+  - [ ] retencja logów u Resend (adresat, temat) i jak je usuwać ([`docs/DATA-DELETION.md`](docs/DATA-DELETION.md) §3);
+  - [ ] aktualne certyfikaty dostawców (SOC 2 / ISO 27001: Render, AWS, Backblaze) — linki do raportów w `TRUST.md` §8;
+  - [ ] lista podprzetwarzających w DPA zgodna z `TRUST.md` §2;
+  - [ ] wersja angielska `TRUST.md` dla klientów spoza Polski.
 - [x] **Lokalny przebieg całej bety** — `npm run local -- --beta` (logowanie dowolną osobą, skrzynka maili
       w aplikacji, przesuwany zegar), scenariusz ręczny i test e2e `npm run test:e2e:beta-local`:
       [`docs/BETA-LOCAL.md`](docs/BETA-LOCAL.md). Pierwsze przejście: 5 błędów poprawionych od razu, reszta niżej.

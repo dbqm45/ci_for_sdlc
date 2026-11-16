@@ -3,7 +3,7 @@
 Stan: 2026-11-16. Dokument dla zespołów i działów bezpieczeństwa firm, które rozważają Quorum (gotowa odpowiedź na
 pytania z kwestionariusza bezpieczeństwa). Opisuje usługę hostowaną w becie; szczegóły techniczne i stan kontroli:
 [`SECURITY-REVIEW.md`](SECURITY-REVIEW.md), [`DATA-DELETION.md`](DATA-DELETION.md), [`BACKUPS.md`](BACKUPS.md),
-[`AI-PLATFORM.md`](AI-PLATFORM.md). Przed wysłaniem klientowi zagranicznemu: wersja angielska.
+[`AI-PLATFORM.md`](AI-PLATFORM.md). Przed wysłaniem klientowi: sprawdzenia z [`TODO.md`](../TODO.md) („Sprawdzenia przed wysłaniem TRUST.md”).
 
 ## 1. Jakie dane czytamy
 
