@@ -19,7 +19,7 @@ import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookie
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
-import { ensure, who, workspaceRoutes } from './routes-workspace.js';
+import { ensure, who, withoutSecret, workspaceRoutes } from './routes-workspace.js';
 import { MUTATION, WORKSPACE_ID_PATTERN, approvalRequestBody, changeParams, errors, oauthCallbackQuery, problem, workspaceBody, workspaceDeleteBody, workspaceParams, workspaceRenameBody } from './schemas.js';
 import type { Store } from './store.js';
 import { APP_VERSION } from './version.js';
@@ -93,7 +93,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const localMail = local.enabled && !opts.mailer ? new MemoryMailer() : undefined;
   // Strict bodies: unknown properties and wrong types are rejected, not silently dropped or coerced.
   const app = Fastify({
-    logger: opts.logger ?? false,
+    // Request lines never carry a webhook secret from the query string (T9).
+    logger: opts.logger
+      ? { serializers: { req: (req: FastifyRequest) => ({ method: req.method, url: withoutSecret(req.url), host: req.host, remoteAddress: req.ip, remotePort: req.socket?.remotePort }) } }
+      : false,
     // Behind the hosting's load balancer (CI_TRUST_PROXY = its number of hops), req.ip is the client's address.
     trustProxy: trustProxyFrom(process.env.CI_TRUST_PROXY),
     ajv: { customOptions: { removeAdditional: false, coerceTypes: false, allErrors: true } },
@@ -135,7 +138,11 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   let onAiLimit: (s: BudgetStatus) => void = () => undefined;
   const aiBudget = aiPlatform ? new AiBudget(storage.backend('_platform'), aiPlatform.defaultLimitUsd, (s) => onAiLimit(s)) : undefined;
   await aiBudget?.init();
+  /** Workspaces an organization other than the first may have (CI_MAX_WORKSPACES_PER_ORG, default 3; T9). */
+  const maxWorkspacesPerOrg = Number(process.env.CI_MAX_WORKSPACES_PER_ORG) > 0 ? Number(process.env.CI_MAX_WORKSPACES_PER_ORG) : 3;
   const workspaces = new Workspaces(storage, connect, async (w) => {
+    // People log in: a workspace's settings may not name files on the server (T9).
+    w.engine.allowServerFiles = authMode !== 'accounts';
     if (aiPlatform) w.engine.aiPlatform = { config: aiPlatform, budget: aiBudget, workspace: w.id };
     /** A2b: decided A2a steps go to pdi's registry as decision.recorded, with the item's CHG from its `change:` label. */
     w.sink = async (steps) => {
@@ -216,7 +223,8 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   /** The organization a request acts for: the person's, or the first one for a machine with a token. */
   const orgOfReq = (req: FastifyRequest) => req.account?.orgId ?? accounts.homeOrgId;
   /** Whether the request may see the workspace: machines and token mode see all, people only their organization's. */
-  const visible = (req: FastifyRequest, w: Workspace) => !accounts.enabled || !req.account || orgOf(w) === req.account.orgId;
+  const visible = (req: FastifyRequest, w: Workspace) =>
+    !accounts.enabled || (req.principal === 'read_token' ? orgOf(w) === accounts.homeOrgId : !req.account || orgOf(w) === req.account.orgId);
   /** The workspaces pdi's changes are made of: those of the first organization (the pdi link is the installation's). */
   function pdiWorkspaces() {
     return workspaces.all().filter((w) => orgOf(w) === (accounts.enabled ? accounts.homeOrgId : undefined));
@@ -391,6 +399,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       const at = new Date().toISOString();
       try {
         const orgId = orgOfReq(req);
+        // The AI limit is per workspace: a cap per organization keeps one team from multiplying it (T9).
+        if (accounts.enabled && orgId !== accounts.homeOrgId && workspaces.all().filter((x) => orgOf(x) === orgId).length >= maxWorkspacesPerOrg)
+          throw httpError(409, `An organization has at most ${maxWorkspacesPerOrg} workspaces in the beta. Ask the operator for more.`);
         const w = await workspaces.create(req.body.id, req.body.name ?? req.body.id, at, accounts.enabled ? orgId : undefined);
         await auditOf(orgId).audit({ at, kind: 'workspace', ...who(req, req.body), summary: `Workspace ${w.id} (${w.name}) created` });
         return reply.status(201).send({ id: w.id, name: w.name });
@@ -756,8 +767,11 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   /** Erases a deleted workspace's data and what the platform keeps about it (AI spend, usage notes). */
   const eraseDeleted = async (archivedAs: string, at: string, by: string, reason: 'operator' | 'expired') => {
     const d = await workspaces.erase(archivedAs);
-    await aiBudget?.forget(d.id);
-    await platform.remove(`usage-seen-${d.id}.json`);
+    // The id may already belong to a new workspace (of another organization): its data stays (T9).
+    if (!workspaces.get(d.id)) {
+      await aiBudget?.forget(d.id);
+      await platform.remove(`usage-seen-${d.id}.json`);
+    }
     await recordErasure({ at, kind: 'workspace_erased', workspace: d.id, deletedAt: d.deletedAt, reason, by });
     return d;
   };
@@ -1098,8 +1112,10 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   // Deleted workspaces past their date are erased for good, hourly and once at start (T7).
   const purge = async () => {
     for (const d of await workspaces.purge(new Date())) {
-      await aiBudget?.forget(d.id);
-      await platform.remove(`usage-seen-${d.id}.json`);
+      if (!workspaces.get(d.id)) {
+        await aiBudget?.forget(d.id);
+        await platform.remove(`usage-seen-${d.id}.json`);
+      }
       await recordErasure({ at: new Date().toISOString(), kind: 'workspace_erased', workspace: d.id, deletedAt: d.deletedAt, reason: 'expired', by: 'system' });
       app.log.info({ workspace: d.id }, 'deleted workspace erased for good');
     }

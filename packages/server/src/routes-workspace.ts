@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { AUTO_CLOSE_DECISION_TYPE, acceptanceStats, autoCloseDecision, DEMO_SCENARIOS, DEFAULT_MODELS, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type AnalysisResult, type DecisionEffect, type NewDecision, type WithdrawnDecision } from '@ci/core';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { ConnectError, stateCookie, type ConnectConfig } from './connections.js';
 import { proposalEvent, recordAutoClose } from './auto-close.js';
 import { effectiveAi } from './ai-budget.js';
@@ -52,6 +52,17 @@ export function aiPlatformView(engine: Engine) {
     },
   };
 }
+
+/**
+ * A workspace's own webhook secret (T9): derived from CI_WEBHOOK_SECRET, so a team that configures its Jira webhook
+ * learns only its own and cannot trigger another workspace's analyses. The global secret stays the operator's.
+ */
+export const workspaceWebhookSecret = (secret: string, workspace: string) => createHmac('sha256', secret).update(`webhook:${workspace}`).digest('base64url').slice(0, 32);
+
+const sameText = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+
+/** Hides a `secret` query parameter (webhook URLs carry one), for logs. */
+export const withoutSecret = (url: string) => url.replace(/([?&]secret=)[^&]*/gi, '$1[hidden]');
 
 /** Who acted and how they were authorized, for audit entries. */
 export const who = (req: FastifyRequest, body?: { by?: string; decidedBy?: string } | null) => ({ actor: actorOf(req, body), via: req.principal ?? undefined });
@@ -311,8 +322,18 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
   });
 
   // ------------------------------------------------------------------ settings
+  /** The workspace's webhook URLs with its own secret, for those who may change settings (Admin, admin token). */
+  const webhookUrls = (req: FastifyRequest, ws: string) => {
+    const secret = process.env.CI_WEBHOOK_SECRET;
+    const admin = req.principal === 'admin_token' || req.principal === 'loopback' || (req.account && ['owner', 'admin'].includes(req.account.role));
+    if (!secret || !admin) return {};
+    const base = `${connect.publicUrl}/api${ws === 'default' ? '' : `/w/${encodeURIComponent(ws)}`}/webhooks`;
+    const q = `?secret=${workspaceWebhookSecret(secret, ws)}`;
+    return { webhooks: { jira: `${base}/jira${q}`, confluence: `${base}/confluence${q}`, figma: `${base}/figma${q}` } };
+  };
+
   app.get('/settings', async (req, reply) => {
-    const { store, atlassian, engine } = of(req);
+    const { store, atlassian, engine, id } = of(req);
     const s = await store.settings();
     reply.header('etag', etagOf(s));
     return {
@@ -333,6 +354,9 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
       connectMode: connect.mode,
       defaultModels: DEFAULT_MODELS,
       ...aiPlatformView(engine),
+      ...webhookUrls(req, id),
+      // The hosted service reads no files on the server: the web app hides those integrations (T9).
+      serverFiles: engine.allowServerFiles,
     };
   });
 
@@ -353,6 +377,9 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
     const ifMatch = req.headers['if-match'];
     if (!ifMatch) throw httpError(428, 'Send If-Match with the ETag from GET /api/settings, so concurrent edits are not lost.');
     if (ifMatch !== '*' && ifMatch !== etagOf(current)) throw httpError(412, 'Settings were changed by someone else. Reload them and apply your change again.');
+    const i = req.body?.integrations as Record<string, { enabled?: boolean; reconstructionPath?: string; reportsPath?: string; specPath?: string } | undefined> | undefined;
+    const filePaths = ['code', 'tests', 'openapi'].filter((k) => i?.[k] && (i[k]!.enabled || i[k]!.reconstructionPath || i[k]!.reportsPath || i[k]!.specPath));
+    if (!engine.allowServerFiles && filePaths.length) throw httpError(422, `Reading files on the server (${filePaths.join(', ')}) is not available in the hosted service.`);
     const typeMap = req.body?.integrations?.jira?.issueTypeMap;
     const next = deepMerge(current, req.body ?? {});
     // A mapping is replaced as a whole, so removing a Jira type from it works.
@@ -446,10 +473,12 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
 
   // ------------------------------------------------------------------ webhooks (Jira / Confluence / Figma)
   app.post<{ Params: { source: string } }>('/webhooks/:source', async (req, reply) => {
-    const { store, engine } = of(req);
+    const { store, engine, id } = of(req);
     const secret = process.env.CI_WEBHOOK_SECRET;
+    // Without a secret anyone could start analyses (and spend the AI budget): closed in production (T9).
+    if (!secret && process.env.NODE_ENV === 'production') throw httpError(503, 'Change notifications are off: set CI_WEBHOOK_SECRET on the server.');
     const given = String(req.headers['x-ci-webhook-secret'] ?? (req.query as Record<string, string>)?.secret ?? '');
-    if (secret && (given.length !== secret.length || !timingSafeEqual(Buffer.from(given), Buffer.from(secret)))) throw httpError(401, 'Invalid webhook secret');
+    if (secret && !sameText(given, workspaceWebhookSecret(secret, id)) && !sameText(given, secret)) throw httpError(401, 'Invalid webhook secret');
     const s = await store.settings();
     const sources: Record<string, boolean> = { jira: s.schedule.onJiraChange, confluence: s.schedule.onConfluenceChange, figma: s.schedule.onFigmaChange };
     if (!Object.hasOwn(sources, req.params.source)) throw httpError(404, 'Unknown source');

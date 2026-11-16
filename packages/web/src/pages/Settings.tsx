@@ -187,6 +187,8 @@ export function Settings() {
             {!oauth && <Field label="Account e-mail"><input className="input" value={s.integrations.confluence.email} onChange={(e) => set('integrations.confluence.email', e.target.value)} /></Field>}
             <Field label="Space keys (comma separated)"><input className="input" placeholder="PAY, CHK" value={s.integrations.confluence.spaceKeys.join(', ')} onChange={(e) => set('integrations.confluence.spaceKeys', e.target.value.split(',').map((x: string) => x.trim()).filter(Boolean))} /></Field>
           </Integration>
+          {data.serverFiles !== false && (
+          <>
           <Integration title="Code (tf reconstruction)" source="code" enabled={s.integrations.code?.enabled ?? false} onToggle={(v) => set('integrations.code', { ...codeIntegration, enabled: v })} badges={<span className="badge">reconstruction.json</span>}>
             <Field label="Path to reconstruction.json on the server"><input className="input" placeholder="/repo/docs/project/00-reconstruction/reconstruction.json" value={codeIntegration.reconstructionPath} onChange={(e) => set('integrations.code', { ...codeIntegration, reconstructionPath: e.target.value })} /></Field>
             <Field label="Repository URL for code links (optional)"><input className="input" placeholder="https://github.com/acme/shop" value={codeIntegration.repoUrl ?? ''} onChange={(e) => set('integrations.code', { ...codeIntegration, repoUrl: e.target.value || undefined })} /></Field>
@@ -199,6 +201,8 @@ export function Settings() {
             <Field label="Path to an OpenAPI 3 file (JSON or YAML), or a directory of them, on the server"><input className="input" placeholder="/repo/api/openapi.yaml" value={openapiIntegration.specPath} onChange={(e) => set('integrations.openapi', { ...openapiIntegration, specPath: e.target.value })} /></Field>
             <p className="small muted" style={{ margin: 0 }}>Each operation joins the context of the items it names (x-requirements) or matches; 202 Accepted, an Idempotency-Key header and item limits become facts, and API-001 asks about API errors without a screen state.</p>
           </Integration>
+          </>
+          )}
           <Integration title="Figma" source="figma" enabled={s.integrations.figma.enabled} onToggle={(v) => set('integrations.figma.enabled', v)} badges={secret('FIGMA_TOKEN')}>
             <Field label="File keys (comma separated)"><input className="input" placeholder="from figma.com/design/<FILE_KEY>/…" value={s.integrations.figma.fileKeys.join(', ')} onChange={(e) => set('integrations.figma.fileKeys', e.target.value.split(',').map((x: string) => parseFigmaFileKey(x)).filter(Boolean))} /></Field>
           </Integration>
@@ -312,10 +316,21 @@ export function Settings() {
             <Check label="On Confluence changes" v={s.schedule.onConfluenceChange} on={(v) => set('schedule.onConfluenceChange', v)} />
             <Check label="On Figma changes" v={s.schedule.onFigmaChange} on={(v) => set('schedule.onFigmaChange', v)} />
             <div className="small muted">
-              Webhook URLs (secured with <span className="kbd">CI_WEBHOOK_SECRET</span>):
-              <div className="mono">{origin}/api/webhooks/jira</div>
-              <div className="mono">{origin}/api/webhooks/confluence</div>
-              <div className="mono">{origin}/api/webhooks/figma</div>
+              {data.webhooks ? (
+                <>
+                  Webhook URLs of this workspace (they carry its own secret: keep them private, paste them only into the source's webhook settings):
+                  <div className="mono">{data.webhooks.jira}</div>
+                  <div className="mono">{data.webhooks.confluence}</div>
+                  <div className="mono">{data.webhooks.figma}</div>
+                </>
+              ) : (
+                <>
+                  Webhook URLs (secured with <span className="kbd">CI_WEBHOOK_SECRET</span>; an Admin sees the full addresses):
+                  <div className="mono">{origin}/api/webhooks/jira</div>
+                  <div className="mono">{origin}/api/webhooks/confluence</div>
+                  <div className="mono">{origin}/api/webhooks/figma</div>
+                </>
+              )}
             </div>
           </div>
         </Card>

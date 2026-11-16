@@ -54,6 +54,10 @@ services:
         generateValue: true
       - key: CI_USAGE_SECRET
         generateValue: true
+      # Change notifications from Jira, Confluence and Figma: refused without it in production. Each workspace gets
+      # its own secret derived from it, shown to its Admins in Settings (T9, docs/SECURITY-REVIEW.md).
+      - key: CI_WEBHOOK_SECRET
+        generateValue: true
       # The first Owner and the operators of the beta: your Atlassian account's e-mail.
       - key: CI_BOOTSTRAP_EMAIL
         sync: false

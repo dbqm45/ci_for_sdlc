@@ -6,7 +6,20 @@ import type { Account } from './accounts.js';
 import { atLeast, requiredRole } from './roles.js';
 
 /** How the caller proved it may change state. Recorded with every audit entry it causes. */
-export type Principal = 'admin_token' | 'loopback' | 'pdi_signature' | 'session';
+export type Principal = 'admin_token' | 'loopback' | 'pdi_signature' | 'session' | 'read_token';
+
+/**
+ * The path as the router sees it (find-my-way decodes it with decodeURI before matching). Role and allow-list checks use
+ * it, so `/api/member%73` cannot pass as an unknown route while being served as `/api/members` (T9).
+ */
+export function routedPath(url: string): string {
+  const path = url.split('?')[0]!;
+  try {
+    return decodeURI(path);
+  } catch {
+    throw httpError(400, 'Malformed URL encoding.');
+  }
+}
 
 export interface GuardConfig {
   /** CI_ADMIN_TOKEN. Empty = local mode: only loopback clients may change state. */
@@ -95,12 +108,15 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
         req.principal = 'admin_token';
         return;
       }
-      if (!mutating && cfg.readToken && sameSecret(given, cfg.readToken) && requiredRole(req.method, req.url) === 'viewer') return;
+      if (!mutating && cfg.readToken && sameSecret(given, cfg.readToken) && requiredRole(req.method, routedPath(req.url)) === 'viewer') {
+        req.principal = 'read_token';
+        return;
+      }
       throw httpError(401, 'This token is not valid for this request.', { 'www-authenticate': 'Bearer realm="ci"' });
     }
     const account = await cfg.session?.(req);
     if (!account) {
-      if (!mutating && LOGIN_READS.has(req.url.split('?')[0]!)) return;
+      if (!mutating && LOGIN_READS.has(routedPath(req.url))) return;
       throw httpError(401, 'Log in first.');
     }
     if (mutating) {
@@ -108,7 +124,7 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
       if (!origin || origin === 'null') throw httpError(403, 'Origin header required: changes with a session come only from the app in a browser.');
       checkOrigin(req, host);
     }
-    const need = requiredRole(req.method, req.url);
+    const need = requiredRole(req.method, routedPath(req.url));
     if (!atLeast(account.role, need)) throw httpError(403, `This needs the ${need} role.`);
     req.account = account;
     req.principal = 'session';
@@ -122,7 +138,7 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
     const host = (req.headers.host ?? '').toLowerCase();
     const hostOk = hosts.has(host) || hosts.has(hostnameOf(host)) || isLoopbackName(hostnameOf(host)) || (!hosts.size && (accounts || !!(cfg.adminToken || cfg.readToken)));
     if (!hostOk) throw httpError(403, `Host "${host}" is not allowed. Add it to CI_ALLOWED_HOSTS.`);
-    if (req.method === 'POST' && PUBLIC_WRITES.has(req.url.split('?')[0]!)) return checkOrigin(req, host);
+    if (req.method === 'POST' && PUBLIC_WRITES.has(routedPath(req.url))) return checkOrigin(req, host);
     if (cfg.devOpen && req.url.startsWith('/api/dev/')) {
       if (MUTATING.has(req.method)) checkOrigin(req, host);
       // A session, if any, still says who is asking (the local login replaces it).
@@ -131,8 +147,13 @@ export function registerGuards(app: FastifyInstance, cfg: GuardConfig) {
     }
     if (accounts) return accountsGuard(req, host);
     if (!MUTATING.has(req.method)) {
-      if (!cfg.readToken || OPEN_READS.has(req.url.split('?')[0]!)) return;
       const given = bearerOf(req);
+      // A read with the admin token says so, for what only an admin may see (e.g. the webhook URLs with their secret).
+      if (cfg.adminToken && given && sameSecret(given, cfg.adminToken)) {
+        req.principal = 'admin_token';
+        return;
+      }
+      if (!cfg.readToken || OPEN_READS.has(routedPath(req.url))) return;
       if (given && (sameSecret(given, cfg.readToken) || (!!cfg.adminToken && sameSecret(given, cfg.adminToken)))) return;
       throw httpError(401, 'Reading requires a token (Authorization: Bearer …): the CI_READ_TOKEN or the admin token of this server.', { 'www-authenticate': 'Bearer realm="ci"' });
     }
