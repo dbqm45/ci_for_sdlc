@@ -61,6 +61,7 @@ w procesie serwera jest już kolejkowana. Wracamy do tego, gdy analiza jednego z
 
 ## 5. Prawo i zaufanie (minimum)
 - Podmiot, który zawiera umowy (działalność lub spółka) — decyzja właściciela, z doradcą.
+- Dokument dla klientów o bezpieczeństwie i poufności: [`TRUST.md`](TRUST.md) (odpowiedź na kwestionariusze).
 - Regulamin bety, polityka prywatności, **umowa powierzenia (DPA)** z listą podprzetwarzających (hosting, baza,
   kopie bazy — Backblaze B2, dostawca AI — AWS Bedrock w UE, poczta) i regionem danych.
 - Jasna informacja, co trafia do modelu AI (treść historyjek i stron, przycięta przez `maxCharsPerSource`, z

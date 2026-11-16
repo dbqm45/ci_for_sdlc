@@ -131,6 +131,7 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
   app.post<{ Params: { key: string } }>('/items/:key/ai-review', { schema: { params: itemKeyParams, response: errors(400, 422), ...MUTATION } }, async (req) => {
     const { store, engine } = of(req);
     const s = await store.settings();
+    if (s.ai.runOn === 'never') throw httpError(400, 'AI review is switched off for this workspace (Settings → AI provider → Run semantic review: never).');
     if (effectiveAi(s.ai, engine.aiPlatform?.config).provider === 'none') throw httpError(400, 'No AI provider configured. Choose one in Settings → AI Provider.');
     const result = await engine.analyze(`AI review of ${req.params.key}`, { aiKeys: [req.params.key] });
     return { item: result.items.find((i) => i.key === req.params.key), errors: result.ai.errors };
@@ -357,6 +358,8 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
       ...webhookUrls(req, id),
       // The hosted service reads no files on the server: the web app hides those integrations (T9).
       serverFiles: engine.allowServerFiles,
+      // Encryption at rest set by the service, not by the workspace (docs/TRUST.md).
+      encryptionForced: store.alwaysEncrypt,
     };
   });
 

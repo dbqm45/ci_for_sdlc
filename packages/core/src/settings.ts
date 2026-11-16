@@ -6,7 +6,8 @@ import type { ReleaseLineSource } from './connectors/atlassian.js';
 /** Workspace settings, shared by the server (storage, validation) and the UI. Secrets are never part of it. */
 export const SETTINGS_MODES = ['demo', 'live'] as const;
 export const SCHEDULE_MODES = ['on_demand', 'interval', 'continuous'] as const;
-export const AI_RUN_ON = ['every_analysis', 'on_demand'] as const;
+/** When the semantic (AI) review runs; `never`: no item is ever sent to a model (a workspace's choice, for confidentiality). */
+export const AI_RUN_ON = ['every_analysis', 'on_demand', 'never'] as const;
 
 export interface Settings {
   mode: (typeof SETTINGS_MODES)[number];

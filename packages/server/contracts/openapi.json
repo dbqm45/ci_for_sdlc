@@ -1274,7 +1274,8 @@
                       "runOn": {
                         "enum": [
                           "every_analysis",
-                          "on_demand"
+                          "on_demand",
+                          "never"
                         ]
                       }
                     }
@@ -2937,7 +2938,8 @@
                       "runOn": {
                         "enum": [
                           "every_analysis",
-                          "on_demand"
+                          "on_demand",
+                          "never"
                         ]
                       }
                     }

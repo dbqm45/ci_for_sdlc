@@ -190,7 +190,9 @@ export class Engine extends EventEmitter {
         azureOpenaiApiKey: process.env.AZURE_OPENAI_API_KEY,
         customApiKey: process.env.CUSTOM_AI_API_KEY,
       });
-      const analyzer = own && platform?.budget ? budgeted(own, platform.budget, platform.workspace, prices) : own;
+      // `never`: this workspace sends nothing to a model, the platform's AI included (confidentiality).
+      const allowed = settings.ai.runOn === 'never' ? undefined : own;
+      const analyzer = allowed && platform?.budget ? budgeted(allowed, platform.budget, platform.workspace, prices) : allowed;
       this.aiCache ??= await this.store.aiCache();
       const cacheSize = this.aiCache.size;
       const audits: Promise<void>[] = [];
