@@ -7,6 +7,11 @@
       danych, raport użycia, przegląd bezpieczeństwa), potem 3–5 zespołów przez ok. 12 tygodni. Czeka na decyzje
       właściciela z §10 planu. T10 (zapisy, ankiety, wstrzymanie, maile) zrobione (#114–#117); uruchomienie na
       serwerze: [`docs/SETUP-BETA.md`](docs/SETUP-BETA.md).
+- [ ] **Refinement ciągły: pytania od ludzi i wynik per historyjka** — plan w
+      [`docs/REFINEMENT-PLAN.md`](docs/REFINEMENT-PLAN.md) (zapisany 2026-11-21, z koncepcji „Refinement Intelligence”
+      właściciela). Dziś wszystkie pytania pochodzą z reguł albo z AI; plan dodaje pytania zespołu (R1–R4: zgłoszenie,
+      przeredagowanie, łączenie, stany), widok refinementu i wynik per historyjka (R5–R6), a zapis do Jiry, Slack albo
+      Teams i miary (R7–R9) zostawia na później. Czeka na decyzje właściciela z końca planu.
 - [ ] **Sprawdzenia przed wysłaniem [`docs/TRUST.md`](docs/TRUST.md) klientowi** (właściciel):
   - [ ] warunki AWS Bedrock: dane wejściowe i wyniki nie są używane do trenowania modeli ani udostępniane dostawcy
         modelu (Anthropic); gdzie dokładnie są przetwarzane dla profilu `eu.`; jak długo AWS je przechowuje;
