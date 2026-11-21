@@ -26,12 +26,18 @@ z tym, co sama wykryła, a spotkanie rozstrzyga tylko to, co zostało. Po spotka
 |---|---|---|
 | Understand (analiza historyjki, luki) | już jest | — |
 | Collect (pytania zespołu przed spotkaniem) | **kroki R1–R4** | — |
-| Refine (spotkanie) | **R5**: zestaw historyjek ułożony pod rozmowę | prowadzenie spotkania (timeboxing, parking lot, lista na żywo): DI Team |
+| Refine (spotkanie) | **R5**: zestaw historyjek ułożony pod rozmowę | sesja na żywo z głosowaniem: sprintdeck (pokój już jest); licznik czasu, parking lot i agenda zespołu: DI Team |
 | Commit (wynik, zapis zwrotny) | **R6**, potem R7 | rejestr decyzji bramek: pdi, jak dziś |
 
 Poza zakresem tej aplikacji: planowanie i prowadzenie spotkań, transkrypcja i nagrywanie, Miro, głosowanie zespołu.
-Głosowanie zostaje w sprintdecku: od decyzji D-E1 (pdi, 2026-10-25) jego rola to konsensus co do zrozumienia i ryzyka,
-a klasyczna estymacja pracy jest tam trybem do wyboru.
+
+**Sprintdeck** (sprawdzone w dbqm45/sprintdeck, `docs/PLAN.md` i `src/lib/deck.ts`, stan `main` z 2026-10-27): to
+planning poker z silnikiem rozbieżności (Consensus Engine). Od decyzji D-E1 (pdi, 2026-10-25) jego rola to konsensus
+co do zrozumienia i ryzyka — talia „Risk” jest zbudowana — a talia Fibonacciego zostaje pełnoprawnym trybem estymacji;
+która jest domyślna, mają rozstrzygnąć wywiady. Ma już to, czego potrzebuje część spotkania: pokój z listą zadań,
+rundy z ukrytymi głosami, odkrycie z pytaniami silnika, zatwierdzenie z notatką i podsumowanie z eksportem. Nie ma
+kont, importu z Jiry, licznika czasu ani czatu (świadomie poza jego MVP). Jego plan po MVP przewiduje sesję
+wyzwalaną przez tę aplikację (otwarte pytania, nowa domena, historyjka po podziale) — R5 jest stroną tej umowy.
 
 ## Zasady (z koncepcji, zgodne z dzisiejszymi)
 
@@ -65,7 +71,8 @@ Każdy krok osobnym PR, z testami przed kodem, jak dotychczas.
 
 - [ ] **R5 — widok refinementu.** Zapisany zestaw historyjek (np. z filtra Jiry albo sprintu) ułożony według tego, co
   wymaga rozmowy: otwarte pytania ludzi i silnika, ustalenia blokujące, liczba osób przy pytaniu. PO może zmienić
-  kolejność. Ten sam zestaw przez API jako źródło agendy dla DI Team; tu bez licznika czasu i bez trybu spotkania.
+  kolejność. Ten sam zestaw przez API: jako lista zadań pokoju sprintdecka (po jego MVP: konta, import) i jako źródło
+  agendy dla DI Team; tu bez licznika czasu i bez trybu spotkania.
 - [ ] **R6 — wynik per historyjka.** Po rozstrzygnięciu pytań: decyzje (już zapisywane), szkic zaktualizowanych
   kryteriów akceptacji złożony z tych decyzji i sprawdzony regułami AC, lista spraw nierozstrzygniętych z właścicielem
   albo „TBD”, przeliczona gotowość. Wynik zatwierdza PO; do tego „kopiuj jako komentarz” (Markdown).
@@ -98,6 +105,7 @@ sugestie AI wymagają więcej sprzątania, niż oszczędzają.
 2. Kto widzi autora pytania: cały zespół, tylko PO i prowadzący, czy nikt (R1, R3).
 3. Zapis zwrotny do Jiry: czy w ogóle, i czy przed bramką Forge, czy razem z nią (R7).
 4. Slack czy Teams jako pierwsza platforma (R8) — zależy od zespołów pilotażu.
-5. Gdzie mieszka prowadzenie spotkania, dopóki DI Team nie istnieje: nigdzie (zostaje dzisiejszy sposób zespołu) czy
-   prosty tryb w R5. Rekomendacja: nigdzie, żeby nie budować tego dwa razy.
+5. Gdzie mieszka prowadzenie spotkania, dopóki DI Team nie istnieje: nigdzie (zostaje dzisiejszy sposób zespołu),
+   pokój sprintdecka zasilany zestawem z R5, czy prosty tryb w R5. Rekomendacja: pokój sprintdecka, gdy będzie miał
+   import; do tego czasu nigdzie — żeby nie budować tego samego w trzech miejscach.
 6. Czy sprzedawać to jako osobny pakiet (np. „DI Refinement”) na silniku tej aplikacji. Nie blokuje R1–R6.
