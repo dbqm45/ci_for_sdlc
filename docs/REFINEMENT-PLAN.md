@@ -25,7 +25,7 @@ z tym, co sama wykryła, a spotkanie rozstrzyga tylko to, co zostało. Po spotka
 | Faza koncepcji | Tutaj | Gdzie indziej |
 |---|---|---|
 | Understand (analiza historyjki, luki) | już jest | — |
-| Collect (pytania zespołu przed spotkaniem) | **kroki R1–R4** | — |
+| Collect (pytania zespołu przed spotkaniem) | **kroki R1–R4**, w tym zgłoszenie z komunikatora (R1c) | sama aplikacja Slack/Teams: usługa wspólna suity (pdi, plan programu §3.7) |
 | Refine (spotkanie) | **R5**: zestaw historyjek ułożony pod rozmowę | sesja na żywo z głosowaniem: sprintdeck (pokój już jest); licznik czasu, parking lot i agenda zespołu: DI Team |
 | Commit (wynik, zapis zwrotny) | **R6**, potem R7 | rejestr decyzji bramek: pdi, jak dziś |
 
@@ -38,6 +38,21 @@ która jest domyślna, mają rozstrzygnąć wywiady. Ma już to, czego potrzebuj
 rundy z ukrytymi głosami, odkrycie z pytaniami silnika, zatwierdzenie z notatką i podsumowanie z eksportem. Nie ma
 kont, importu z Jiry, licznika czasu ani czatu (świadomie poza jego MVP). Jego plan po MVP przewiduje sesję
 wyzwalaną przez tę aplikację (otwarte pytania, nowa domena, historyjka po podziale) — R5 jest stroną tej umowy.
+
+## Co z koncepcji nie ma dziś miejsca w żadnym planie
+
+Żeby nic z dokumentów nie zginęło. Wszystko poniżej dotyczy samego spotkania, nie tej aplikacji; decyzja, gdzie to
+zbudować, jest w planie programu (pdi, §3.8 i D-P11; rekomendacja: sprintdeck jako „pokój refinementu”).
+
+- Sesja refinementu jako obiekt: data, uczestnicy, prowadzący, zaproszenie w kalendarzu albo w Teams, lista spotkań.
+- Agenda spotkania z czasem na punkt, listą „omówione” i polem notatek. R5 daje tylko kolejność tematów.
+- Prowadzenie na żywo: parking lot, podpowiedzi AI dla prowadzącego.
+- Action points jako śledzone zadania (status, termin, link do zewnętrznego zadania). R6 ma tylko listę spraw
+  nierozstrzygniętych z właścicielem.
+- Publikacja wyniku do Confluence (dziś Confluence jest tylko czytane).
+- Rola prowadzącego w uprawnieniach.
+
+Świadomie pominięte: transkrypcja i nagrywanie, Miro, automatyczna estymacja, analityka między zespołami.
 
 ## Zasady (z koncepcji, zgodne z dzisiejszymi)
 
@@ -58,6 +73,13 @@ Każdy krok osobnym PR, z testami przed kodem, jak dotychczas.
   tekstem i pytaniem; zamykane tak samo jak pozostałe (decyzja, akceptacja ryzyka, nie dotyczy). Do rozstrzygnięcia
   w planie kroku: czy pytanie człowieka wpływa na gotowość (propozycja: dopiero po przyjęciu przez PO), jaki ma
   wymiar i wagę, kto widzi autora.
+- [ ] **R1c — zgłoszenie z komunikatora, w najmniejszej postaci.** Jedna akcja „dodaj pytanie” w Slacku albo
+  Teams (platforma zespołów pilotażu), która zapisuje pytanie przy właściwej historyjce i odsyła link. Bez
+  przypomnień, głosowania i odpowiedzi w wątku — te zostają w R8. Powód kolejności (korekta z 2026-11-21): test
+  samym formularzem w aplikacji nie rozstrzyga hipotezy; gdyby ludzie nie zgłaszali pytań, nie byłoby wiadomo, czy
+  nie chcą, czy formularz był za daleko od miejsca, w którym pracują. Po stronie suity to pierwszy krok wspólnej
+  aplikacji kanałów (pdi, plan programu §3.7, CH1), nie własny bot tej aplikacji; do czasu jej powstania wystarczy
+  prosty odbiornik (akcja komunikatora → podpisane wywołanie API tej aplikacji).
 - [ ] **R2 — przeredagowanie przez AI.** Z surowej myśli jasne pytanie refinementowe; autor przyjmuje, poprawia albo
   odrzuca. Idzie przez istniejącą warstwę AI (redakcja, limit znaków, audyt źródeł); działa też bez AI — wtedy pytanie
   zostaje w brzmieniu autora. Ewaluacja: zachowanie sensu, brak dopisanych założeń (zestaw z `docs/AI-QUALITY-PLAN.md`).
@@ -81,15 +103,16 @@ Każdy krok osobnym PR, z testami przed kodem, jak dotychczas.
 
 - [ ] **R7 — zapis zwrotny do Jiry.** Zatwierdzony wynik jako komentarz, w drugim kroku propozycja zmiany kryteriów.
   To nowa klasa uprawnień (dziś tylko odczyt), więc razem z bramką Forge albo po niej; każdy zapis w audycie.
-- [ ] **R8 — Slack albo Teams, jedna platforma.** Akcja „dodaj pytanie” z rozmowy, która trafia na właściwą
-  historyjkę, oraz zbiorcze przypomnienie przed refinementem z limitem częstotliwości. Ta sama integracja co źródło
-  wiedzy z `docs/ROADMAP.md` (faza 2–3).
+- [ ] **R8 — pełny kanał w komunikatorze.** Ponad R1c: zbiorcze przypomnienie przed refinementem z limitem
+  częstotliwości, „to też moje pytanie” i podgląd połączonego pytania w rozmowie. Przez wspólną aplikację kanałów
+  suity (pdi, plan programu §3.7), nie własną integrację. Slack/Teams jako *źródło wiedzy* (`docs/ROADMAP.md`,
+  faza 2–3) to osobna sprawa: wymaga czytania kanałów, czyli innych zgód.
 - [ ] **R9 — miary zespołu.** Odsetek historyjek z wkładem ludzi przed spotkaniem, odsetek grup pytań przyjętych bez
   poprawek (wzorem `/api/decisions/acceptance`), odsetek pytań rozstrzygniętych przed spotkaniem.
 
 ## Jak sprawdzić, czy warto iść dalej
 
-Po R1–R4, na 2–3 cyklach refinementu jednego albo dwóch zespołów (naturalnie: zespoły zamkniętej bety,
+Po R1–R4 razem z R1c, na 2–3 cyklach refinementu jednego albo dwóch zespołów (naturalnie: zespoły zamkniętej bety,
 `docs/BETA-PLAN.md`). Progi z koncepcji są propozycją do skorygowania po pomiarze stanu wyjściowego:
 
 - co najmniej 60% historyjek ma wkład człowieka przed spotkaniem;
@@ -104,7 +127,8 @@ sugestie AI wymagają więcej sprzątania, niż oszczędzają.
 1. Czy pytanie człowieka od razu obniża gotowość, czy dopiero po przyjęciu przez PO (R1).
 2. Kto widzi autora pytania: cały zespół, tylko PO i prowadzący, czy nikt (R1, R3).
 3. Zapis zwrotny do Jiry: czy w ogóle, i czy przed bramką Forge, czy razem z nią (R7).
-4. Slack czy Teams jako pierwsza platforma (R8) — zależy od zespołów pilotażu.
+4. Slack czy Teams jako pierwsza platforma (R1c, R8) — zależy od zespołów pilotażu; ta sama decyzja co D-P9
+   w planie programu (pdi), bo aplikacja kanałów jest wspólna dla całej suity.
 5. Gdzie mieszka prowadzenie spotkania, dopóki DI Team nie istnieje: nigdzie (zostaje dzisiejszy sposób zespołu),
    pokój sprintdecka zasilany zestawem z R5, czy prosty tryb w R5. Rekomendacja: pokój sprintdecka, gdy będzie miał
    import; do tego czasu nigdzie — żeby nie budować tego samego w trzech miejscach.
