@@ -117,6 +117,9 @@ export const workspaceBody = obj({ id: str(40, { pattern: WORKSPACE_ID_PATTERN }
 export const changeParams = obj({ change: str(64, { pattern: '^[A-Z][A-Z0-9]+-[0-9]+$' }) }, ['change']);
 export const approvalRequestBody = { ...obj({ by: str(200), note: str(500) }), nullable: true } as const;
 /** A2a: what a person does with an answer proposal; `answer` is the edited text. */
+/** R1: a question a person adds to a work item; the author comes from the session. */
+export const humanQuestionBody = obj({ text: str(2000, { minLength: 1 }), link: str(500), by: str(200) }, ['text']);
+export const humanQuestionParams = obj({ key: str(64, { pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]*$' }), id: str(64, { pattern: '^hq-[a-f0-9]{12}$' }) }, ['key', 'id']);
 export const answerActionBody = obj({ action: { enum: ['accept', 'edit', 'reject'] }, answer: str(5000), by: str(200) }, ['action']);
 export const answerParams = obj({ key: str(64, { pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]*$' }), proposalId: str(128, { minLength: 1 }) }, ['key', 'proposalId']);
 

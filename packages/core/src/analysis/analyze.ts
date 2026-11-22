@@ -109,6 +109,8 @@ function actionFor(env: AnalysisEnv, f: Finding): SeverityAction {
   const base = env.policy.actions[f.severity];
   f.needsConfirmation = undefined;
   if (f.origin === 'drift') return driftReactionOf(env.policy) === 'review_required' ? 'block' : base === 'record' ? 'record' : 'notify';
+  // R1: a person's question counts for readiness only once the Product Owner accepted it (owner's decision 2026-11-22).
+  if (f.origin === 'human') return f.human?.accepted ? base : 'record';
   if (f.origin !== 'ai' || base !== 'block') return base;
   const mode = aiFindingsAction(env.policy);
   if (mode === 'block') return 'block';

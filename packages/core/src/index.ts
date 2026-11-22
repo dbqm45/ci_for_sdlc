@@ -9,6 +9,7 @@ export { extractClaims, findConflicts, formatClaimValue, ATTRIBUTE_LABELS, GENER
 export { EV_CLAIM_PACK } from './analysis/claim-pack-ev.js';
 export { claimPackOf } from './analysis/claim-packs.js';
 export { RULES } from './analysis/rules.js';
+export { HUMAN_QUESTION_RULE, humanFinding } from './analysis/human.js';
 export { OWASP_TOP10_CWES, SECURITY_RULES, placeOfResult, securityByItem, securityRuleOf } from './analysis/security-scan.js';
 export { parseAcceptanceCriteria, normalizeAction } from './analysis/acceptance.js';
 export { storyStatement, joinedActions } from './analysis/story-shape.js';

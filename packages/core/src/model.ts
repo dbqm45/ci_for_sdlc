@@ -504,8 +504,10 @@ export interface Finding {
   evidence: Evidence[];
   question?: Question;
   status: FindingStatus;
-  /** Where the finding came from. */
-  origin: 'rule' | 'ai' | 'drift';
+  /** Where the finding came from; `human`: a question a person asked on the item (R1, docs/REFINEMENT-PLAN.md). */
+  origin: 'rule' | 'ai' | 'drift' | 'human';
+  /** R1: who asked the question and whether the Product Owner accepted it (only then it counts for readiness). */
+  human?: { author: string; askedAt: string; accepted: boolean; acceptedBy?: string; link?: string };
   /** Set when a human decision resolved the finding. */
   resolution?: { decisionId: string; summary: string };
   /** AI finding that would block but waits for a human to confirm it (policy `require_confirmation`). */
@@ -516,6 +518,26 @@ export interface Finding {
   confirmation?: { decisionId: string; by: string; at: string };
   /** A2a: the answer to the finding's question found in one of the item's sources, with a verbatim quote. */
   answer?: AnswerProposal;
+}
+
+/**
+ * A question or thought a person adds to a work item before refinement (R1, docs/REFINEMENT-PLAN.md). It becomes a
+ * finding with `origin: 'human'` and is closed like any other finding (decision, accepted risk, not applicable). It
+ * lowers readiness only once accepted by the Product Owner; until then it is visible but does not count. The original
+ * text is kept as written.
+ */
+export interface HumanQuestion {
+  readonly id: string;
+  readonly itemKey: string;
+  /** The question as the person wrote it (kept verbatim). */
+  readonly text: string;
+  /** An optional link (a page, a frame, a screenshot elsewhere). */
+  readonly link?: string;
+  readonly author: string;
+  readonly askedAt: string;
+  readonly accepted: boolean;
+  readonly acceptedBy?: string;
+  readonly acceptedAt?: string;
 }
 
 /** The decision type of closing a finding with an answer found in a source (pdi contract 0.5.0, `autonomy.decision_types`). */

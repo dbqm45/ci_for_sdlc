@@ -284,6 +284,7 @@ export function ItemPage({ itemKey, focusFinding }: { itemKey: string; focusFind
             <div className="card-pad col" style={{ gap: 12 }}>
               {tab === 'findings' && (
                 <>
+                  <AskQuestion itemKey={a.key} onAsked={changed} />
                   {open.length === 0 && <div className="empty">No open findings. {a.readiness === 'ready' && 'This item is ready for implementation.'}</div>}
                   {open.map((f) => (
                     <FindingCard key={f.id} finding={f} onChanged={changed} />
@@ -716,6 +717,43 @@ function ReleasePlanPanel({ a, children, navigate }: { a: ItemAnalysis; children
         </table>
       )}
     </Card>
+  );
+}
+
+/** R1: anyone on the team adds a question or thought to the item; it shows with the author for the whole team. */
+function AskQuestion({ itemKey, onAsked }: { itemKey: string; onAsked: () => void }) {
+  const [text, setText] = useState('');
+  const [link, setLink] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string>();
+  const ask = async () => {
+    setBusy(true);
+    setErr(undefined);
+    try {
+      await api.askQuestion(itemKey, text.trim(), link.trim() || undefined, currentUser());
+      setText('');
+      setLink('');
+      onAsked();
+    } catch (e) {
+      setErr(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="col" style={{ gap: 6 }}>
+      <label className="small muted" htmlFor="ask-question">
+        Add a question or thought for refinement — the team sees it with your name; it counts for readiness once the Product Owner accepts it.
+      </label>
+      <textarea id="ask-question" rows={2} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="What should happen if…?" />
+      <div className="row wrap" style={{ gap: 8 }}>
+        <input id="ask-question-link" type="url" maxLength={500} value={link} onChange={(e) => setLink(e.target.value)} placeholder="Link (optional)" style={{ flex: 1, minWidth: 200 }} />
+        <button className="btn sm" disabled={busy || !text.trim()} onClick={ask}>
+          Add question
+        </button>
+      </div>
+      {err && <div className="banner bad">{err}</div>}
+    </div>
   );
 }
 
