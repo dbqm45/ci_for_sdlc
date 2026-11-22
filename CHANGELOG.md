@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.61] - 2026-11-22
+
+### Poprawione
+
+- **core:** send targets_status.checked_at in whole seconds (#141)
+
 ## [0.1.60] - 2026-11-16
 
 ### Nowe
