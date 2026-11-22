@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
-import { CHANGE_LABEL_PREFIX, approvalQuestions, mergeChangeReadiness, workspacePath, changeKeyOf, changeReadiness, decisionRecordedEvent, gateRequestedEvent, parseGateDecided, readinessEvents, type DecisionRecordedInput, type ItemAnalysis, type RequirementItem } from '../src/index.js';
+import { CHANGE_LABEL_PREFIX, approvalQuestions, mergeChangeReadiness, workspacePath, changeKeyOf, changeReadiness, decisionRecordedEvent, gateRequestedEvent, parseGateDecided, readinessEvents, targetsStatusOf, type DecisionRecordedInput, type ItemAnalysis, type RequirementItem } from '../src/index.js';
 
 // F4 (pdi docs/plan-jeden-flow-sdlc.md §6): readiness of a pdi change (CHG-n) from the stories labelled `change:CHG-n`,
 // sent to pdi as readiness.changed; gate.decided from pdi approves the stories. Envelopes: pdi contract 0.4.0.
@@ -288,5 +288,60 @@ describe('changes across workspaces (F5)', () => {
     expect(decisionRecordedEvent({ ...input, workspace: 'default' }, '2026-10-27T12:00:00Z').payload.ref).toBe('APP-7/ERR-003:APP-7');
     const g = gateRequestedEvent({ change: c('CHG-12', 'not_ready', ['APP-7']), stories: [], requestedBy: 'Ann', publicUrl: 'https://ci.example.com', workspace: 'mobile' }, '2026-10-27T12:00:00Z');
     expect(g.payload.url).toBe('https://ci.example.com/#/w/mobile/item/APP-7');
+  });
+});
+
+// The newest pdi contract (0.14.0) next to the versions each event was written for: everything ci_for_sdlc sends still
+// passes pdi's current event schema, and pdi's current gate.decided example is still read. The events keep their own
+// contract_version; this guards against a contract change that would break them.
+describe('pdi contract 0.14.0: events sent and received stay valid', () => {
+  const dir = new URL('./fixtures/pdi-contract/0.14.0/', import.meta.url);
+  const read = (name: string) => JSON.parse(readFileSync(new URL(name, dir), 'utf8'));
+  const validate = new Ajv2020({ allErrors: true, strict: false }).compile(read('event.schema.json'));
+  const errors = (e: unknown) => (validate(e) ? [] : validate.errors!.map((x) => `${x.instancePath} ${x.message}`));
+  const AT = '2026-11-22T12:00:00.123Z';
+  const change = { change: 'CHG-12', readiness: 'not_ready' as const, openQuestions: 1, items: ['PAY-1'] };
+
+  it.each(['event-readiness.changed.json', 'event-gate.requested.json', 'event-gate.decided.json', 'event-decision.recorded.json'])('PDI-C14-01: the pdi example %s passes the copied schema', (name) => {
+    expect(errors(read(name))).toEqual([]);
+  });
+
+  it('PDI-C14-02: readiness.changed, with and without targets_status', () => {
+    // Built the way the gate builds it: from `new Date().toISOString()`, which carries milliseconds.
+    const status = targetsStatusOf('CHG-12', { coverage: { min_percent: 90 } }, { changeKey: 'CHG-12', touchedFiles: [], coverage: { percent: 82, missingReport: false, filesConsidered: 1 } }, AT);
+    expect(status.checked_at).toBe('2026-11-22T12:00:00Z');
+    const plain = readinessEvents([change], {}, AT).events;
+    const withTargets = readinessEvents([change], {}, AT, new Map([['CHG-12', status]])).events;
+    expect(plain).toHaveLength(1);
+    expect(withTargets).toHaveLength(1);
+    expect(errors(plain[0])).toEqual([]);
+    expect(errors(withTargets[0])).toEqual([]);
+  });
+
+  it('PDI-C14-03: gate.requested for approve-for-implementation', () => {
+    expect(errors(gateRequestedEvent({ change, stories: [], requestedBy: 'Ann', note: 'Ship behind a flag', publicUrl: 'https://ci.example.com/' }, AT))).toEqual([]);
+  });
+
+  it.each(['accepted', 'edited', 'rejected', 'reopened', 'applied'] as const)('PDI-C14-04: decision.recorded (%s)', (outcome) => {
+    const input: DecisionRecordedInput = {
+      outcome,
+      proposalId: 'ans:1a2b3c4d',
+      itemKey: 'CHK-202',
+      findingId: 'ERR-003:CHK-202',
+      question: 'What should happen if the payment API does not respond within 30 seconds?',
+      quote: 'If the payment provider does not respond within 30 seconds, the app shows a timeout message.',
+      source: { title: 'Payment Failure Handling', url: 'https://wiki.example.com/pages/1004' },
+      answer: outcome === 'rejected' || outcome === 'reopened' ? undefined : 'A timeout message after 30 s.',
+      decidedBy: outcome === 'applied' ? 'auto-close' : 'Ann',
+      change: 'CHG-12',
+      publicUrl: 'https://ci.example.com/',
+      ...(outcome === 'reopened' ? { supersedes: 'DEC-41', why: 'Wrong flow' } : {}),
+      ...(outcome === 'applied' ? { rule: 'auto-close:ERR-003' } : {}),
+    };
+    expect(errors(decisionRecordedEvent(input, AT))).toEqual([]);
+  });
+
+  it('PDI-C14-05: gate.decided from pdi 0.14.0 is read as before', () => {
+    expect(parseGateDecided(read('event-gate.decided.json'))).toEqual({ id: 'evt-gate.decided', change: 'CHG-12', gate: 'B1', outcome: 'approved', decision: 'DEC-42' });
   });
 });
