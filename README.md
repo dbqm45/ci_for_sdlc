@@ -187,7 +187,9 @@ Workspace „Checkout” odtwarza przykłady z koncepcji produktu:
 
 ## Konfiguracja
 
-Wszystko poza sekretami ustawiasz w UI (*Settings*). Sekrety — zmienne środowiskowe serwera (patrz [`.env.example`](.env.example)):
+Wszystko poza sekretami ustawiasz w UI (*Settings*). Sekrety — zmienne środowiskowe serwera (patrz [`.env.example`](.env.example)).
+`npm start` i `npm run dev` czytają też plik `.env` w katalogu głównym repozytorium, jeśli istnieje
+(`cp .env.example .env`; plik jest w `.gitignore`); zmienna ustawiona w środowisku wygrywa z plikiem:
 
 | Zmienna | Do czego |
 |---|---|
