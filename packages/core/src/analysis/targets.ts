@@ -305,7 +305,8 @@ export function targetsStatusOf(
       ? 'met'
       : 'unknown';
   const summaryText = summarize(change, details);
-  return { overall, checked_at: checkedAt, ...(summaryText && { summary: summaryText }), details };
+  // The pdi contract takes whole seconds (…T10:00:00Z); `new Date().toISOString()` carries milliseconds, which pdi refuses.
+  return { overall, checked_at: checkedAt.replace(/\.\d+Z$/, 'Z'), ...(summaryText && { summary: summaryText }), details };
 }
 
 function summarize(change: string, details: ReturnType<typeof targetsStatusOf>['details']): string {

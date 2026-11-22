@@ -49,6 +49,16 @@
         "examples/event-readiness.changed.json": "packages/core/test/fixtures/pdi-contract/0.12.0/event-readiness.changed.json",
         "examples/event-gate.requested.json": "packages/core/test/fixtures/pdi-contract/0.12.0/event-gate.requested.json"
       }
+    },
+    {
+      "version": "0.14.0",
+      "files": {
+        "event.schema.json": "packages/core/test/fixtures/pdi-contract/0.14.0/event.schema.json",
+        "examples/event-readiness.changed.json": "packages/core/test/fixtures/pdi-contract/0.14.0/event-readiness.changed.json",
+        "examples/event-gate.requested.json": "packages/core/test/fixtures/pdi-contract/0.14.0/event-gate.requested.json",
+        "examples/event-gate.decided.json": "packages/core/test/fixtures/pdi-contract/0.14.0/event-gate.decided.json",
+        "examples/event-decision.recorded.json": "packages/core/test/fixtures/pdi-contract/0.14.0/event-decision.recorded.json"
+      }
     }
   ]
 }
