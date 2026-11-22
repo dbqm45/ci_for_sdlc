@@ -18,6 +18,7 @@ import { PostHogSink, Usage, triggerOf, usageReport, type UsageEventName, type U
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
+import { addQuestion, parseChannelQuestion, type ChannelsOptions } from './questions.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { ensure, who, withoutSecret, workspaceRoutes } from './routes-workspace.js';
 import { MUTATION, WORKSPACE_ID_PATTERN, approvalRequestBody, changeParams, errors, oauthCallbackQuery, problem, workspaceBody, workspaceDeleteBody, workspaceParams, workspaceRenameBody } from './schemas.js';
@@ -45,6 +46,8 @@ export interface AppOptions {
   connect?: ConnectConfig;
   /** pdi link (F4); defaults to PDI_EVENTS_URL and PDI_SIGNING_SECRET. */
   pdi?: PdiOptions;
+  /** DI Channels link (step 16); defaults to CI_CHANNELS_SIGNING_SECRET. */
+  channels?: ChannelsOptions;
   /** Postgres instead of files (F5); defaults to CI_DATABASE_URL. Empty = files in `dataDir`. */
   databaseUrl?: string;
   /** Defaults to CI_AUTH_MODE: `token` (machines and loopback) or `accounts` (people log in with Atlassian). */
@@ -1290,6 +1293,38 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       }
       await main.store.audit({ at, kind: 'pdi', actor: 'pdi', via: 'pdi_signature', summary: `pdi decision ${event.decision}: ${event.change} approved for implementation — approved ${approved.join(', ') || 'none'}${skipped.length ? `, skipped ${skipped.map((s) => s.key).join(', ')}` : ''}` });
       return { approved, skipped };
+    });
+  });
+
+  /**
+   * A question asked in a chat app (step 16: DI Channels, Slack first). Signed like the pdi webhook, with the secret
+   * shared with di-channels: `X-DI-Signature: v1=<hex HMAC-SHA256(CI_CHANNELS_SIGNING_SECRET, "<X-DI-Timestamp>.<raw body>")>`.
+   * Until the suite identity (step 14) exists, the author is the chat display name, marked with the platform.
+   * Without the secret the route does not exist (404).
+   */
+  const channelsSecret = (opts.channels?.secret ?? process.env.CI_CHANNELS_SIGNING_SECRET) || undefined;
+  await app.register(async (scope) => {
+    scope.addContentTypeParser('application/json', { parseAs: 'string', bodyLimit: 16 * 1024 }, (_req, body, done) => done(null, body));
+    scope.post('/api/webhooks/channels', { schema: { hide: true } }, async (req, reply) => {
+      if (!channelsSecret) return notFound(req, reply);
+      const raw = typeof req.body === 'string' ? req.body : '';
+      const header = (name: string) => (typeof req.headers[name] === 'string' ? (req.headers[name] as string) : undefined);
+      const problem = pdiSignatureProblem(channelsSecret, header('x-di-timestamp'), raw, header('x-di-signature'), new Date());
+      if (problem) throw httpError(401, problem.replace(/X-PDI-/g, 'X-DI-'));
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        throw httpError(400, 'The body is not valid JSON');
+      }
+      const q = parseChannelQuestion(parsed);
+      if (typeof q === 'string') throw httpError(400, q);
+      const w = workspaces.get(q.workspace ?? DEFAULT_WORKSPACE);
+      if (!w) throw httpError(404, `No workspace ${q.workspace}`);
+      const author = `${q.author.name} (Slack)`;
+      const { question, duplicate } = await addQuestion(w.store, w.engine, q.item, { text: q.text, link: q.link, author, via: { platform: q.platform, user: q.author.user, event: q.id } }, { actor: author, via: 'channels_signature' });
+      const base = connect.publicUrl?.replace(/\/+$/, '');
+      return { question, duplicate, ...(base && { url: `${base}/#${workspacePath(w.id === DEFAULT_WORKSPACE ? undefined : w.id)}/item/${encodeURIComponent(q.item)}` }) };
     });
   });
 

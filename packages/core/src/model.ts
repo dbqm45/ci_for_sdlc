@@ -538,6 +538,8 @@ export interface HumanQuestion {
   readonly accepted: boolean;
   readonly acceptedBy?: string;
   readonly acceptedAt?: string;
+  /** Asked from a chat app through DI Channels (step 16): the platform, its user id and the event id (deduplication). */
+  readonly via?: { readonly platform: 'slack'; readonly user: string; readonly event: string };
 }
 
 /** The decision type of closing a finding with an answer found in a source (pdi contract 0.5.0, `autonomy.decision_types`). */

@@ -75,7 +75,7 @@ Każdy krok osobnym PR, z testami przed kodem, jak dotychczas.
   przyjęciu przez PO** (do tego czasu tylko zapis, akcja `record`); autora widzi **cały zespół**. Przyjęcie: rola
   Admin jako zastępstwo PO, dopóki aplikacja nie ma osobnej roli PO. Wymiar „requirements”, kategoria
   „ambiguity”, waga „warning”. Pytania w `questions.json` (szyfrowane jak reszta magazynu), każde w dzienniku audytu.
-- [ ] **R1c — zgłoszenie z komunikatora, w najmniejszej postaci.** Jedna akcja „dodaj pytanie” w Slacku albo
+- [ ] **R1c — zgłoszenie z komunikatora, w najmniejszej postaci.** *(2026-11-22: platforma — Slack, decyzja D-P9; strona DI Definition gotowa: `POST /api/webhooks/channels`, [`CHANNELS.md`](CHANNELS.md); czeka na aplikację w `di-channels`.)* Jedna akcja „dodaj pytanie” w Slacku albo
   Teams (platforma zespołów pilotażu), która zapisuje pytanie przy właściwej historyjce i odsyła link. Bez
   przypomnień, głosowania i odpowiedzi w wątku — te zostają w R8. Powód kolejności (korekta z 2026-11-21): test
   samym formularzem w aplikacji nie rozstrzyga hipotezy; gdyby ludzie nie zgłaszali pytań, nie byłoby wiadomo, czy
