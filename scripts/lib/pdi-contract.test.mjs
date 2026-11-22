@@ -29,6 +29,11 @@ describe('PDI-PIN: pin file', () => {
       ['0123456789abcdef0123456789abcdef01234567', 'old.json', 'fix/0.1.0/old.json'],
     ]);
   });
+  it('PDI-PIN-4: a set may name its own repo; the others use the pin\'s (versions released in pdi stay there)', () => {
+    const plan = planCopies(parsePin({ repo: 'dbqm45/di-contract', sets: [{ ...PIN.sets[0] }, { ...PIN.sets[1], repo: 'dbqm45/pdi' }] }));
+    assert.deepEqual(plan.map((c) => c.repo), ['dbqm45/di-contract', 'dbqm45/di-contract', 'dbqm45/pdi']);
+    assert.throws(() => parsePin({ ...PIN, sets: [{ ...PIN.sets[0], repo: 'pdi' }] }), /owner\/name/);
+  });
   it('PDI-PIN-2: the source is the tag (or pinned commit) in the pdi repository', () => {
     assert.equal(sourceUrl('dbqm45/pdi', 'contract-v9.9.9', 'examples/a.json'), 'https://raw.githubusercontent.com/dbqm45/pdi/contract-v9.9.9/contract/examples/a.json');
   });

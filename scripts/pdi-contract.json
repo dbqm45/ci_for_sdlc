@@ -1,8 +1,9 @@
 {
-  "repo": "dbqm45/pdi",
+  "repo": "dbqm45/di-contract",
   "sets": [
     {
       "version": "0.4.0",
+      "repo": "dbqm45/pdi",
       "ref": "5d5ca9c41e66fe1f93e80df3cee70e83352ca825",
       "files": {
         "fixtures/story-shape/README.md": "packages/core/test/fixtures/pdi-contract/0.4.0/story-shape/README.md",
@@ -17,6 +18,7 @@
     },
     {
       "version": "0.7.0",
+      "repo": "dbqm45/pdi",
       "ref": "6e2b16604d55838b5e1eeb1e3f9a3020a5ecaf3c",
       "files": {
         "event.schema.json": "packages/core/test/fixtures/pdi-contract/0.7.0/event.schema.json",
@@ -26,6 +28,7 @@
     },
     {
       "version": "0.8.0",
+      "repo": "dbqm45/pdi",
       "files": {
         "reconstruction.schema.json": "packages/core/test/fixtures/tf-reconstruction/reconstruction-export.schema.json",
         "examples/reconstruction.json": "packages/core/test/fixtures/tf-reconstruction/reconstruction.json"
@@ -33,6 +36,7 @@
     },
     {
       "version": "0.9.0",
+      "repo": "dbqm45/pdi",
       "files": {
         "design-links.schema.json": "packages/core/test/fixtures/pdi-contract/0.9.0/design-links.schema.json",
         "examples/design.md": "packages/core/test/fixtures/pdi-contract/0.9.0/design.md",
@@ -41,6 +45,7 @@
     },
     {
       "version": "0.12.0",
+      "repo": "dbqm45/pdi",
       "files": {
         "release-plan.schema.json": "packages/core/test/fixtures/pdi-contract/0.12.0/release-plan.schema.json",
         "event.schema.json": "packages/core/test/fixtures/pdi-contract/0.12.0/event.schema.json",
