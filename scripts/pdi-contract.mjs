@@ -49,13 +49,13 @@ async function main() {
     return 2;
   }
   const copies = planCopies(pin);
-  const where = opts.source ?? `dbqm45/pdi (tag lub commit z przypięcia)`;
+  const where = opts.source ?? `${[...new Set(copies.map((c) => c.repo))].join(', ')} (tag lub commit z przypięcia)`;
   const missing = [];
   const differ = [];
   for (const copy of copies) {
-    const want = await read(pin.repo, copy, opts.source);
+    const want = await read(copy.repo, copy, opts.source);
     if (want === null) {
-      missing.push(`${copy.ref}: ${copy.name}`);
+      missing.push(`${copy.repo}@${copy.ref}: ${copy.name}`);
       continue;
     }
     const dest = join(opts.root, copy.dest);
