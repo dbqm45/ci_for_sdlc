@@ -17,6 +17,7 @@ const PUBLIC: Record<string, { status: number; why: string }> = {
   'POST /api/beta/apply': { status: 422, why: 'the beta form: validated, rate limited, then a fixed-text confirmation mail to the address' },
   'POST /api/beta/confirm': { status: 422, why: 'the link in that mail: a one-time token, 24 hours' },
   'POST /api/webhooks/pdi': { status: 404, why: 'pdi events: absent without the pdi link; with it, refused without the HMAC signature (pdi tests)' },
+  'POST /api/webhooks/channels': { status: 404, why: 'questions from a chat app (DI Channels): absent without CI_CHANNELS_SIGNING_SECRET; with it, refused without the HMAC signature (channel-questions tests)' },
   'POST /api/webhooks/:source': { status: 401, why: 'source change notifications: refused without CI_WEBHOOK_SECRET' },
   'POST /api/w/:ws/webhooks/:source': { status: 401, why: 'the same, per workspace' },
 };

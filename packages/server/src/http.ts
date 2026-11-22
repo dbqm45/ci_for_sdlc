@@ -6,7 +6,7 @@ import type { Account } from './accounts.js';
 import { atLeast, requiredRole } from './roles.js';
 
 /** How the caller proved it may change state. Recorded with every audit entry it causes. */
-export type Principal = 'admin_token' | 'loopback' | 'pdi_signature' | 'session' | 'read_token';
+export type Principal = 'admin_token' | 'loopback' | 'pdi_signature' | 'channels_signature' | 'session' | 'read_token';
 
 /**
  * The path as the router sees it (find-my-way decodes it with decodeURI before matching). Role and allow-list checks use

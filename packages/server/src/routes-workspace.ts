@@ -6,6 +6,7 @@ import { proposalEvent, recordAutoClose } from './auto-close.js';
 import { effectiveAi } from './ai-budget.js';
 import type { Engine } from './engine.js';
 import { actorOf, httpError } from './http.js';
+import { addQuestion } from './questions.js';
 import { MUTATION, answerActionBody, answerParams, approveBody, atlassianSiteBody, decisionBody, errors, humanQuestionBody, humanQuestionParams, idParams, impactQuery, itemKeyParams, settingsBody, withdrawBody } from './schemas.js';
 import { deepMerge, type Settings } from './store.js';
 import type { Workspace } from './workspaces.js';
@@ -225,26 +226,9 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
     { schema: { summary: 'Ask a question on a work item', params: itemKeyParams, body: humanQuestionBody, response: errors(400, 404, 422), ...MUTATION } },
     async (req) => {
       const { store, engine } = of(req);
-      const result = await ensure(engine);
-      if (!result.items.some((i) => i.key === req.params.key)) throw httpError(404, `No work item ${req.params.key}`);
-      const text = req.body.text.trim();
-      if (!text) throw httpError(400, 'A question needs its text');
-      const link = req.body.link?.trim();
-      if (link && !/^https?:\/\/\S+$/i.test(link)) throw httpError(400, 'The link must be an http(s) address');
       const by = who(req, req.body);
-      const question: HumanQuestion = {
-        id: `hq-${randomBytes(6).toString('hex')}`,
-        itemKey: req.params.key,
-        text,
-        ...(link && { link }),
-        author: by.actor,
-        askedAt: new Date().toISOString(),
-        accepted: false,
-      };
-      await store.updateHumanQuestions((all) => [...all, question]);
-      await store.audit({ at: question.askedAt, kind: 'question', ...by, summary: `${question.itemKey}: question asked (${question.id})` });
-      const next = await engine.analyze(`question on ${question.itemKey}`);
-      return { question, item: next.items.find((i) => i.key === question.itemKey) };
+      const { question, item } = await addQuestion(store, engine, req.params.key, { text: req.body.text, link: req.body.link, author: by.actor }, by);
+      return { question, item };
     },
   );
 
