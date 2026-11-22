@@ -4,6 +4,7 @@ import { analyzeItem, applyDecisions, blendEpicScores, crossItemPass, findingFro
 import { answerProposalId, decisionText, isVerbatimQuote, proposeAnswers, type AiAnswer } from './analysis/auto-close.js';
 import { formatClaimValue } from './analysis/claims.js';
 import { createEnv, evJira, questionOptions, type ItemCtx } from './analysis/context.js';
+import { humanFinding } from './analysis/human.js';
 import { designCoveragePercent } from './analysis/states.js';
 import { errorMessage } from './errors.js';
 import { buildContextGraph, docId, issueId, type ContextGraph } from './graph.js';
@@ -20,6 +21,7 @@ import type {
   ProjectMetrics,
   Severity,
   SourceSystem,
+  HumanQuestion,
 } from './model.js';
 import { DEFAULT_POLICY, autoCloseOf, driftReactionOf, type AnalysisPolicy } from './policy.js';
 import { hash } from './text.js';
@@ -80,6 +82,8 @@ export interface AnalyzeOptions {
   now?: Date;
   /** A2a: answer proposals a person rejected or reopened; they are not made again. */
   suppressedAnswers?: readonly string[];
+  /** R1: questions people asked on work items; each becomes a finding with `origin: 'human'`. */
+  humanQuestions?: readonly HumanQuestion[];
 }
 
 export interface ProjectAnalysis {
@@ -154,6 +158,9 @@ export async function analyzeProject(ctx: ProjectContext, opts: AnalyzeOptions =
       ),
     );
   }
+
+  // ---------------- questions people asked (R1) ----------------
+  for (const q of opts.humanQuestions ?? []) items.get(q.itemKey)?.findings.push(humanFinding(q));
 
   for (const a of items.values()) {
     applyDecisions(env, a);

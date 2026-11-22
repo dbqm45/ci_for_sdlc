@@ -16,6 +16,12 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
         <span className="small muted">{DIMENSION_LABELS[finding.dimension]}</span>
         {finding.origin === 'ai' && <span className="badge accent" title="Found by the semantic AI reviewer — backed by cited evidence">AI</span>}
         {finding.origin === 'drift' && <span className="badge warn">Drift</span>}
+        {finding.human && (
+          <span className="badge" title={`Asked on ${finding.human.askedAt.slice(0, 10)}`}>
+            Question from {finding.human.author}
+          </span>
+        )}
+        {finding.human && !finding.human.accepted && <span className="badge warn" title="Counts for readiness once the Product Owner accepts it">Not accepted yet</span>}
         {finding.needsConfirmation && <span className="badge warn" title="AI finding — blocks only after a human confirms it">Needs confirmation</span>}
         {finding.confirmation && <span className="badge" title={`Confirmed by ${finding.confirmation.by}`}>Confirmed</span>}
         <span className="right small faint mono" title="Rule that produced this finding">{finding.ruleId}</span>
@@ -47,6 +53,7 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
         </div>
       )}
       {finding.needsConfirmation && finding.question && <ConfirmButton finding={finding} onChanged={onChanged} />}
+      {finding.human && !finding.human.accepted && finding.status === 'open' && <AcceptQuestionButton finding={finding} onChanged={onChanged} />}
       {finding.resolution && (
         <div className="resolution row" style={{ gap: 8 }}>
           <StatusIcon status="ok" />
@@ -141,6 +148,29 @@ function AnswerBox({ finding, onChanged }: { finding: Finding; onChanged: () => 
 }
 
 /** P2: a human confirms an AI finding; it then blocks like a rule finding. */
+/** R1: the Product Owner accepts a person's question for refinement (Admin on the server). */
+function AcceptQuestionButton({ finding, onChanged }: { finding: Finding; onChanged: () => void }) {
+  const [err, setErr] = useState<string>();
+  const id = finding.id.split(':').pop()!;
+  const accept = async () => {
+    try {
+      await api.acceptQuestion(finding.itemKey, id, currentUser());
+      onChanged();
+    } catch (e) {
+      setErr(errMsg(e));
+    }
+  };
+  return (
+    <div className="row wrap">
+      <button className="btn sm" onClick={accept} title="Take the question into refinement: from now on it counts for readiness">
+        Accept for refinement
+      </button>
+      <span className="small muted">Until accepted it does not change readiness.</span>
+      {err && <div className="banner bad">{err}</div>}
+    </div>
+  );
+}
+
 function ConfirmButton({ finding, onChanged }: { finding: Finding; onChanged: () => void }) {
   const [err, setErr] = useState<string>();
   const q = finding.question!;

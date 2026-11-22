@@ -19,6 +19,9 @@ const ROUTE_ROLES: Record<string, Role> = {
   'DELETE /decisions/:id': 'member',
   'POST /decisions/:id/reopen': 'member',
   'POST /items/:key/answers/:proposalId': 'member',
+  // R1: anyone on the team asks; accepting a question for readiness is the Product Owner's call (Admin here).
+  'POST /items/:key/questions': 'member',
+  'POST /items/:key/questions/:id/accept': 'admin',
   'POST /changes/:change/request-approval': 'member',
   // Admin: settings, connections, demo data, workspaces, members.
   'PUT /settings': 'admin',

@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { AUTO_CLOSE_DECISION_TYPE, acceptanceStats, autoCloseDecision, DEMO_SCENARIOS, DEFAULT_MODELS, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type AnalysisResult, type DecisionEffect, type NewDecision, type WithdrawnDecision } from '@ci/core';
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { AUTO_CLOSE_DECISION_TYPE, acceptanceStats, autoCloseDecision, DEMO_SCENARIOS, DEFAULT_MODELS, clearFigmaCache, errorMessage, impactAnalysis, recordDecision, withdrawDecision, type ActiveDecision, type HumanQuestion, type AnalysisResult, type DecisionEffect, type NewDecision, type WithdrawnDecision } from '@ci/core';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { ConnectError, stateCookie, type ConnectConfig } from './connections.js';
 import { proposalEvent, recordAutoClose } from './auto-close.js';
 import { effectiveAi } from './ai-budget.js';
 import type { Engine } from './engine.js';
 import { actorOf, httpError } from './http.js';
-import { MUTATION, answerActionBody, answerParams, approveBody, atlassianSiteBody, decisionBody, errors, idParams, impactQuery, itemKeyParams, settingsBody, withdrawBody } from './schemas.js';
+import { MUTATION, answerActionBody, answerParams, approveBody, atlassianSiteBody, decisionBody, errors, humanQuestionBody, humanQuestionParams, idParams, impactQuery, itemKeyParams, settingsBody, withdrawBody } from './schemas.js';
 import { deepMerge, type Settings } from './store.js';
 import type { Workspace } from './workspaces.js';
 
@@ -217,6 +217,60 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
     const result = await engine.analyze(`decision on ${decision.itemKey}`);
     return { decision, item: result.items.find((i) => i.key === decision.itemKey) };
   });
+
+  // ------------------------------------------------------------------ questions people ask (R1, docs/REFINEMENT-PLAN.md)
+  /** Add a question or thought to a work item; the author is the signed-in person (shown to the whole team). */
+  app.post<{ Params: { key: string }; Body: { text: string; link?: string; by?: string } }>(
+    '/items/:key/questions',
+    { schema: { summary: 'Ask a question on a work item', params: itemKeyParams, body: humanQuestionBody, response: errors(400, 404, 422), ...MUTATION } },
+    async (req) => {
+      const { store, engine } = of(req);
+      const result = await ensure(engine);
+      if (!result.items.some((i) => i.key === req.params.key)) throw httpError(404, `No work item ${req.params.key}`);
+      const text = req.body.text.trim();
+      if (!text) throw httpError(400, 'A question needs its text');
+      const link = req.body.link?.trim();
+      if (link && !/^https?:\/\/\S+$/i.test(link)) throw httpError(400, 'The link must be an http(s) address');
+      const by = who(req, req.body);
+      const question: HumanQuestion = {
+        id: `hq-${randomBytes(6).toString('hex')}`,
+        itemKey: req.params.key,
+        text,
+        ...(link && { link }),
+        author: by.actor,
+        askedAt: new Date().toISOString(),
+        accepted: false,
+      };
+      await store.updateHumanQuestions((all) => [...all, question]);
+      await store.audit({ at: question.askedAt, kind: 'question', ...by, summary: `${question.itemKey}: question asked (${question.id})` });
+      const next = await engine.analyze(`question on ${question.itemKey}`);
+      return { question, item: next.items.find((i) => i.key === question.itemKey) };
+    },
+  );
+
+  /** The Product Owner accepts a question for refinement: from now on it counts for readiness (owner's decision). */
+  app.post<{ Params: { key: string; id: string }; Body: { by?: string } | null }>(
+    '/items/:key/questions/:id/accept',
+    { schema: { summary: 'Accept a question so it counts for readiness', params: humanQuestionParams, body: withdrawBody, response: errors(404, 409, 422), ...MUTATION } },
+    async (req) => {
+      const { store, engine } = of(req);
+      const by = who(req, req.body);
+      const at = new Date().toISOString();
+      let found: HumanQuestion | undefined;
+      await store.updateHumanQuestions((all) =>
+        all.map((q) => {
+          if (q.id !== req.params.id || q.itemKey !== req.params.key) return q;
+          found = q.accepted ? q : { ...q, accepted: true, acceptedBy: by.actor, acceptedAt: at };
+          return found;
+        }),
+      );
+      if (!found) throw httpError(404, `No question ${req.params.id} on ${req.params.key}`);
+      if (found.acceptedAt !== at) throw httpError(409, `Question ${req.params.id} was already accepted by ${found.acceptedBy ?? 'someone'}`);
+      await store.audit({ at, kind: 'question_accepted', ...by, summary: `${found.itemKey}: question ${found.id} accepted for refinement` });
+      const next = await engine.analyze(`question accepted on ${found.itemKey}`);
+      return { question: found, item: next.items.find((i) => i.key === found!.itemKey) };
+    },
+  );
 
   // ------------------------------------------------------------------ answers found in sources (A2a, docs/AUTO-CLOSE-A2A-PLAN.md)
   /** Accept, edit or reject an answer proposal; accept and edit record the decision (`finding.auto_close`). */

@@ -68,11 +68,13 @@ Każdy krok osobnym PR, z testami przed kodem, jak dotychczas.
 
 ### Pierwsza część — sprawdza hipotezę „ludzie zgłaszają pytania przed spotkaniem”
 
-- [ ] **R1 — pytanie od człowieka przy elemencie.** Pole „dodaj pytanie albo myśl” na stronie historyjki (tekst,
-  link, zrzut ekranu). Model: ustalenie z `origin: 'human'`, autorem z konta (`docs/ACCOUNTS-PLAN.md`), oryginalnym
-  tekstem i pytaniem; zamykane tak samo jak pozostałe (decyzja, akceptacja ryzyka, nie dotyczy). Do rozstrzygnięcia
-  w planie kroku: czy pytanie człowieka wpływa na gotowość (propozycja: dopiero po przyjęciu przez PO), jaki ma
-  wymiar i wagę, kto widzi autora.
+- [x] **R1 — pytanie od człowieka przy elemencie.** Pole „dodaj pytanie albo myśl” na stronie historyjki (tekst,
+  opcjonalny link; zrzut ekranu — później). Model: ustalenie `HUMAN-001` z `origin: 'human'`, autorem z konta
+  (albo nazwą podaną w trybie bez kont), oryginalnym tekstem i pytaniem; zamykane tak samo jak pozostałe (decyzja,
+  akceptacja ryzyka, nie dotyczy). Rozstrzygnięte 2026-11-22 (właściciel): pytanie obniża gotowość **dopiero po
+  przyjęciu przez PO** (do tego czasu tylko zapis, akcja `record`); autora widzi **cały zespół**. Przyjęcie: rola
+  Admin jako zastępstwo PO, dopóki aplikacja nie ma osobnej roli PO. Wymiar „requirements”, kategoria
+  „ambiguity”, waga „warning”. Pytania w `questions.json` (szyfrowane jak reszta magazynu), każde w dzienniku audytu.
 - [ ] **R1c — zgłoszenie z komunikatora, w najmniejszej postaci.** Jedna akcja „dodaj pytanie” w Slacku albo
   Teams (platforma zespołów pilotażu), która zapisuje pytanie przy właściwej historyjce i odsyła link. Bez
   przypomnień, głosowania i odpowiedzi w wątku — te zostają w R8. Powód kolejności (korekta z 2026-11-21): test
@@ -124,8 +126,8 @@ sugestie AI wymagają więcej sprzątania, niż oszczędzają.
 
 ## Decyzje właściciela przed startem
 
-1. Czy pytanie człowieka od razu obniża gotowość, czy dopiero po przyjęciu przez PO (R1).
-2. Kto widzi autora pytania: cały zespół, tylko PO i prowadzący, czy nikt (R1, R3).
+1. ~~Czy pytanie człowieka od razu obniża gotowość~~ — przyjęte 2026-11-22: dopiero po przyjęciu przez PO (R1).
+2. ~~Kto widzi autora pytania~~ — przyjęte 2026-11-22: cały zespół (R1, R3).
 3. Zapis zwrotny do Jiry: czy w ogóle, i czy przed bramką Forge, czy razem z nią (R7).
 4. Slack czy Teams jako pierwsza platforma (R1c, R8) — zależy od zespołów pilotażu; ta sama decyzja co D-P9
    w planie programu (pdi), bo aplikacja kanałów jest wspólna dla całej suity.

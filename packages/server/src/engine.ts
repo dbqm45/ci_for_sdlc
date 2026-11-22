@@ -178,7 +178,7 @@ export class Engine extends EventEmitter {
     this.emit('status', { running: true, reason });
     try {
       const settings = await this.store.settings();
-      const [context, stored, approvals, previous] = await Promise.all([this.loadContext(settings), this.store.decisions().then(activeDecisions), this.store.approvals(), this.store.snapshot()]);
+      const [context, stored, approvals, previous, humanQuestions] = await Promise.all([this.loadContext(settings), this.store.decisions().then(activeDecisions), this.store.approvals(), this.store.snapshot(), this.store.humanQuestions()]);
       const decisions = withRepoDecisions(stored, context);
 
       const platform = this.aiPlatform;
@@ -206,6 +206,7 @@ export class Engine extends EventEmitter {
         previous: previous ?? undefined,
         policy: settings.policy,
         suppressedAnswers,
+        humanQuestions,
         ai: analyzer
           ? {
               analyzer,

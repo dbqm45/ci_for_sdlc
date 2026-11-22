@@ -231,6 +231,10 @@ export const api = {
   approve: (key: string, by: string, force?: { reason: string }) => req<AnalysisResult>('POST', `/api/items/${encodeURIComponent(key)}/approve`, { by, ...(force && { force: true, reason: force.reason }) }),
   unapprove: (key: string) => req<AnalysisResult>('DELETE', `/api/items/${encodeURIComponent(key)}/approve`),
   decide: (d: Omit<NewDecision, 'decidedAt'> & { reason?: string }) => req<{ decision: Decision; item: ItemAnalysis }>('POST', '/api/decisions', d),
+  /** R1: a question or thought a person adds to a work item; the server takes the author from the session. */
+  askQuestion: (key: string, text: string, link: string | undefined, by: string) => req<{ item: ItemAnalysis }>('POST', `/api/items/${encodeURIComponent(key)}/questions`, { text, ...(link && { link }), by }),
+  /** R1: the Product Owner accepts a question; from then on it counts for readiness. */
+  acceptQuestion: (key: string, id: string, by: string) => req<{ item: ItemAnalysis }>('POST', `/api/items/${encodeURIComponent(key)}/questions/${encodeURIComponent(id)}/accept`, { by }),
   /** Withdraws the decision (it stays in history) and re-opens its finding. Returns undefined when the user cancels. */
   reopen: async (id: string) => {
     const reason = window.prompt('Why re-open this decision? (optional, recorded in the audit log)');

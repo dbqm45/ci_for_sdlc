@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { DEFAULT_POLICY, errorMessage, normalizeDecision, summarizeAiCalls, type AiCallRecord, type AiUsageRow, type Approval, type AutoCloseEvent, type Decision, type StoredDecision, type DriftEvent, type IssueType, type PdiEvent, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, errorMessage, normalizeDecision, summarizeAiCalls, type AiCallRecord, type AiUsageRow, type Approval, type AutoCloseEvent, type HumanQuestion, type Decision, type StoredDecision, type DriftEvent, type IssueType, type PdiEvent, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
 import { FileBackend, type Backend } from './backend.js';
 import type { Principal } from './http.js';
 import { pruneToSchema, settingsBody } from './schemas.js';
@@ -87,7 +87,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export interface AuditEntry {
   at: string;
-  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection' | 'pdi' | 'auto_close' | 'workspace' | 'member' | 'access';
+  kind: 'ai_call' | 'decision' | 'decision_removed' | 'decision_withdrawn' | 'approval' | 'approval_removed' | 'analysis' | 'settings' | 'webhook' | 'demo_change' | 'connection' | 'pdi' | 'auto_close' | 'workspace' | 'member' | 'access' | 'question' | 'question_accepted';
   /** A display name; `via` is how the change was authorized (admin token or a loopback client). */
   actor: string;
   via?: Principal;
@@ -264,6 +264,13 @@ export class Store {
   }
   updateApprovals(fn: (all: Approval[]) => Approval[] | void) {
     return this.update('approvals.json', [], listOf<Approval>(), fn, true);
+  }
+  /** R1: questions people asked on work items (sealed like decisions when encryption at rest is on). */
+  humanQuestions() {
+    return this.readJson('questions.json', [], listOf<HumanQuestion>());
+  }
+  updateHumanQuestions(fn: (all: HumanQuestion[]) => HumanQuestion[] | void) {
+    return this.update('questions.json', [], listOf<HumanQuestion>(), fn, true);
   }
   snapshot() {
     return this.readJson('snapshot.json', null, recordOrNull<Snapshot>());
