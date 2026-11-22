@@ -45,6 +45,9 @@ przestrzeń; także cała trasa bez `CI_CHANNELS_SIGNING_SECRET`).
 Pytanie jak każde z R1: widzi je cały zespół z autorem, a gotowość obniża dopiero po przyjęciu przez PO. Każde
 pytanie trafia do dziennika audytu (`question`, „asked from slack”, sposób: `channels_signature`).
 
+Sekret ustawiasz jak inne: w środowisku albo w pliku `.env` w katalogu głównym repozytorium (czytają go `npm start`
+i `npm run dev`).
+
 ## Czego tu nie ma
 
 Przypomnienia, głosowanie i odpowiedzi w wątku (R8), Teams, powiązanie z kontem suity (po kroku 14). Gdy pojawi się
