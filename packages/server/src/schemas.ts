@@ -124,6 +124,8 @@ export const answerActionBody = obj({ action: { enum: ['accept', 'edit', 'reject
 export const answerParams = obj({ key: str(64, { pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]*$' }), proposalId: str(128, { minLength: 1 }) }, ['key', 'proposalId']);
 
 export const impactQuery = obj({ q: str(500) });
+/** D9: the suite decisions of a change and/or matching words. */
+export const suiteDecisionsQuery = obj({ change: str(40), q: str(500) });
 
 /** Which Atlassian site of the connection the analysis reads. */
 export const atlassianSiteBody = obj({ cloudId: str(100, { minLength: 1 }) }, ['cloudId']);

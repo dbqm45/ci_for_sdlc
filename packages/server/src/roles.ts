@@ -23,6 +23,8 @@ const ROUTE_ROLES: Record<string, Role> = {
   'POST /items/:key/questions': 'member',
   'POST /items/:key/questions/:id/accept': 'admin',
   'POST /changes/:change/request-approval': 'member',
+  // D9: anyone on the team refreshes the read-only copy of the suite decisions from pdi.
+  'POST /suite-decisions/refresh': 'member',
   // Admin: settings, connections, demo data, workspaces, members.
   'PUT /settings': 'admin',
   'POST /settings/test-connections': 'admin',

@@ -26,6 +26,7 @@ export { demoProject, DEMO_SCENARIOS } from './connectors/demo.js';
 export * from './hierarchy.js';
 export * from './settings.js';
 export * from './pdi.js';
+export * from './suite-decisions.js';
 export { errorMessage } from './errors.js';
 export { MAX_RECONSTRUCTION_BYTES, RECONSTRUCTION_FORMAT, ReconstructionError, isClaimable, parseReconstruction, readReconstruction, reconstructionToDocuments, type Reconstruction } from './connectors/reconstruction.js';
 export { ATLASSIAN_API, RELEASE_LINE_SOURCES, type ReleaseLineSource, fetchJira, fetchConfluence, jiraIssueToRequirement, adfToText, splitSections, type AtlassianOAuthAccess, type JiraConfig, type ConfluenceConfig } from './connectors/atlassian.js';

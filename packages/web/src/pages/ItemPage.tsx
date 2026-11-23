@@ -4,6 +4,7 @@ import { useApp } from '../App';
 import { api, currentUser, currentWorkspace, type GraphData, type ItemDetail, errMsg } from '../api';
 import { FindingCard, QuestionBox } from '../components/FindingCard';
 import { GraphView } from '../components/GraphView';
+import { SuiteDecisions } from '../components/SuiteDecisions';
 import { Modal } from '../components/Modal';
 import { Bar, Card, Chevron, DIMENSION_LABELS, DateTime, EmptyState, HealthNumber, JOURNEY_LABELS, ReadinessBadge, STATE_LABELS, SeverityBadge, Source, SourceLogo, Spinner, StatusBadge, StatusIcon, ago } from '../components/ui';
 import { ChevronIcon, ListIcon, SearchIcon, SettingsIcon, SlidersIcon, SparkleIcon } from '../components/icons';
@@ -272,6 +273,7 @@ export function ItemPage({ itemKey, focusFinding }: { itemKey: string; focusFind
 
           {a.rollup && <EpicRollup a={a} children={d.children} navigate={navigate} />}
           {a.releasePlan && <ReleasePlanPanel a={a} children={d.children} navigate={navigate} />}
+          <SuiteDecisions change={change?.change} />
 
           <section className="card">
             <div className="tabs">
