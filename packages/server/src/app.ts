@@ -163,6 +163,14 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       void pdi.deliver().catch((e) => app.log.error(e));
     };
     w.engine.autoCloseSink = w.sink;
+    /** D5: a person's decisions and their withdrawal go to pdi's registry too, with the item's CHG. */
+    w.decisionSink = async (d) => {
+      if (!pdi.enabled) return;
+      const prefix = (await w.store.settings()).integrations.jira.changeLabelPrefix || undefined;
+      const requirements = w.engine.state.context?.requirements ?? (await w.store.demoContext())?.requirements ?? [];
+      await pdi.enqueueHumanDecision(d, changeKeyOf(requirements.find((r) => r.key === d.itemKey)?.labels ?? [], prefix), w.id === DEFAULT_WORKSPACE ? undefined : w.id);
+      void pdi.deliver().catch((e) => app.log.error(e));
+    };
     // After every analysis: readiness of the labelled changes across all workspaces to pdi, then whatever is due (F4).
     w.engine.on('analysis', () => {
       const work = afterAnalysis?.(w);

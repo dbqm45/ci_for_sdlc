@@ -194,7 +194,7 @@ last 30 reviewed drafts against pdi's thresholds (95% unedited, 10% edited) and 
 an `auto_close` audit entry. Plan: `docs/AUTO-CLOSE-A2A-PLAN.md`.
 
 With the pdi link, every decided step (accept, edit, reject, reopen, apply) also goes to pdi's decision register as
-`decision.recorded` (contract 0.7.0, A2b): `recordAutoClose()` hands the steps to a sink, `PdiLink.enqueueDecisions()`
+`decision.recorded` (contract 0.7.0, A2b; 0.17.0 with `origin` since D5): `recordAutoClose()` hands the steps to a sink, `PdiLink.enqueueDecisions()`
 builds the event (`decisionRecordedEvent()` in core: `ref` = `<item>/<finding>`, `url` = `#/item/<item>/<finding>`,
 the quote and its source as `evidence`, `change` from the `change:` label) and queues it in the same outbox as
 readiness. pdi's DEC is kept as `pdiDecision` on the local decision (and on the log entry of a rejection); a reopen

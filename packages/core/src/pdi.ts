@@ -1,4 +1,4 @@
-import type { ItemAnalysis, RequirementItem } from './model.js';
+import type { Decision, DecisionEffect, ItemAnalysis, RequirementItem } from './model.js';
 
 /**
  * pdi integration (F4 of the pdi one-flow plan): a pdi change (CHG-n) is the set of stories labelled `change:CHG-n`;
@@ -175,11 +175,43 @@ export function parseGateDecided(v: unknown): GateDecided | string {
 
 // ---------------------------------------------------------------------------- A2b: decisions to pdi's registry
 
-/** `decision.recorded` came with pdi contract 0.7.0; `readiness.changed` keeps the version it was written for. */
-export const PDI_DECISION_CONTRACT_VERSION = '0.7.0';
+/**
+ * `decision.recorded` came with pdi contract 0.7.0 and carries its origin since 0.16.0 (D5: 0.17.0, the version pdi pins);
+ * `gate.requested` and `readiness.changed` keep the versions they were written for.
+ */
+export const PDI_DECISION_CONTRACT_VERSION = '0.17.0';
+/** `gate.requested` came with pdi contract 0.7.0. */
+export const PDI_GATE_CONTRACT_VERSION = '0.7.0';
 /** What pdi records when the `apply` policy decided: the sender, not a person. */
 export const PDI_AUTOMAT = 'ci_for_sdlc';
 const MAX_REF = 200;
+
+/** The origin of a decision made here (pdi contract 0.16.0, D1): one key per finding, so its decisions are versions of one. */
+export interface PdiOrigin {
+  app: 'ci_for_sdlc';
+  scope: string;
+  local_id: string;
+  url?: string;
+}
+
+/** The link to a finding in the app (CI_PUBLIC_URL), or undefined without a public URL. */
+function findingUrl(publicUrl: string | undefined, workspace: string | undefined, itemKey: string, findingId: string): string | undefined {
+  const base = publicUrl?.replace(/\/+$/, '');
+  return base ? `${base}/#${workspacePath(workspace)}/item/${encodeURIComponent(itemKey)}/${encodeURIComponent(findingId)}` : undefined;
+}
+
+/**
+ * D5: where a decision of DI Definition lives — the workspace (`default` too) and the finding; the link only when it is
+ * https (the contract asks for it).
+ */
+export function pdiOrigin(i: { itemKey: string; findingId: string; workspace?: string; url?: string }): PdiOrigin {
+  return {
+    app: 'ci_for_sdlc',
+    scope: (i.workspace || DEFAULT_WORKSPACE).slice(0, MAX_REF),
+    local_id: `${i.itemKey}/${i.findingId}`.slice(0, MAX_REF),
+    ...(i.url?.startsWith('https://') && { url: i.url }),
+  };
+}
 
 /** One step of A2a (docs/AUTO-CLOSE-A2A-PLAN.md) with what pdi needs to record it (docs/PDI-F4-PLAN.md, "A2b"). */
 export interface DecisionRecordedInput {
@@ -219,7 +251,7 @@ export function decisionRecordedEvent(i: DecisionRecordedInput, at: string): Pdi
     reopened: `Reopened "${i.question}": ${from} did not answer it`,
   }[i.outcome];
   const automatic = i.outcome === 'applied';
-  const base = i.publicUrl?.replace(/\/+$/, '');
+  const url = findingUrl(i.publicUrl, i.workspace, i.itemKey, i.findingId);
   const ws = inWorkspace(i.workspace) ? `${i.workspace}/` : '';
   return {
     id: `ci-ac-${ws.replace('/', '-')}${i.proposalId.replace(/^ans:/, '').replace(/[^A-Za-z0-9._-]/g, '-')}-${i.outcome}-${isoSeconds(at).replace(/[-:]/g, '')}`,
@@ -230,7 +262,8 @@ export function decisionRecordedEvent(i: DecisionRecordedInput, at: string): Pdi
     payload: {
       decision_type: 'finding.auto_close',
       ref: `${ws}${i.itemKey}/${i.findingId}`.slice(0, MAX_REF),
-      ...(base && { url: `${base}/#${workspacePath(i.workspace)}/item/${encodeURIComponent(i.itemKey)}/${encodeURIComponent(i.findingId)}` }),
+      origin: pdiOrigin({ ...i, url }),
+      ...(url && { url }),
       statement,
       ...(i.why?.trim() && { why: i.why.trim() }),
       decided_by: automatic ? PDI_AUTOMAT : i.decidedBy,
@@ -240,6 +273,65 @@ export function decisionRecordedEvent(i: DecisionRecordedInput, at: string): Pdi
       evidence: [{ text: i.quote, ...(i.source.url && { source_url: i.source.url }) }],
       ...(i.supersedes && { supersedes: i.supersedes }),
       ...(i.change && { change: i.change }),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------- D5: every decision to the suite index
+
+const HUMAN_DECISION: Record<DecisionEffect, { type: string; kind: 'product' | 'triage'; says: (q: string, a: string) => string }> = {
+  resolve: { type: 'finding.resolve', kind: 'product', says: (q, a) => `Answered "${q}": ${a}` },
+  accept_risk: { type: 'finding.accept_risk', kind: 'triage', says: (q, a) => `Accepted the risk in "${q}": ${a}` },
+  dismiss: { type: 'finding.dismiss', kind: 'triage', says: (q, a) => `Dismissed "${q}": ${a}` },
+  confirm: { type: 'finding.confirm', kind: 'triage', says: (q, a) => `Confirmed the finding "${q}": ${a}` },
+};
+
+export interface HumanDecisionOptions {
+  /** The DEC pdi gave the version this one replaces (a new answer) or withdraws. */
+  supersedes?: string;
+  /** The CHG of the item's `change:` label. */
+  change?: string;
+  /** CI_PUBLIC_URL, for the link to the finding. */
+  publicUrl?: string;
+  /** The workspace of the item; another than `default` prefixes the ref and the event id. */
+  workspace?: string;
+}
+
+/**
+ * D5 (docs/PDI-D5-PLAN.md): a person's decision on a finding (`POST /decisions`) as `decision.recorded`, or — for a
+ * withdrawn decision — its withdrawal. Every decision on one finding has the same origin, so pdi keeps them as versions.
+ */
+export function humanDecisionEvent(d: Decision, o: HumanDecisionOptions = {}): PdiEvent {
+  const withdrawn = d.status === 'withdrawn';
+  const at = isoSeconds(withdrawn ? d.withdrawnAt : d.decidedAt);
+  const question = d.question.trim() || d.findingId;
+  const kind = withdrawn ? { type: 'finding.withdraw', kind: 'triage' as const } : HUMAN_DECISION[d.effect];
+  const statement = withdrawn ? `Withdrew the decision on "${question}" (was: ${d.answer})` : HUMAN_DECISION[d.effect].says(question, d.answer);
+  const why = (withdrawn ? d.withdrawReason : d.changeReason?.trim() || d.note)?.trim();
+  const url = findingUrl(o.publicUrl, o.workspace, d.itemKey, d.findingId);
+  const ws = inWorkspace(o.workspace) ? `${o.workspace}/` : '';
+  const evidence = (d.evidence ?? []).filter((e) => e.excerpt?.trim()).map((e) => ({ text: e.excerpt!.trim(), ...(e.url && { source_url: e.url }) }));
+  const ai = !withdrawn && d.draftedBy === 'ai';
+  return {
+    id: `ci-dec-${ws.replace('/', '-')}${d.id.replace(/[^A-Za-z0-9._-]/g, '-')}-${withdrawn ? 'withdrawn' : d.effect}-${at.replace(/[-:]/g, '')}`.slice(0, 128),
+    type: 'decision.recorded',
+    occurred_at: at,
+    source: 'ci_for_sdlc',
+    contract_version: PDI_DECISION_CONTRACT_VERSION,
+    payload: {
+      decision_type: kind.type,
+      ref: `${ws}${d.itemKey}/${d.findingId}`.slice(0, MAX_REF),
+      origin: pdiOrigin({ itemKey: d.itemKey, findingId: d.findingId, workspace: o.workspace, url }),
+      ...(url && { url }),
+      statement,
+      ...(why && { why }),
+      kind: kind.kind,
+      decided_by: withdrawn ? d.withdrawnBy : d.decidedBy,
+      drafted_by: ai ? 'ai' : 'human',
+      ...(ai && d.draftEdited !== undefined && { draft_edited: d.draftEdited }),
+      ...(evidence.length && !withdrawn && { evidence }),
+      ...(o.supersedes && { supersedes: o.supersedes }),
+      ...(o.change && { change: o.change }),
     },
   };
 }
@@ -295,7 +387,7 @@ export function gateRequestedEvent(i: GateRequestInput, at: string): PdiEvent {
     type: 'gate.requested',
     occurred_at: isoSeconds(at),
     source: 'ci_for_sdlc',
-    contract_version: PDI_DECISION_CONTRACT_VERSION,
+    contract_version: PDI_GATE_CONTRACT_VERSION,
     payload: {
       change: i.change.change,
       gate: APPROVE_GATE,

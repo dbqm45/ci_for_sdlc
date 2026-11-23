@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
-import { CHANGE_LABEL_PREFIX, approvalQuestions, mergeChangeReadiness, workspacePath, changeKeyOf, changeReadiness, decisionRecordedEvent, gateRequestedEvent, parseGateDecided, readinessEvents, targetsStatusOf, type DecisionRecordedInput, type ItemAnalysis, type RequirementItem } from '../src/index.js';
+import { CHANGE_LABEL_PREFIX, approvalQuestions, mergeChangeReadiness, workspacePath, changeKeyOf, changeReadiness, decisionRecordedEvent, gateRequestedEvent, humanDecisionEvent, pdiOrigin, parseGateDecided, readinessEvents, targetsStatusOf, type Decision, type DecisionRecordedInput, type ItemAnalysis, type RequirementItem } from '../src/index.js';
 
 // F4 (pdi docs/plan-jeden-flow-sdlc.md §6): readiness of a pdi change (CHG-n) from the stories labelled `change:CHG-n`,
 // sent to pdi as readiness.changed; gate.decided from pdi approves the stories. Envelopes: pdi contract 0.4.0.
@@ -123,9 +123,9 @@ describe('parseGateDecided', () => {
 });
 
 // A2b (docs/PDI-F4-PLAN.md, "A2b"): every step of A2a with a finding.auto_close decision goes to pdi's registry as
-// decision.recorded (pdi contract 0.7.0), checked against a copy of pdi's event schema.
+// decision.recorded (pdi contract 0.7.0; with its origin since D5, 0.17.0), checked against a copy of pdi's event schema.
 describe('decision.recorded (A2b)', () => {
-  const schema = JSON.parse(readFileSync(new URL('./fixtures/pdi-contract/0.7.0/event.schema.json', import.meta.url), 'utf8'));
+  const schema = JSON.parse(readFileSync(new URL('./fixtures/pdi-contract/0.17.0/event.schema.json', import.meta.url), 'utf8'));
   const validate = new Ajv2020({ allErrors: true, strict: false }).compile(schema);
   const valid = (e: unknown) => {
     const ok = validate(e);
@@ -147,7 +147,7 @@ describe('decision.recorded (A2b)', () => {
   const AT = '2026-10-27T12:00:00.123Z';
 
   it('PDI-A2B-01: the pdi example passes the copied schema', () => {
-    expect(valid(JSON.parse(readFileSync(new URL('./fixtures/pdi-contract/0.7.0/event-decision.recorded.json', import.meta.url), 'utf8')))).toEqual([]);
+    expect(valid(JSON.parse(readFileSync(new URL('./fixtures/pdi-contract/0.17.0/event-decision.recorded.json', import.meta.url), 'utf8')))).toEqual([]);
   });
 
   it('PDI-A2B-02: Accept — the person, the AI draft unedited, the quote and its source, the change', () => {
@@ -158,10 +158,11 @@ describe('decision.recorded (A2b)', () => {
       type: 'decision.recorded',
       occurred_at: '2026-10-27T12:00:00Z',
       source: 'ci_for_sdlc',
-      contract_version: '0.7.0',
+      contract_version: '0.17.0',
       payload: {
         decision_type: 'finding.auto_close',
         ref: 'CHK-202/ERR-003:CHK-202',
+        origin: { app: 'ci_for_sdlc', scope: 'default', local_id: 'CHK-202/ERR-003:CHK-202', url: 'https://ci.example.com/#/item/CHK-202/ERR-003%3ACHK-202' },
         url: 'https://ci.example.com/#/item/CHK-202/ERR-003%3ACHK-202',
         statement: `Closed "${base.question}" with the answer from Payment Failure Handling: ${base.answer}`,
         decided_by: 'Ann',
@@ -322,7 +323,8 @@ describe('pdi contract 0.14.0: events sent and received stay valid', () => {
     expect(errors(gateRequestedEvent({ change, stories: [], requestedBy: 'Ann', note: 'Ship behind a flag', publicUrl: 'https://ci.example.com/' }, AT))).toEqual([]);
   });
 
-  it.each(['accepted', 'edited', 'rejected', 'reopened', 'applied'] as const)('PDI-C14-04: decision.recorded (%s)', (outcome) => {
+  // decision.recorded is sent with 0.17.0 since D5 (PDI-D5-08); apart from its origin (new in 0.16.0) nothing changed.
+  it.each(['accepted', 'edited', 'rejected', 'reopened', 'applied'] as const)('PDI-C14-04: decision.recorded (%s) without its origin', (outcome) => {
     const input: DecisionRecordedInput = {
       outcome,
       proposalId: 'ans:1a2b3c4d',
@@ -338,10 +340,126 @@ describe('pdi contract 0.14.0: events sent and received stay valid', () => {
       ...(outcome === 'reopened' ? { supersedes: 'DEC-41', why: 'Wrong flow' } : {}),
       ...(outcome === 'applied' ? { rule: 'auto-close:ERR-003' } : {}),
     };
-    expect(errors(decisionRecordedEvent(input, AT))).toEqual([]);
+    const { origin, ...payload } = decisionRecordedEvent(input, AT).payload;
+    expect(origin).toBeDefined();
+    expect(errors({ ...decisionRecordedEvent(input, AT), contract_version: '0.14.0', payload })).toEqual([]);
   });
 
   it('PDI-C14-05: gate.decided from pdi 0.14.0 is read as before', () => {
     expect(parseGateDecided(read('event-gate.decided.json'))).toEqual({ id: 'evt-gate.decided', change: 'CHG-12', gate: 'B1', outcome: 'approved', decision: 'DEC-42' });
+  });
+});
+
+// D5 (docs/PDI-D5-PLAN.md): every decision of DI Definition goes to the suite index in pdi as decision.recorded with its
+// origin (pdi contract 0.17.0): a person's answer, accepted risk, dismissal, confirmation and the withdrawal of one.
+describe('decision.recorded for every decision (D5, contract 0.17.0)', () => {
+  const dir = new URL('./fixtures/pdi-contract/0.17.0/', import.meta.url);
+  const read = (name: string) => JSON.parse(readFileSync(new URL(name, dir), 'utf8'));
+  const validate = new Ajv2020({ allErrors: true, strict: false }).compile(read('event.schema.json'));
+  const errors = (e: unknown) => (validate(e) ? [] : validate.errors!.map((x) => `${x.instancePath} ${x.message}`));
+  const decision: Decision = {
+    id: 'a1b2c3d4',
+    questionId: 'q-timeout',
+    findingId: 'ERR-003:CHK-202',
+    itemKey: 'CHK-202',
+    topic: 'error handling',
+    question: 'What should happen if the payment API does not respond within 30 seconds?',
+    answer: 'Show a timeout message and let the user retry.',
+    decidedBy: 'Ann',
+    decidedAt: '2026-11-23T10:00:00.456Z',
+    effect: 'resolve',
+    version: 1,
+    status: 'active',
+  };
+  const opts = { publicUrl: 'https://ci.example.com/', change: 'CHG-12' };
+
+  it('PDI-D5-01: the pdi example 0.17.0 passes the copied schema', () => {
+    expect(errors(read('event-decision.recorded.json'))).toEqual([]);
+  });
+
+  it('PDI-D5-02: a person answers a question — finding.resolve with its origin, the change and a link', () => {
+    const e = humanDecisionEvent(decision, opts);
+    expect(errors(e)).toEqual([]);
+    expect(e).toEqual({
+      id: 'ci-dec-a1b2c3d4-resolve-20261123T100000Z',
+      type: 'decision.recorded',
+      occurred_at: '2026-11-23T10:00:00Z',
+      source: 'ci_for_sdlc',
+      contract_version: '0.17.0',
+      payload: {
+        decision_type: 'finding.resolve',
+        ref: 'CHK-202/ERR-003:CHK-202',
+        origin: { app: 'ci_for_sdlc', scope: 'default', local_id: 'CHK-202/ERR-003:CHK-202', url: 'https://ci.example.com/#/item/CHK-202/ERR-003%3ACHK-202' },
+        url: 'https://ci.example.com/#/item/CHK-202/ERR-003%3ACHK-202',
+        statement: `Answered "${decision.question}": ${decision.answer}`,
+        kind: 'product',
+        decided_by: 'Ann',
+        drafted_by: 'human',
+        change: 'CHG-12',
+      },
+    });
+  });
+
+  it.each([
+    ['accept_risk', 'finding.accept_risk', 'triage', `Accepted the risk in "${decision.question}": ${decision.answer}`],
+    ['dismiss', 'finding.dismiss', 'triage', `Dismissed "${decision.question}": ${decision.answer}`],
+    ['confirm', 'finding.confirm', 'triage', `Confirmed the finding "${decision.question}": ${decision.answer}`],
+  ] as const)('PDI-D5-03: %s — its own decision type and kind', (effect, type, kind, statement) => {
+    const e = humanDecisionEvent({ ...decision, effect }, opts);
+    expect(errors(e)).toEqual([]);
+    expect(e.payload).toMatchObject({ decision_type: type, kind, statement });
+    expect(e.id).toBe(`ci-dec-a1b2c3d4-${effect}-20261123T100000Z`);
+  });
+
+  it('PDI-D5-04: a new version of the answer — the reason as why, supersedes the DEC of the version it replaces', () => {
+    const e = humanDecisionEvent({ ...decision, version: 2, changeReason: 'The provider allows 60 s', note: 'Agreed with Bob' }, { ...opts, supersedes: 'DEC-41' });
+    expect(errors(e)).toEqual([]);
+    expect(e.payload).toMatchObject({ why: 'The provider allows 60 s', supersedes: 'DEC-41' });
+    expect(humanDecisionEvent({ ...decision, note: 'Agreed with Bob' }, opts).payload.why).toBe('Agreed with Bob');
+  });
+
+  it('PDI-D5-05: an AI draft and the evidence of the decision are kept; another workspace prefixes the ref, not the local id', () => {
+    const e = humanDecisionEvent(
+      { ...decision, draftedBy: 'ai', draftEdited: true, evidence: [{ source: 'confluence', entityId: '1004', title: 'Payment Failure Handling', url: 'https://wiki.example.com/pages/1004', excerpt: 'Timeout after 30 seconds.' }, { source: 'jira', entityId: 'CHK-202', title: 'CHK-202' }] },
+      { ...opts, workspace: 'mobile' },
+    );
+    expect(errors(e)).toEqual([]);
+    expect(e.id).toBe('ci-dec-mobile-a1b2c3d4-resolve-20261123T100000Z');
+    expect(e.payload).toMatchObject({
+      ref: 'mobile/CHK-202/ERR-003:CHK-202',
+      origin: { app: 'ci_for_sdlc', scope: 'mobile', local_id: 'CHK-202/ERR-003:CHK-202', url: 'https://ci.example.com/#/w/mobile/item/CHK-202/ERR-003%3ACHK-202' },
+      drafted_by: 'ai',
+      draft_edited: true,
+      evidence: [{ text: 'Timeout after 30 seconds.', source_url: 'https://wiki.example.com/pages/1004' }],
+    });
+  });
+
+  it('PDI-D5-06: a withdrawal — finding.withdraw at the time of the withdrawal, by its author, with its reason', () => {
+    const withdrawn: Decision = { ...decision, status: 'withdrawn', withdrawnBy: 'Bob', withdrawnAt: '2026-11-24T08:30:00Z', withdrawReason: 'Asked the wrong question' };
+    const e = humanDecisionEvent(withdrawn, { ...opts, supersedes: 'DEC-41' });
+    expect(errors(e)).toEqual([]);
+    expect(e.id).toBe('ci-dec-a1b2c3d4-withdrawn-20261124T083000Z');
+    expect(e.occurred_at).toBe('2026-11-24T08:30:00Z');
+    expect(e.payload).toMatchObject({ decision_type: 'finding.withdraw', kind: 'triage', decided_by: 'Bob', why: 'Asked the wrong question', supersedes: 'DEC-41', statement: `Withdrew the decision on "${decision.question}" (was: ${decision.answer})` });
+  });
+
+  it('PDI-D5-07: without a public https URL there is no link; a question without text names the finding; long fields are cut', () => {
+    const e = humanDecisionEvent({ ...decision, question: '', itemKey: 'K'.repeat(150), findingId: 'F'.repeat(150) }, { publicUrl: 'http://localhost:4317' });
+    expect(errors(e)).toEqual([]);
+    expect(e.payload.origin).toEqual({ app: 'ci_for_sdlc', scope: 'default', local_id: `${'K'.repeat(150)}/${'F'.repeat(150)}`.slice(0, 200) });
+    expect(e.payload.url).toBe(`http://localhost:4317/#/item/${'K'.repeat(150)}/${'F'.repeat(150)}`);
+    expect(e.payload.statement).toBe(`Answered "${'F'.repeat(150)}": ${decision.answer}`);
+    expect((e.payload.ref as string).length).toBe(200);
+    expect(pdiOrigin({ itemKey: 'A-1', findingId: 'f1' })).toEqual({ app: 'ci_for_sdlc', scope: 'default', local_id: 'A-1/f1' });
+  });
+
+  it.each(['accepted', 'edited', 'rejected', 'reopened', 'applied'] as const)('PDI-D5-08: A2b %s carries the origin of its finding and passes 0.17.0', (outcome) => {
+    const e = decisionRecordedEvent(
+      { outcome, proposalId: 'ans:1', itemKey: 'CHK-202', findingId: 'ERR-003:CHK-202', question: 'Q?', quote: 'Quote.', source: { title: 'Page' }, answer: 'A.', decidedBy: 'Ann', workspace: 'mobile', ...(outcome === 'applied' && { rule: 'auto-close:ERR-003' }) },
+      '2026-11-23T10:00:00Z',
+    );
+    expect(errors(e)).toEqual([]);
+    expect(e.contract_version).toBe('0.17.0');
+    expect(e.payload.origin).toEqual({ app: 'ci_for_sdlc', scope: 'mobile', local_id: 'CHK-202/ERR-003:CHK-202' });
   });
 });

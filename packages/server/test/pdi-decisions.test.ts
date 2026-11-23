@@ -68,7 +68,7 @@ describe('decision.recorded to pdi', () => {
     await start();
     await act('accept');
     const [e] = decisionsSent();
-    expect(e).toMatchObject({ type: 'decision.recorded', source: 'ci_for_sdlc', contract_version: '0.7.0', payload: { decision_type: 'finding.auto_close', ref: 'CHK-202/ERR-003:CHK-202', decided_by: 'Ann', drafted_by: 'ai', draft_edited: false, change: 'CHG-12' } });
+    expect(e).toMatchObject({ type: 'decision.recorded', source: 'ci_for_sdlc', contract_version: '0.17.0', payload: { decision_type: 'finding.auto_close', ref: 'CHK-202/ERR-003:CHK-202', origin: { app: 'ci_for_sdlc', scope: 'default', local_id: 'CHK-202/ERR-003:CHK-202' }, decided_by: 'Ann', drafted_by: 'ai', draft_edited: false, change: 'CHG-12' } });
     expect(e!.payload.evidence).toEqual([{ text: expect.stringMatching(/^If the payment provider does not respond within 30 seconds/), source_url: 'https://demo.atlassian.net/wiki/spaces/PAY/pages/1004' }]);
     expect(e!.payload.url).toBe('http://localhost:4317/#/item/CHK-202/ERR-003%3ACHK-202');
     expect((await localDecision()).pdiDecision).toBe('DEC-41');
