@@ -34,6 +34,11 @@ Ciało (nieznane pola → 400):
 }
 ```
 
+`author.suite_id` (opcjonalne, UUID): osoba w usłudze tożsamości suity (`sub` z `dbqm45/di-identity`). `di-channels`
+dopasowuje ją po zweryfikowanym e-mailu użytkownika Slacka. Wtedy autorem pytania jest nazwa z suity (bez dopisku
+„(Slack)”), a `suite_id` zostaje zapisane przy pytaniu jako `authorId`. Bez dopasowania pole nie jest wysyłane
+i autorem zostaje nazwa ze Slacka z dopiskiem. Inne pola w `author` → 400.
+
 - `id` — identyfikator zdarzenia ze Slacka; ponowne doręczenie tego samego `id` niczego nie dodaje (`duplicate: true`).
 - `workspace` — opcjonalnie; bez niego przestrzeń domyślna. Mapowanie kanału Slacka na przestrzeń trzyma `di-channels`.
 - `link` — zwykle odnośnik do wiadomości w Slacku.
@@ -50,5 +55,6 @@ i `npm run dev`).
 
 ## Czego tu nie ma
 
-Przypomnienia, głosowanie i odpowiedzi w wątku (R8), Teams, powiązanie z kontem suity (po kroku 14). Gdy pojawi się
+Przypomnienia, głosowanie i odpowiedzi w wątku (R8), Teams. Powiązanie z kontem suity: `author.suite_id` (wyżej),
+gdy `di-channels` znajdzie osobę; logowanie do samej aplikacji przez tożsamość suity to osobny krok (ADR 17 §3). Gdy pojawi się
 drugi odbiorca pytań z komunikatora, kształt ciała warto przenieść do kontraktu suity (`di-contract`) jako zdarzenie.

@@ -8,6 +8,7 @@ export interface QuestionInput {
   text: string;
   link?: string;
   author: string;
+  authorId?: string;
   via?: HumanQuestion['via'];
 }
 
@@ -33,6 +34,7 @@ export async function addQuestion(store: Store, engine: Engine, itemKey: string,
     text,
     ...(link && { link }),
     author: input.author.trim().slice(0, 80) || 'anonymous',
+    ...(input.authorId && { authorId: input.authorId }),
     askedAt: new Date().toISOString(),
     accepted: false,
     ...(input.via && { via: input.via }),
@@ -54,6 +56,8 @@ const SLACK_USER = /^[UW][A-Z0-9]{2,20}$/;
 const EVENT_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const KEY = /^[A-Z][A-Z0-9_]*-\d+$/;
 const WORKSPACE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+/** A person's `sub` in the suite identity service (a Keycloak user id). */
+const SUITE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export interface ChannelQuestion {
   id: string;
@@ -62,7 +66,8 @@ export interface ChannelQuestion {
   item: string;
   text: string;
   link?: string;
-  author: { name: string; user: string };
+  /** `suite_id`: the person in the suite identity service, when di-channels matched the Slack user (by e-mail). */
+  author: { name: string; user: string; suite_id?: string };
 }
 
 /** The body di-channels sends (docs/CHANNELS.md), or why it is not one. Never echoes what was sent. */
@@ -79,6 +84,9 @@ export function parseChannelQuestion(body: unknown): ChannelQuestion | string {
   const a = b.author as Record<string, unknown> | undefined;
   if (!a || typeof a !== 'object' || !str(a.name, 80) || !(a.name as string).trim() || !str(a.user, 24) || !SLACK_USER.test(a.user as string))
     return 'author: { name, user } with the Slack user id';
+  if (a.suite_id !== undefined && (typeof a.suite_id !== 'string' || !SUITE_ID.test(a.suite_id))) return 'author.suite_id: a suite identity id (UUID)';
+  const extraAuthor = Object.keys(a).filter((k) => !['name', 'user', 'suite_id'].includes(k));
+  if (extraAuthor.length) return `Unknown author fields: ${extraAuthor.slice(0, 5).join(', ')}`;
   const extra = Object.keys(b).filter((k) => !['id', 'platform', 'workspace', 'item', 'text', 'link', 'author'].includes(k));
   if (extra.length) return `Unknown fields: ${extra.slice(0, 5).join(', ')}`;
   return {
@@ -88,6 +96,6 @@ export function parseChannelQuestion(body: unknown): ChannelQuestion | string {
     item: b.item as string,
     text: b.text as string,
     ...(b.link !== undefined && { link: b.link as string }),
-    author: { name: (a.name as string).trim(), user: a.user as string },
+    author: { name: (a.name as string).trim(), user: a.user as string, ...(a.suite_id !== undefined && { suite_id: a.suite_id as string }) },
   };
 }
