@@ -18,10 +18,11 @@ import { PostHogSink, Usage, triggerOf, usageReport, type UsageEventName, type U
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
+import { SuiteDecisions, type SuiteDecisionsOptions } from './suite-decisions.js';
 import { addQuestion, parseChannelQuestion, type ChannelsOptions } from './questions.js';
 import { actorOf, guardConfigFromEnv, httpError, notFound, registerGuards, registerProblemHandler, type GuardConfig } from './http.js';
 import { ensure, who, withoutSecret, workspaceRoutes } from './routes-workspace.js';
-import { MUTATION, WORKSPACE_ID_PATTERN, approvalRequestBody, changeParams, errors, oauthCallbackQuery, problem, workspaceBody, workspaceDeleteBody, workspaceParams, workspaceRenameBody } from './schemas.js';
+import { MUTATION, WORKSPACE_ID_PATTERN, approvalRequestBody, changeParams, errors, suiteDecisionsQuery, oauthCallbackQuery, problem, workspaceBody, workspaceDeleteBody, workspaceParams, workspaceRenameBody } from './schemas.js';
 import type { Store } from './store.js';
 import { APP_VERSION } from './version.js';
 import pg from 'pg';
@@ -46,6 +47,8 @@ export interface AppOptions {
   connect?: ConnectConfig;
   /** pdi link (F4); defaults to PDI_EVENTS_URL and PDI_SIGNING_SECRET. */
   pdi?: PdiOptions;
+  /** D9: the copy of the suite decision index; defaults to CI_SUITE_DECISIONS_CMD. */
+  suiteDecisions?: SuiteDecisionsOptions;
   /** DI Channels link (step 16); defaults to CI_CHANNELS_SIGNING_SECRET. */
   channels?: ChannelsOptions;
   /** Postgres instead of files (F5); defaults to CI_DATABASE_URL. Empty = files in `dataDir`. */
@@ -187,6 +190,7 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   const main = workspaces.default;
   // pdi's queue and state live with `default`; the hooks above read the link only once something happens.
   pdi = new PdiLink(main.store, { publicUrl: connect.publicUrl, ...opts.pdi });
+  const suite = new SuiteDecisions(main.store, opts.suiteDecisions);
   pdi.storeOf = (id) => workspaces.get(id)?.store;
   for (const w of workspaces.all()) await w.engine.reschedule();
 
@@ -608,6 +612,13 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   settle = async () => {
     while (background.size) await Promise.allSettled([...background]);
   };
+  // D9: the copy of the suite decisions — at start and every 15 minutes, never holding a response.
+  if (suite.enabled) inBackground(suite.refresh());
+  const suiteTimer = suite.enabled ? setInterval(() => inBackground(suite.refresh()), 15 * 60_000) : undefined;
+  suiteTimer?.unref();
+  app.addHook('onClose', async () => {
+    if (suiteTimer) clearInterval(suiteTimer);
+  });
   app.addHook('onClose', () => settle());
 
   /** Someone joined through an invitation: audited; the Owner of an invited beta team starts its beta. */
@@ -1219,6 +1230,18 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
 
   // ------------------------------------------------------------------ pdi (F4, docs/PDI-F4-PLAN.md), across workspaces
   app.get('/api/pdi', async (req) => (requirePdiVisible(req), pdi.status()));
+
+  /** D9 (docs/PDI-D9-PLAN.md): decisions taken elsewhere in the suite, from the copy of pdi's index. */
+  app.get<{ Querystring: { change?: string; q?: string } }>('/api/suite-decisions', { schema: { summary: 'Suite decisions of a change or matching words', querystring: suiteDecisionsQuery, response: errors(404, 422) } }, async (req) => {
+    requirePdiVisible(req);
+    return suite.find({ change: req.query.change, q: req.query.q });
+  });
+  app.post('/api/suite-decisions/refresh', { schema: { summary: 'Refresh the copy of the suite decisions from pdi', response: errors(404, 409, 422), ...MUTATION } }, async (req) => {
+    requirePdiVisible(req);
+    if (!suite.enabled) throw httpError(409, 'The copy of the suite decisions is not configured (CI_SUITE_DECISIONS_CMD).');
+    await suite.refresh();
+    return suite.status();
+  });
 
   /** The pdi changes (stories labelled `change:CHG-n`) of all workspaces with their readiness and the last request for approval. */
   app.get('/api/changes', async (req) => {

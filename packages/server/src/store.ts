@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { DEFAULT_POLICY, errorMessage, normalizeDecision, summarizeAiCalls, type AiCallRecord, type AiUsageRow, type Approval, type AutoCloseEvent, type HumanQuestion, type Decision, type StoredDecision, type DriftEvent, type IssueType, type PdiEvent, type ProjectContext, type SemanticOutput, type Settings, type Snapshot } from '@ci/core';
+import { DEFAULT_POLICY, errorMessage, normalizeDecision, summarizeAiCalls, type AiCallRecord, type AiUsageRow, type Approval, type AutoCloseEvent, type HumanQuestion, type Decision, type StoredDecision, type DriftEvent, type IssueType, type PdiEvent, type ProjectContext, type SemanticOutput, type Settings, type Snapshot, type SuiteDecisionCache } from '@ci/core';
 import { FileBackend, type Backend } from './backend.js';
 import type { Principal } from './http.js';
 import { pruneToSchema, settingsBody } from './schemas.js';
@@ -35,6 +35,7 @@ export interface PdiState {
   requested?: Record<string, { at: string; by: string; event: string }>;
 }
 const pdiStateShape: Shape<PdiState> = (v): v is PdiState => isRecord(v);
+const suiteCacheShape: Shape<SuiteDecisionCache> = (v): v is SuiteDecisionCache => isRecord(v) && Array.isArray(v.decisions);
 /** A workspace other than `default` (F5, docs/WORKSPACES-F5-PLAN.md), listed in the default data directory. */
 export interface WorkspaceInfo {
   id: string;
@@ -349,6 +350,13 @@ export class Store {
   }
   updateAutoCloseLog(fn: (all: AutoCloseEvent[]) => AutoCloseEvent[] | void) {
     return this.update('auto-close.json', [], listOf<AutoCloseEvent>(), fn, true);
+  }
+  /** D9: the read-only copy of the suite decision index from pdi (installation-wide, kept with `default`). */
+  suiteDecisions() {
+    return this.readJson<SuiteDecisionCache>('suite-decisions.json', { decisions: [] }, suiteCacheShape);
+  }
+  updateSuiteDecisions(fn: (cache: SuiteDecisionCache) => SuiteDecisionCache | void) {
+    return this.update<SuiteDecisionCache>('suite-decisions.json', { decisions: [] }, suiteCacheShape, fn, true);
   }
   /** Events waiting for delivery to pdi, with their retry state. */
   pdiOutbox() {

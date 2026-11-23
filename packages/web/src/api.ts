@@ -1,7 +1,8 @@
-import type { AcceptanceStats, AnalysisResult, Approval, Decision, DeepPartial, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem, Settings } from '@ci/core';
+import type { AcceptanceStats, AnalysisResult, Approval, Decision, DeepPartial, NewDecision, DriftEvent, ImpactReport, ItemAnalysis, Relation, RequirementItem, Settings, SuiteDecision } from '@ci/core';
 import type { Me, Role } from './lib/account';
 import { authStep } from './lib/auth';
 import type { ChangeState } from './lib/changes';
+import type { SuiteCopyStatus } from './lib/suiteDecisions';
 import { DEFAULT_WORKSPACE, apiUrl } from './lib/workspace';
 import type { applicationBody, BetaStatus, BetaView, Question, SurveyKind, SurveyState, UsageReport } from './lib/beta';
 
@@ -265,6 +266,8 @@ export const api = {
   eraseOrg: (orgId: string, confirm: string) => req<{ erased: string; workspaces: number; people: number }>('POST', `/api/orgs/${encodeURIComponent(orgId)}/erase`, { confirm }),
   /** F4: pdi changes (stories labelled `change:CHG-n`) and whether the pdi link is on. */
   changes: () => req<{ pdi: boolean; changes: ChangeState[] }>('GET', '/api/changes'),
+  /** D9: decisions taken elsewhere in the suite (copy of pdi's index), of a change and/or matching words. */
+  suiteDecisions: (f: { change?: string; q?: string }) => req<SuiteCopyStatus & { decisions: SuiteDecision[] }>('GET', `/api/suite-decisions?${new URLSearchParams(Object.entries(f).filter(([, v]) => !!v) as [string, string][])}`),
   /** F4: ask pdi to decide the approval of a change that is not ready. Returns undefined when the user cancels. */
   requestApproval: async (change: string) => {
     const note = window.prompt(`Ask pdi to approve ${change} for implementation although it is not ready. Why? (optional, shown in pdi's inbox)`);
