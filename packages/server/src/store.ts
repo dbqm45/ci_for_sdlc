@@ -56,6 +56,8 @@ export interface PdiOutboxEntry {
   decisionId?: string;
   /** A2b: a reopen waits until this decision has its DEC, then supersedes it. */
   reopensDecisionId?: string;
+  /** D5: a withdrawal waits until pdi has this decision (its DEC); pdi supersedes it by the origin. */
+  afterDecisionId?: string;
   /** A2b: the step in the proposal log that gets the DEC. */
   logRef?: { proposalId: string; outcome: string; at: string };
 }

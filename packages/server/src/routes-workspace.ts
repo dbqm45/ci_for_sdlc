@@ -190,7 +190,7 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
   });
 
   app.post<{ Body: DecisionBody }>('/decisions', { schema: { summary: 'Answer a question or confirm a finding', body: decisionBody, response: errors(400, 422), ...MUTATION } }, async (req) => {
-    const { store, engine } = of(req);
+    const { store, engine, decisionSink } = of(req);
     const b = req.body;
     const by = who(req, b);
     if (!b?.questionId || !b.itemKey || !b.answer?.trim()) throw httpError(400, 'questionId, itemKey and answer are required');
@@ -215,6 +215,7 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
     });
     const change = decision.supersedes && decision.changeReason ? ` [v${decision.version}, replaces previous answer: ${decision.changeReason}]` : decision.version > 1 ? ` [v${decision.version}]` : '';
     await store.audit({ at: decision.decidedAt, kind: 'decision', ...by, summary: `${decision.itemKey}: "${decision.question}" → ${decision.answer} (${decision.effect})${change}` });
+    await decisionSink?.(decision);
     const result = await engine.analyze(`decision on ${decision.itemKey}`);
     return { decision, item: result.items.find((i) => i.key === decision.itemKey) };
   });
@@ -320,7 +321,7 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
 
   /** Decisions are never deleted: DELETE withdraws the active version and re-opens its finding. */
   app.delete<{ Params: { id: string }; Body: { by?: string; reason?: string } | null }>('/decisions/:id', { schema: { params: idParams, body: withdrawBody, response: errors(404, 422), ...MUTATION } }, async (req) => {
-    const { store, engine } = of(req);
+    const { store, engine, decisionSink } = of(req);
     const at = new Date().toISOString();
     const { actor: by, via } = who(req, req.body);
     let d: WithdrawnDecision | undefined;
@@ -331,6 +332,7 @@ export async function workspaceRoutes(app: FastifyInstance, { of, connect }: Wor
     });
     if (!d) throw httpError(404, 'No active decision with this id');
     await store.audit({ at, kind: 'decision_withdrawn', actor: by, via, summary: `Decision withdrawn: ${d.itemKey} "${d.question}" (was: ${d.answer})${d.withdrawReason ? ` — ${d.withdrawReason}` : ''}` });
+    await decisionSink?.(d);
     return engine.analyze('decision withdrawn');
   });
 

@@ -7,7 +7,7 @@ import { AtlassianConnection, type ConnectConfig } from './connections.js';
 import { Engine } from './engine.js';
 import { WORKSPACE_ID_PATTERN } from './schemas.js';
 import { Store, type WorkspaceInfo } from './store.js';
-import { DEFAULT_WORKSPACE } from '@ci/core';
+import { DEFAULT_WORKSPACE, type Decision } from '@ci/core';
 
 /**
  * Workspaces (F5, docs/WORKSPACES-F5-PLAN.md): each has its own settings, sources, analysis, decisions, approvals,
@@ -29,6 +29,8 @@ export interface Workspace {
   orgId?: string;
   /** Where its decided A2a steps go besides the log (pdi's registry); set by buildApp. */
   sink?: AutoCloseSink;
+  /** D5: where a person's decision or its withdrawal goes besides the store (pdi's registry); set by buildApp. */
+  decisionSink?: (decision: Decision) => Promise<void>;
 }
 
 /** Where the workspaces keep their state. */

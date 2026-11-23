@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { decisionRecordedEvent, errorMessage, gateRequestedEvent, readinessEvents, type ChangeReadiness, type DecisionRecordedInput, type GateRequestInput, type PdiEvent } from '@ci/core';
+import { AUTO_CLOSE_DECISION_TYPE, decisionRecordedEvent, errorMessage, gateRequestedEvent, humanDecisionEvent, readinessEvents, type Decision, type ChangeReadiness, type DecisionRecordedInput, type GateRequestInput, type PdiEvent } from '@ci/core';
 import type { AutoCloseStep } from './auto-close.js';
 import type { PdiOutboxEntry, Store } from './store.js';
 
@@ -168,6 +168,32 @@ export class PdiLink {
     await this.store.updatePdiOutbox((all) => [...all, ...entries]);
   }
 
+  /**
+   * D5 (docs/PDI-D5-PLAN.md): a person's decision on a finding, or its withdrawal, as `decision.recorded` with its origin.
+   * A new version supersedes the DEC of the version it replaces only when that one was an answer from a source, which
+   * may have gone to pdi before D5 without origin; pdi links the rest by the origin. A withdrawal goes only when pdi has
+   * (or will get) the decision it withdraws, and waits for its DEC.
+   */
+  async enqueueHumanDecision(d: Decision, change: string | undefined, workspace?: string) {
+    if (!this.enabled) return;
+    const store = this.storeFor(workspace);
+    const now = this.clock().toISOString();
+    const opts = { change, publicUrl: this.publicUrl, workspace };
+    let entry: PdiOutboxEntry;
+    if (d.status === 'withdrawn') {
+      const queued = (await this.store.pdiOutbox()).some((e) => e.decisionId === d.id && (e.workspace ?? undefined) === workspace);
+      if (!d.pdiDecision && !queued) return;
+      // An answer from a source (A2b) may be in pdi without origin: the withdrawal names its DEC, like a reopen.
+      const wait = d.decisionType === AUTO_CLOSE_DECISION_TYPE ? { reopensDecisionId: d.id } : { afterDecisionId: d.id };
+      entry = { event: humanDecisionEvent(d, opts), attempts: 0, nextAt: now, ...wait };
+    } else {
+      const previous = d.supersedes ? (await store.decisions()).find((x) => x.id === d.supersedes) : undefined;
+      const supersedes = previous?.status === 'superseded' && previous.decisionType === AUTO_CLOSE_DECISION_TYPE ? previous.pdiDecision : undefined;
+      entry = { event: humanDecisionEvent(d, { ...opts, supersedes }), attempts: 0, nextAt: now, decisionId: d.id };
+    }
+    await this.store.updatePdiOutbox((all) => [...all, { ...entry, ...(workspace && { workspace }) }]);
+  }
+
   /** Runs `fn` after the queueing scheduled before it (errors are logged by the caller of deliver). */
   schedule(fn: () => Promise<unknown>) {
     this.pending = this.pending.then(fn).catch((e) => console.error(`[pdi] ${errorMessage(e)}`));
@@ -203,6 +229,7 @@ export class PdiLink {
     for (const queued of due) {
       if (Date.now() >= deadline) break;
       let entry = queued;
+      if (entry.afterDecisionId && !(await this.storeFor(entry.workspace).decisions()).find((d) => d.id === entry.afterDecisionId)?.pdiDecision) continue;
       if (entry.reopensDecisionId) {
         // A reopen supersedes the DEC of the decision it reopens; until pdi has given that one, it waits (no attempt).
         const dec = (await this.storeFor(entry.workspace).decisions()).find((d) => d.id === entry.reopensDecisionId)?.pdiDecision;
