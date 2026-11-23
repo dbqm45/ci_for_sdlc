@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.65] - 2026-11-23
+
+### Nowe
+
+- **server:** take the suite person as author of chat questions (#147)
+
 ## [0.1.64] - 2026-11-22
 
 ### Nowe
