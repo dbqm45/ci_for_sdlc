@@ -22,7 +22,7 @@ export function humanFinding(q: HumanQuestion): Finding {
     severity: 'warning',
     dimension: 'requirements',
     title,
-    explanation: `Asked by ${q.author} on ${q.askedAt.slice(0, 10)}${q.accepted ? `; accepted for refinement by ${q.acceptedBy ?? 'the Product Owner'}` : '; waiting for the Product Owner to accept it — until then it does not change readiness'}.`,
+    explanation: `Asked by ${q.author} on ${q.askedAt.slice(0, 10)} ${q.askedAt.slice(11, 16)} UTC${q.accepted ? `; accepted for refinement by ${q.acceptedBy ?? 'the Product Owner'}` : '; waiting for the Product Owner to accept it — until then it does not change readiness'}.`,
     evidence: q.link
       ? [
           {

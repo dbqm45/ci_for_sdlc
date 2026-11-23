@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Decision, Finding, Question } from '@ci/core';
 import { api, currentUser, errMsg } from '../api';
 import { AUTO_CLOSE, pdiDecisionLabel } from '../lib/autoClose';
+import { askedLine, localDateTime } from '../lib/questions';
 import { CATEGORY_LABELS, Chevron, DIMENSION_LABELS, QuestionMark, SeverityBadge, Source, StatusIcon } from './ui';
 
 /** Finding → Explanation → Evidence → Question → Decision */
@@ -17,7 +18,7 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
         {finding.origin === 'ai' && <span className="badge accent" title="Found by the semantic AI reviewer — backed by cited evidence">AI</span>}
         {finding.origin === 'drift' && <span className="badge warn">Drift</span>}
         {finding.human && (
-          <span className="badge" title={`Asked on ${finding.human.askedAt.slice(0, 10)}`}>
+          <span className="badge" title={`Asked on ${localDateTime(finding.human.askedAt)}`}>
             Question from {finding.human.author}
           </span>
         )}
@@ -27,7 +28,7 @@ export function FindingCard({ finding, decision, onChanged }: { finding: Finding
         <span className="right small faint mono" title="Rule that produced this finding">{finding.ruleId}</span>
       </div>
       <div className="title">{finding.title}</div>
-      <p>{finding.explanation}</p>
+      <p>{finding.human ? askedLine(finding.human) : finding.explanation}</p>
       <div>
         <button className="btn ghost sm row" onClick={() => setWhy(!why)}>
           <Chevron open={why} /> WHY? — {finding.evidence.length} source{finding.evidence.length === 1 ? '' : 's'}
