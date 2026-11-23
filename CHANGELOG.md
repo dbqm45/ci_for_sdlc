@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.67] - 2026-11-23
+
+### Nowe
+
+- **server:** send every finding decision to pdi with its origin (D5) (#149)
+
 ## [0.1.66] - 2026-11-23
 
 ### Poprawione
