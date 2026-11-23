@@ -63,6 +63,16 @@ describe('questions from a chat app (step 16)', () => {
     expect(f).toMatchObject({ origin: 'human', human: { author: 'Ola (Slack)', accepted: false } });
   });
 
+  it('CHQ-06: a question from a Slack user matched to a suite person has their suite name and id', async () => {
+    const key = await storyKey();
+    const sub = '7badb004-5f2f-4791-838f-9ee86d26839d';
+    const { status, body } = await send({ ...question(key, 'Ev07SUITE'), author: { name: 'Ola Nowak', user: 'U012AB3CD', suite_id: sub } });
+    expect(status).toBe(200);
+    expect(body.question).toMatchObject({ author: 'Ola Nowak', authorId: sub, via: { platform: 'slack', user: 'U012AB3CD', event: 'Ev07SUITE' } });
+    expect(parseChannelQuestion({ ...question(key), author: { name: 'Ola', user: 'U012AB3CD', suite_id: 'not-a-uuid' } })).toMatch(/^author\.suite_id/);
+    expect(parseChannelQuestion({ ...question(key), author: { name: 'Ola', user: 'U012AB3CD', email: 'x@example.com' } })).toMatch(/^Unknown author fields/);
+  });
+
   it('CHQ-02: a retried delivery of the same event adds nothing', async () => {
     const key = await storyKey();
     const first = await send(question(key, 'Ev02RETRY'));

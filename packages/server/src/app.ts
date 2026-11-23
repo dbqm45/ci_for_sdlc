@@ -1299,7 +1299,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
   /**
    * A question asked in a chat app (step 16: DI Channels, Slack first). Signed like the pdi webhook, with the secret
    * shared with di-channels: `X-DI-Signature: v1=<hex HMAC-SHA256(CI_CHANNELS_SIGNING_SECRET, "<X-DI-Timestamp>.<raw body>")>`.
-   * Until the suite identity (step 14) exists, the author is the chat display name, marked with the platform.
+   * The author is the suite person when di-channels matched the Slack user to one (`author.suite_id`, by e-mail through
+   * di-identity): their suite name, with the id kept on the question. Otherwise the chat display name, marked with the
+   * platform.
    * Without the secret the route does not exist (404).
    */
   const channelsSecret = (opts.channels?.secret ?? process.env.CI_CHANNELS_SIGNING_SECRET) || undefined;
@@ -1321,8 +1323,15 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
       if (typeof q === 'string') throw httpError(400, q);
       const w = workspaces.get(q.workspace ?? DEFAULT_WORKSPACE);
       if (!w) throw httpError(404, `No workspace ${q.workspace}`);
-      const author = `${q.author.name} (Slack)`;
-      const { question, duplicate } = await addQuestion(w.store, w.engine, q.item, { text: q.text, link: q.link, author, via: { platform: q.platform, user: q.author.user, event: q.id } }, { actor: author, via: 'channels_signature' });
+      const suiteId = q.author.suite_id;
+      const author = suiteId ? q.author.name : `${q.author.name} (Slack)`;
+      const { question, duplicate } = await addQuestion(
+        w.store,
+        w.engine,
+        q.item,
+        { text: q.text, link: q.link, author, ...(suiteId && { authorId: suiteId }), via: { platform: q.platform, user: q.author.user, event: q.id } },
+        { actor: author, via: 'channels_signature' },
+      );
       const base = connect.publicUrl?.replace(/\/+$/, '');
       return { question, duplicate, ...(base && { url: `${base}/#${workspacePath(w.id === DEFAULT_WORKSPACE ? undefined : w.id)}/item/${encodeURIComponent(q.item)}` }) };
     });

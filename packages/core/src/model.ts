@@ -534,6 +534,8 @@ export interface HumanQuestion {
   /** An optional link (a page, a frame, a screenshot elsewhere). */
   readonly link?: string;
   readonly author: string;
+  /** The author's id (`sub`) in the suite identity service, when the chat user was matched to a suite person. */
+  readonly authorId?: string;
   readonly askedAt: string;
   readonly accepted: boolean;
   readonly acceptedBy?: string;
