@@ -9,6 +9,7 @@ import { Bar, Card, Chevron, DIMENSION_LABELS, DateTime, EmptyState, HealthNumbe
 import { ChevronIcon, ListIcon, SearchIcon, SettingsIcon, SlidersIcon, SparkleIcon } from '../components/icons';
 import { acTestRows, acTestsSummary } from '../lib/acTests';
 import { canAskPdi, changeLabel, changeOfItem, type ChangeState } from '../lib/changes';
+import { orderFindings } from '../lib/questions';
 
 type Tab = 'findings' | 'challenge' | 'states' | 'context' | 'claims' | 'history';
 
@@ -61,8 +62,8 @@ export function ItemPage({ itemKey, focusFinding }: { itemKey: string; focusFind
   if (err) return <ItemNotFound itemKey={itemKey} message={err} navigate={navigate} />;
   if (!d) return <div className="empty"><Spinner /></div>;
   const a = d.item;
-  const open = a.findings.filter((f) => f.status === 'open');
-  const closed = a.findings.filter((f) => f.status !== 'open');
+  const open = orderFindings(a.findings.filter((f) => f.status === 'open'));
+  const closed = orderFindings(a.findings.filter((f) => f.status !== 'open'));
   const openChallenges = a.challenges.filter((c) => !c.answered);
   const decisionFor = (qid?: string) => d.decisions.find((x) => x.questionId === qid);
 
