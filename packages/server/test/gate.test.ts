@@ -249,6 +249,50 @@ describe('analyze --sarif (Z8c, docs/SECURITY-SCAN-PLAN.md)', () => {
     expect(bad.out).toMatch(/::error title=Security scan::Cannot read the pull request against origin\/nope/);
   });
 
+  it('GATE-20: with --base the decisions whose applies_to covers the changed files are listed with the question; warnings and a summary table; the exit code is unchanged', async () => {
+    const { root, git, commit } = repo();
+    const data = join(tmp, `data${n++}`);
+    const store = new Store(data);
+    await store.init();
+    await store.updateSuiteDecisions(() => ({
+      decisions: [
+        { id: 'DEC-41', statement: 'History reads only from the replica', why: 'History must stay fast.', status: 'recorded', app: 'pdi', appliesTo: { paths: ['web/**'] }, reviewBy: '2026-01-01', assumptions: [{ statement: 'The replica lags under 5 s', invalidatedIf: 'lag above 5 s' }] },
+        { id: 'DEC-42', statement: 'Old rule', status: 'superseded', app: 'pdi', appliesTo: { paths: ['web/**'] } },
+        { id: 'DEC-43', statement: 'Payments stay in lib', status: 'recorded', app: 'tf', appliesTo: { paths: ['lib/**'] } },
+      ],
+    }));
+    git('checkout', '-q', '-b', 'topic');
+    commit({ 'web/history.ts': 'y', 'web/list.ts': 'z' }, 'feat: faster list');
+    const summary = join(root, 'summary.md');
+    const r = await gate(['--repo', root, '--base', 'main', '--fail-on', 'critical'], { CI_DATA_DIR: data, GITHUB_ACTIONS: 'true', GITHUB_STEP_SUMMARY: summary });
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/Decisions this pull request touches: 1/);
+    expect(r.out).toMatch(/DEC-41 \(pdi\) History reads only from the replica — web\/history\.ts, web\/list\.ts/);
+    expect(r.out).toMatch(/Does this pull request change DEC-41\?/);
+    expect(r.out).toMatch(/review date 2026-01-01 passed: reconsider/);
+    expect(r.out).toMatch(/::warning file=web\/history\.ts,title=Decision DEC-41::History reads only from the replica/);
+    expect(r.out).not.toMatch(/DEC-42|DEC-43/);
+    const md = readFileSync(summary, 'utf8');
+    expect(md).toMatch(/### Decisions this pull request touches/);
+    expect(md).toMatch(/\| DEC-41 \| pdi \| History reads only from the replica \| `web\/history\.ts`, `web\/list\.ts` \|/);
+    expect(md).toMatch(/The replica lags under 5 s/);
+  });
+
+  it('GATE-21: without --base, or with no matching decision, nothing about decisions is printed', async () => {
+    const { root, git, commit } = repo();
+    expect((await gate(['--repo', root, '--fail-on', 'critical'])).out).not.toMatch(/Decisions this pull request/);
+    git('checkout', '-q', '-b', 'topic');
+    commit({ 'docs/x.md': 'x' }, 'docs: x');
+    expect((await gate(['--repo', root, '--base', 'main', '--fail-on', 'critical'])).out).not.toMatch(/Decisions this pull request/);
+  });
+
+  it('GATE-22: a base git cannot read only warns about decisions and does not fail the gate', async () => {
+    const { root } = repo();
+    const r = await gate(['--repo', root, '--base', 'origin/nope', '--fail-on', 'critical']);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/Decisions this pull request touches: not checked \(Cannot read the pull request against origin\/nope/);
+  });
+
   it('GATE-18: a clean scan passes, and without --sarif nothing about a scan is printed', async () => {
     const { root } = repo();
     writeFileSync(join(root, 'clean.sarif'), sarif([]));

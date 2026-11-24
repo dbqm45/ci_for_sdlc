@@ -15,6 +15,8 @@
  *                                                    # with a security scan (SARIF): SEC-001…003 (docs/SECURITY-SCAN-PLAN.md)
  *   npm run analyze -- --repo . --coverage reports/lcov.info --mutation reports/stryker.json
  *                                                    # with coverage and mutation reports: TGT-001…TGT-004 (Z7b-1b, docs/TARGETS-PLAN.md)
+ *   npm run analyze -- --repo . --base origin/main   # also the suite decisions whose applies_to covers the files the
+ *                                                    # pull request changes (docs/DECISION-SCOPE-PLAN.md); informs only
  *
  * With `--repo`, a change file that cannot be read fails the gate whatever the threshold; so does a `--tests` report
  * (a JUnit XML file, or a directory of them; repeatable) or an `--openapi` contract file (OpenAPI 3.x, a file or a
@@ -34,12 +36,13 @@
 import { appendFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CHANGES_DIR, changeReadiness, placeOfResult, readCoverage, readMutation, readOpenApi, readRepoTargets, readSarif, readTestResults, securityByItem, securityRuleOf, targetsByItem, targetsStatusOf, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem, type SecurityScan, type TargetSummary } from '@ci/core';
+import { CHANGES_DIR, changeReadiness, decisionsTouched, placeOfResult, readCoverage, readMutation, readOpenApi, readRepoTargets, readSarif, readTestResults, securityByItem, securityRuleOf, targetsByItem, targetsStatusOf, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem, type SecurityScan, type TargetSummary, type TouchedDecision } from '@ci/core';
 import { AtlassianConnection, connectConfigFromEnv } from './connections.js';
 import { Engine } from './engine.js';
 import { PdiLink } from './pdi.js';
 import { readSliceFiles } from './slice-files.js';
 import { Store } from './store.js';
+import { SuiteDecisions } from './suite-decisions.js';
 
 export interface GateIo {
   env: Record<string, string | undefined>;
@@ -210,6 +213,27 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
     io.out('\nSecurity scan reports that could not be read:');
     for (const p of scanProblems) io.out(`  ✗ ${p.path ? `${p.path}: ` : ''}${p.message}`);
   }
+  // The suite decisions whose applies_to covers the files of the pull request (docs/DECISION-SCOPE-PLAN.md). Informs
+  // only: never changes the exit code; with CI_SUITE_DECISIONS_CMD the copy is refreshed first.
+  const base = arg('base');
+  const prRead = base && repoPath ? (slices ?? (await readSliceFiles(resolve(repoPath), { base }))) : undefined;
+  let touched: TouchedDecision[] = [];
+  if (prRead?.problem) io.out(`\nDecisions this pull request touches: not checked (${prRead.problem})`);
+  else if (prRead?.pr) {
+    const suite = new SuiteDecisions(store, { cmd: io.env.CI_SUITE_DECISIONS_CMD ?? '', env: io.env });
+    if (suite.enabled) await suite.refresh();
+    touched = decisionsTouched((await store.suiteDecisions()).decisions, prRead.pr.files, new Date().toISOString().slice(0, 10));
+  }
+  if (touched.length) {
+    io.out(`\nDecisions this pull request touches: ${touched.length}`);
+    for (const { decision: d, files, reviewDue } of touched) {
+      io.out(`  · ${d.id} (${d.app}) ${d.statement} — ${files.join(', ')}`);
+      if (d.why) io.out(`      why: ${d.why}`);
+      for (const a of d.assumptions ?? []) io.out(`      assumes: ${a.statement}${a.invalidatedIf ? ` (reconsider if ${a.invalidatedIf})` : ''}`);
+      if (reviewDue) io.out(`      review date ${d.reviewBy} passed: reconsider ${d.id}`);
+      io.out(`      Does this pull request change ${d.id}? no / yes — record a superseding decision / don't know (PR template: decision impact)`);
+    }
+  }
   const out = arg('json');
   if (out) await writeFile(out, JSON.stringify(result, null, 2));
 
@@ -248,6 +272,7 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
       }
     }
     for (const a of notes.values()) io.out(annotation(a.level, a.at, `${a.ruleId} ${a.keys.join(', ')}`, a.title));
+    for (const { decision: d, files } of touched) io.out(annotation('warning', { file: files[0] }, `Decision ${d.id}`, `${d.statement} (${d.app}) — does this pull request change it?`));
     const summary = io.env.GITHUB_STEP_SUMMARY;
     if (summary) {
       const md = [
@@ -260,6 +285,7 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
         ...items.map((i) => `| ${icon[i.healthStatus]} | ${i.key} | ${i.type} | ${cell(i.title)} | ${cell(i.blockingIssues.join('; '))} |`),
         ...(problems.length ? ['', `**Files that could not be read** (their changes were left out):`, '', ...problems.map((p) => `- \`${p.path}\`: ${cell(p.message)}`)] : []),
         ...(scanRead ? securitySummary(scanRead.results, engine.state.context, scanProblems) : []),
+        ...(touched.length ? decisionsSummary(touched) : []),
         '',
       ];
       await appendFile(summary, md.join('\n'));
@@ -289,6 +315,24 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
   if (apiProblems.length) io.err(`\n✗ Quality gate failed: ${apiProblems.length} API contract file(s) could not be read`);
   if (scanProblems.length) io.err(`\n✗ Quality gate failed: ${scanProblems.length} security scan report(s) could not be read`);
   return failing.length || problems.length || testProblems.length || apiProblems.length || scanProblems.length ? 1 : 0;
+}
+
+/** The step summary's section of the suite decisions the pull request touches, with the question to its author. */
+function decisionsSummary(touched: TouchedDecision[]): string[] {
+  return [
+    '',
+    '### Decisions this pull request touches',
+    '',
+    'The files of this pull request are covered by these decisions (`applies_to`). Does it change any of them? Answer in the "Decision impact" section of the description: no / yes — with a superseding decision / don\'t know.',
+    '',
+    '| Decision | App | Statement | Files | Why and assumptions |',
+    '|---|---|---|---|---|',
+    ...touched.map(({ decision: d, files, reviewDue }) => {
+      const notes = [d.why, ...(d.assumptions ?? []).map((a) => `assumes: ${a.statement}${a.invalidatedIf ? ` (reconsider if ${a.invalidatedIf})` : ''}`), reviewDue ? `review date ${d.reviewBy} passed` : undefined].filter(Boolean);
+      const id = d.link ? `[${d.id}](${d.link})` : d.id;
+      return `| ${id} | ${d.app} | ${cell(d.statement)} | ${files.slice(0, 10).map((f) => `\`${cell(f)}\``).join(', ')}${files.length > 10 ? ` +${files.length - 10}` : ''} | ${cell(notes.join('; '))} |`;
+    }),
+  ];
 }
 
 /** The step summary's security scan section: one row per result with its SEC rule and the items it went to. */
