@@ -56,7 +56,7 @@ describe('login with Atlassian', () => {
   it('AC-02: the first person with CI_BOOTSTRAP_EMAIL (any case) becomes Owner and gets a session', async () => {
     const { calls } = fakeAtlassian();
     app = await startAccounts(dir, { bootstrapEmail: 'ADA@Example.com' });
-    expect((await me()).json()).toEqual({ mode: 'accounts', user: null });
+    expect((await me()).json()).toEqual({ mode: 'accounts', user: null, suiteLogin: false });
     const { back, session } = await login(app.app);
     expect(back.statusCode).toBe(302);
     expect(back.headers.location).toBe('/');
@@ -252,7 +252,7 @@ describe('sessions', () => {
     process.env.CI_AUTH_MODE = 'accounts';
     process.env.CI_BOOTSTRAP_EMAIL = ADA.email;
     app = await buildApp({ dataDir: dir, adminToken: '', readToken: '', allowedHosts: [], allowedOrigins: [], connect: loginCfg });
-    expect((await me()).json()).toEqual({ mode: 'accounts', user: null });
+    expect((await me()).json()).toEqual({ mode: 'accounts', user: null, suiteLogin: false });
     expect((await login(app.app)).session).toBeDefined();
     await app.app.close();
     app = undefined;
@@ -265,7 +265,7 @@ describe('token mode (the default) is unchanged', () => {
   it('TM-01: me says token mode, login is off and loopback still changes data', async () => {
     fakeAtlassian();
     app = await buildApp({ dataDir: dir, adminToken: '', readToken: '', allowedHosts: [], allowedOrigins: [], connect: loginCfg });
-    expect((await me()).json()).toEqual({ mode: 'token', user: null });
+    expect((await me()).json()).toEqual({ mode: 'token', user: null, suiteLogin: false });
     expect((await app.app.inject({ method: 'GET', url: '/api/auth/login' })).statusCode).toBe(404);
     expect((await app.app.inject({ method: 'POST', url: '/api/analyze' })).statusCode).toBe(200);
     expect(app.accounts.bootstrapLink()).toBeUndefined();

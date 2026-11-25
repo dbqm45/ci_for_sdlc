@@ -15,6 +15,7 @@ import { AiBudget, aiPlatformFrom, type AiPlatformConfig, type BudgetStatus } fr
 import { Alerts, databaseResponds, heartbeat } from './monitoring.js';
 import { LOCAL_PEOPLE, MemoryMailer, localBetaMode, shiftedClock } from './beta-local.js';
 import { PostHogSink, Usage, triggerOf, usageReport, type UsageEventName, type UsageSink } from './usage.js';
+import { SUITE_CALLBACK_PATH, SUITE_LOGIN_COOKIE, SuiteLogin, checkIssuer, suiteLoginConfig, type SuiteLoginConfig } from './suite-login.js';
 import { CALLBACK_PATH, ConnectError, STATE_COOKIE, connectConfigFromEnv, cookieValue, stateCookie, type ConnectConfig } from './connections.js';
 import type { Engine } from './engine.js';
 import { PdiLink, pdiSignatureProblem, type PdiOptions } from './pdi.js';
@@ -59,6 +60,8 @@ export interface AppOptions {
   bootstrapEmail?: string;
   /** Defaults to CI_OPERATOR_EMAILS (comma-separated): who may open organizations (docs/ORGANIZATIONS-PLAN.md). */
   operatorEmails?: string[];
+  /** Login through the suite's identity service beside Atlassian (docs/SUITE-LOGIN-PLAN.md); defaults to CI_SUITE_*. */
+  suite?: SuiteLoginConfig;
   /** Who gets the monitoring alerts (T6); defaults to CI_ALERT_EMAILS, else CI_OPERATOR_EMAILS. */
   alertEmails?: string[];
   /** The platform's AI and its limits (T4); defaults to CI_AI_PROVIDER and friends; `false` = none. */
@@ -205,6 +208,9 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     sessionsNeverExpire: local.enabled,
   });
   if (accounts.enabled) await accounts.init();
+  const suiteCfg = opts.suite ?? suiteLoginConfig();
+  if (suiteCfg) checkIssuer(suiteCfg.issuer);
+  const suiteLogin = accounts.enabled && suiteCfg ? new SuiteLogin(suiteCfg, connect.publicUrl) : undefined;
 
   // The closed beta's applications and enrollments, beside the accounts (docs/BETA-ENROLLMENT-PLAN.md).
   const beta = new BetaEnrollments(storage.backend('_platform'), {
@@ -524,14 +530,43 @@ export async function buildApp(opts: AppOptions): Promise<{ app: FastifyInstance
     return reply.redirect(url);
   });
 
+  // Login through the suite's identity service (docs/SUITE-LOGIN-PLAN.md), beside the login with Atlassian.
+  app.get('/api/auth/suite/login', { schema: { hide: true } }, async (req, reply) => {
+    if (!suiteLogin) throw httpError(404, 'The suite login is off: CI_SUITE_ISSUER is not set (or CI_AUTH_MODE is not "accounts").');
+    try {
+      const { url, cookie } = await suiteLogin.start();
+      reply.header('set-cookie', cookie);
+      return reply.redirect(url);
+    } catch (e) {
+      req.log.warn(`The suite identity service is not reachable: ${(e as Error).message}`);
+      return reply.redirect(`/?login_error=${encodeURIComponent('The suite identity service is not reachable. Try again in a moment.')}`);
+    }
+  });
+  const suiteCallbackQuery = { type: 'object', properties: { code: { type: 'string', maxLength: 2000 }, state: { type: 'string', maxLength: 200 }, error: { type: 'string', maxLength: 200 } } } as const;
+  app.get<{ Querystring: { code?: string; state?: string; error?: string } }>(SUITE_CALLBACK_PATH, { schema: { hide: true, querystring: suiteCallbackQuery } }, async (req, reply) => {
+    if (!suiteLogin) throw httpError(404, 'The suite login is off.');
+    reply.header('set-cookie', suiteLogin.loginCookie('', 0));
+    try {
+      const person = await suiteLogin.complete({ ...req.query, cookieState: cookieValue(req.headers.cookie, SUITE_LOGIN_COOKIE) });
+      const { id } = await accounts.suiteLogin(person, suiteLogin.cfg.organization);
+      reply.header('set-cookie', accounts.sessionCookie(id));
+      return reply.redirect('/');
+    } catch (e) {
+      if (!(e instanceof ConnectError)) req.log.error(e);
+      else if (e.cause instanceof Error) req.log.warn(`Suite login refused: ${e.cause.message}`);
+      return reply.redirect(`/?login_error=${encodeURIComponent(e instanceof ConnectError ? e.message : 'The login failed. Details are in the server log.')}`);
+    }
+  });
+
   app.get('/api/auth/me', { schema: { summary: 'The auth mode and the logged-in person with their organization, if any' } }, async (req) => {
     const a = req.account;
     const localInfo = local.enabled ? { local: { offsetDays: Math.round((clock!.offsetMs / 86_400_000) * 10) / 10, now: new Date().toISOString() } } : {};
-    if (!a) return { mode: authMode, user: null, ...localInfo };
+    if (!a) return { mode: authMode, user: null, suiteLogin: !!suiteLogin, ...localInfo };
     const org = accounts.org(a.orgId);
     const mine = workspaces.all().filter((w) => visible(req, w));
     return {
       mode: authMode,
+      suiteLogin: !!suiteLogin,
       user: { id: a.userId, name: a.name, email: a.email, role: a.role, operator: a.operator },
       org: org ? { id: org.id, name: org.name } : null,
       // Where the app opens: `default` when the person sees it, else their organization's first workspace.

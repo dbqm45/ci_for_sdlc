@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { api, currentUser, currentWorkspace, loginUrl, readToken, setAccountsMode, setWorkspace, workspaceApi, type AnalysisResult, errMsg } from './api';
-import { disabledReason, loginErrorFrom, roleLabel, showLogin, startWorkspace, type Me } from './lib/account';
+import { api, currentUser, currentWorkspace, loginUrl, SUITE_LOGIN_URL, readToken, setAccountsMode, setWorkspace, workspaceApi, type AnalysisResult, errMsg } from './api';
+import { disabledReason, loginErrorFrom, offersSuiteLogin, roleLabel, showLogin, startWorkspace, type Me } from './lib/account';
 import { WorkspaceSelect } from './components/WorkspaceSelect';
 import { hashPath, parseHashPath } from './lib/workspace';
 import { ago, Sdot, Source, Spinner } from './components/ui';
@@ -200,8 +200,8 @@ function AccountMenu({ navigate, me }: { navigate: (p: string) => void; me?: Me 
   );
 }
 
-/** Accounts mode without a session: the only way in is logging in with Atlassian (or an invitation link). */
-function LoginScreen() {
+/** Accounts mode without a session: logging in with Atlassian (or an invitation link), or through the suite when offered. */
+function LoginScreen({ suite }: { suite: boolean }) {
   const error = loginErrorFrom(location.search);
   const [betaOpen, setBetaOpen] = useState(false);
   useEffect(() => void api.betaInfo().then((b) => setBetaOpen(b.open)).catch(() => undefined), []);
@@ -221,6 +221,11 @@ function LoginScreen() {
         <a className="btn primary" href={loginUrl()}>
           Log in with Atlassian
         </a>
+        {suite && (
+          <a className="btn" href={SUITE_LOGIN_URL}>
+            Log in with the suite
+          </a>
+        )}
         {betaOpen && (
           <p className="small muted">
             New here? <a href="#/beta">Apply for the closed beta</a>
@@ -371,7 +376,7 @@ export function App() {
     );
   if (me?.local && localPage(location.hash) === 'login') return <LocalLogin />;
   if (me?.local && localPage(location.hash) === 'mail') return <LocalMailbox />;
-  if (showLogin(me)) return me?.local ? <LocalLogin /> : <LoginScreen />;
+  if (showLogin(me)) return me?.local ? <LocalLogin /> : <LoginScreen suite={offersSuiteLogin(me)} />;
 
   let page;
   if (!analysis && !error) page = <div className="empty"><Spinner /> Discovering context and analyzing…</div>;

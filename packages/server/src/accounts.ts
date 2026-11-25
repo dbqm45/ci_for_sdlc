@@ -3,6 +3,7 @@ import type { Backend } from './backend.js';
 import { ATLASSIAN_AUTH, CALLBACK_PATH, ConnectError, tokenRequest } from './connections.js';
 import { httpError } from './http.js';
 import { atLeast, type Role } from './roles.js';
+import type { SuitePerson } from './suite-login.js';
 
 /**
  * People, organizations and sessions (docs/ACCOUNTS-PLAN.md, docs/ORGANIZATIONS-PLAN.md), kept in the reserved
@@ -27,7 +28,8 @@ const INVITE_GONE = 'This invitation is no longer valid. Ask an administrator fo
 const INVITE_OTHER_EMAIL = 'This invitation is for a different e-mail address. Log in with that Atlassian account or ask for a new invitation.';
 
 export interface Identity {
-  provider: 'atlassian';
+  /** `suite`: a person from the suite's identity service (docs/SUITE-LOGIN-PLAN.md), without an e-mail (DI3). */
+  provider: 'atlassian' | 'suite';
   subject: string;
   name: string;
   email: string;
@@ -115,6 +117,18 @@ export interface AccountsConfig {
   operatorEmails?: string[];
   /** The local beta walkthrough moves the clock by days: sessions then do not expire (docs/BETA-LOCAL.md). */
   sessionsNeverExpire?: boolean;
+}
+
+const NOT_SUITE_MEMBER = "Your suite account is not a member of the organization that uses DI Definition. Ask your organization's administrator.";
+const NO_SUITE_ROLE = 'Your suite account has no role in DI Definition. Ask an administrator to grant you one.';
+const SUITE_NOT_SET_UP = 'DI Definition is not set up yet: the first person to log in needs the admin role in the suite. Ask your administrator.';
+
+/** The role a suite role gives here (docs/SUITE-LOGIN-PLAN.md): the strongest one the token lists, or none. */
+export function suiteRole(roles: string[]): Exclude<Role, 'owner'> | undefined {
+  if (roles.includes('admin')) return 'admin';
+  if (roles.includes('editor')) return 'member';
+  if (roles.includes('viewer')) return 'viewer';
+  return undefined;
 }
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
@@ -260,6 +274,44 @@ export class Accounts {
       this.sessions.push({ hash: sha256(id), userId: user.id, createdAt: now, lastSeenAt: now });
       await this.backend.write('sessions.json', this.sessions);
       return { id, joined };
+    });
+  }
+
+  /**
+   * Logs in a person from the suite (docs/SUITE-LOGIN-PLAN.md) into the first organization: only a member of the
+   * suite organization `organization`, with the role the token gives now. Owner does not come from the suite: a person
+   * with `admin` becomes Owner when the organization has none (also the very first login), and stays Owner while the
+   * token still says `admin`. Returns the new session id; errors are ConnectError with a message for the login screen.
+   */
+  async suiteLogin(person: SuitePerson, organization: string): Promise<{ id: string }> {
+    if (!person.organizations.includes(organization)) throw new ConnectError('not_member', NOT_SUITE_MEMBER);
+    const role = suiteRole(person.roles);
+    if (!role) throw new ConnectError('no_role', NO_SUITE_ROLE);
+    return this.serial(async () => {
+      const now = new Date().toISOString();
+      let org = this.orgs[0];
+      if (!org) {
+        if (role !== 'admin') throw new ConnectError('not_set_up', SUITE_NOT_SET_UP);
+        org = { id: randomUUID(), name: 'Organization', createdAt: now };
+        this.orgs.push(org);
+        await this.backend.write('orgs.json', this.orgs);
+      }
+      const orgId = org.id;
+      let user = this.users.find((u) => u.provider === 'suite' && u.subject === person.sub);
+      if (user) Object.assign(user, { name: person.name, lastLoginAt: now });
+      else this.users.push((user = { id: randomUUID(), provider: 'suite', subject: person.sub, name: person.name, email: '', createdAt: now, lastLoginAt: now }));
+      const userId = user.id;
+      const current = this.memberships.find((m) => m.userId === userId);
+      const ownerless = !this.memberships.some((m) => m.orgId === orgId && m.role === 'owner' && m.userId !== userId);
+      const next: Role = role === 'admin' && (current?.role === 'owner' || ownerless) ? 'owner' : role;
+      this.memberships = this.memberships.filter((m) => m.userId !== userId);
+      this.memberships.push({ userId, orgId, role: next });
+      await this.backend.write('users.json', this.users);
+      await this.backend.write('memberships.json', this.memberships);
+      const id = token();
+      this.sessions.push({ hash: sha256(id), userId, createdAt: now, lastSeenAt: now });
+      await this.backend.write('sessions.json', this.sessions);
+      return { id };
     });
   }
 

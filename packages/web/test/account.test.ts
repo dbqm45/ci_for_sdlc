@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignableRoles, canManage, disabledReason, loginErrorFrom, roleLabel, showLogin, startWorkspace, type Me } from '../src/lib/account';
+import { assignableRoles, canManage, disabledReason, loginErrorFrom, offersSuiteLogin, roleLabel, showLogin, startWorkspace, type Me } from '../src/lib/account';
 import { authStep } from '../src/lib/auth';
 
 // Accounts mode (docs/ACCOUNTS-PLAN.md, stage 2): the login screen, the person menu and buttons a role may not use.
@@ -19,6 +19,13 @@ describe('who is logged in', () => {
     expect(loginErrorFrom('?login_error=This%20invitation%20is%20no%20longer%20valid.')).toBe('This invitation is no longer valid.');
     expect(loginErrorFrom('?x=1')).toBe('');
     expect(loginErrorFrom('')).toBe('');
+  });
+
+  it('ACC-02b: the login screen offers the suite login only when the server has it (docs/SUITE-LOGIN-PLAN.md)', () => {
+    expect(offersSuiteLogin({ mode: 'accounts', user: null, suiteLogin: true })).toBe(true);
+    expect(offersSuiteLogin({ mode: 'accounts', user: null, suiteLogin: false })).toBe(false);
+    expect(offersSuiteLogin({ mode: 'accounts', user: null })).toBe(false);
+    expect(offersSuiteLogin(undefined)).toBe(false);
   });
 
   it('ACC-03: roles have readable names', () => {
