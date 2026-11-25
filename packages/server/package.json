@@ -17,8 +17,8 @@
   },
   "dependencies": {
     "@ci/core": "*",
-    "@fastify/static": "^10.1.10",
-    "@fastify/swagger": "^9.9.3",
+    "@fastify/static": "^10.1.12",
+    "@fastify/swagger": "^9.9.5",
     "fastify": "^5.12.8",
     "pg": "^8.23.1",
     "tsx": "^4.19.2"
@@ -26,7 +26,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/pg": "^8.23.1",
-    "@vitest/coverage-v8": "^5.1.0",
-    "vitest": "^5.1.0"
+    "@vitest/coverage-v8": "^5.1.1",
+    "vitest": "^5.1.1"
   }
 }
