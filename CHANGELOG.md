@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.72] - 2026-11-25
+
+### Nowe
+
+- **server:** let people log in through the suite identity service (#154)
+
 ## [0.1.71] - 2026-11-25
 
 ### Nowe
