@@ -100,6 +100,8 @@ Viewer; szczegóły w [`ACCOUNTS-PLAN.md`](ACCOUNTS-PLAN.md)). Działa w obu try
    | `RESEND_API_KEY`, `CI_MAIL_FROM` | maile bety przez Resend (klucz tylko w zmiennej środowiskowej albo menedżerze sekretów; nadawca z domeny zweryfikowanej w Resend, np. `Quorum <beta@twoja-domena>`); bez nich maile trafiają tylko do logu |
 
    *Callback URL* jest ten sam co dla połączenia (`…/api/connections/atlassian/callback`); nie dodawaj drugiego.
+   Obok Atlassian osoby mogą logować się przez tożsamość suity (DI Identity, `CI_SUITE_*`):
+   [`SUITE-LOGIN-PLAN.md`](SUITE-LOGIN-PLAN.md).
    `CI_ENCRYPTION_KEY` jest potrzebny tylko dla połączenia w trybie `oauth`.
 3. Pierwszy Owner: bez `CI_BOOTSTRAP_EMAIL` serwer wypisuje przy starcie jednorazowy link
    `…/api/auth/login?bootstrap=…`. Otwórz go i zaloguj się kontem Atlassian. Kolejne osoby zapraszasz w

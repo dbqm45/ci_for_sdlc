@@ -12,6 +12,8 @@ const PUBLIC: Record<string, { status: number; why: string }> = {
   'GET /api/health': { status: 200, why: 'uptime monitor and Render health check; version and booleans only' },
   'GET /api/auth/me': { status: 200, why: 'tells the web app whether to show the login screen; no data without a session' },
   'GET /api/auth/login': { status: 302, why: 'starts the Atlassian login' },
+  'GET /api/auth/suite/login': { status: 404, why: 'starts the suite login (docs/SUITE-LOGIN-PLAN.md): absent without CI_SUITE_ISSUER; with it, a redirect to the identity service (suite-login tests)' },
+  'GET /api/auth/suite/callback': { status: 404, why: 'the suite login return: absent without CI_SUITE_ISSUER; with it, checks its one-time state, PKCE and the signed ID token' },
   'GET /api/connections/atlassian/callback': { status: 302, why: 'OAuth return; checks its one-time state' },
   'GET /api/beta': { status: 200, why: 'whether the beta form is open' },
   'POST /api/beta/apply': { status: 422, why: 'the beta form: validated, rate limited, then a fixed-text confirmation mail to the address' },

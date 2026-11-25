@@ -362,6 +362,8 @@ export interface BetaEnrollment extends BetaView {
 }
 
 /** Where the browser goes to log in; an invitation token rides along. */
+/** Login through the suite's identity service (docs/SUITE-LOGIN-PLAN.md). */
+export const SUITE_LOGIN_URL = '/api/auth/suite/login';
 export const loginUrl = (invite?: string) => `/api/auth/login${invite ? `?invite=${encodeURIComponent(invite)}` : ''}`;
 
 const USER_KEY = 'ci.user';

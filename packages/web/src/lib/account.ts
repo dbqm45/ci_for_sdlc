@@ -25,6 +25,8 @@ export interface Me {
   home?: string | null;
   /** The organization's closed beta, if it takes part (docs/BETA-ENROLLMENT-PLAN.md). */
   beta?: BetaView | null;
+  /** The server also logs people in through the suite's identity service (docs/SUITE-LOGIN-PLAN.md). */
+  suiteLogin?: boolean;
   /** The local beta walkthrough (CI_BETA_LOCAL=1, docs/BETA-LOCAL.md): how far the clock was moved. */
   local?: { offsetDays: number; now: string };
 }
@@ -46,6 +48,9 @@ export function disabledReason(me: Me | undefined, need: Role): string | undefin
   if (me?.mode !== 'accounts' || !me.user || atLeast(me.user.role, need)) return undefined;
   return `Needs the ${roleLabel(need)} role`;
 }
+
+/** The login screen offers "Log in with the suite" beside Atlassian. */
+export const offersSuiteLogin = (me: Me | undefined) => me?.mode === 'accounts' && me.suiteLogin === true;
 
 /** The message the server put in the address after a refused login (`?login_error=…`). */
 export const loginErrorFrom = (search: string) => new URLSearchParams(search).get('login_error') ?? '';
