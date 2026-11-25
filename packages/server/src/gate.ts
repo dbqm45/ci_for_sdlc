@@ -16,7 +16,10 @@
  *   npm run analyze -- --repo . --coverage reports/lcov.info --mutation reports/stryker.json
  *                                                    # with coverage and mutation reports: TGT-001…TGT-004 (Z7b-1b, docs/TARGETS-PLAN.md)
  *   npm run analyze -- --repo . --base origin/main   # also the suite decisions whose applies_to covers the files the
- *                                                    # pull request changes (docs/DECISION-SCOPE-PLAN.md); informs only
+ *                                                    # pull request changes (docs/DECISION-SCOPE-PLAN.md); with the
+ *                                                    # description (--pr-body FILE, or the pull request event in GitHub
+ *                                                    # Actions) an unanswered "Decision impact" section, or "yes"
+ *                                                    # without a superseding decision, fails the gate
  *
  * With `--repo`, a change file that cannot be read fails the gate whatever the threshold; so does a `--tests` report
  * (a JUnit XML file, or a directory of them; repeatable) or an `--openapi` contract file (OpenAPI 3.x, a file or a
@@ -33,10 +36,10 @@
  * was not delivered stays queued for the next run; delivery never changes the exit code (docs/PDI-L3-PLAN.md).
  * Exit codes: 0 passed, 1 failed, 2 could not run (e.g. no changes folder).
  */
-import { appendFile, writeFile } from 'node:fs/promises';
+import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CHANGES_DIR, changeReadiness, decisionsTouched, placeOfResult, readCoverage, readMutation, readOpenApi, readRepoTargets, readSarif, readTestResults, securityByItem, securityRuleOf, targetsByItem, targetsStatusOf, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem, type SecurityScan, type TargetSummary, type TouchedDecision } from '@ci/core';
+import { CHANGES_DIR, changeReadiness, decisionImpactOf, decisionsTouched, placeOfResult, readCoverage, readMutation, readOpenApi, readRepoTargets, readSarif, readTestResults, securityByItem, securityRuleOf, targetsByItem, targetsStatusOf, type Finding, type ItemAnalysis, type RepoProblem, type RequirementItem, type SecurityScan, type TargetSummary, type TouchedDecision } from '@ci/core';
 import { AtlassianConnection, connectConfigFromEnv } from './connections.js';
 import { Engine } from './engine.js';
 import { PdiLink } from './pdi.js';
@@ -234,6 +237,25 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
       io.out(`      Does this pull request change ${d.id}? no / yes — record a superseding decision / don't know (PR template: decision impact)`);
     }
   }
+  // Step 2: the answer in the description's "Decision impact" section (docs/DECISION-SCOPE-PLAN.md).
+  let impactFailure: string | undefined;
+  let impactWarning: string | undefined;
+  const body = touched.length ? await prBodyOf(arg('pr-body'), io.env) : undefined;
+  if (body !== undefined) {
+    const ids = touched.map((t) => t.decision.id).join(', ');
+    const impact = decisionImpactOf(body);
+    if (impact.answer === 'missing' || impact.answer === 'unanswered') {
+      impactFailure = `answer the Decision impact section of the pull request (${ids})`;
+      io.out(`  Decision impact: ${impact.answer} — answer it in the pull request description: no / yes with a superseding decision / don't know`);
+    } else if (impact.answer === 'yes' && !impact.superseding.length) {
+      impactFailure = `the pull request changes ${ids} without a superseding decision`;
+      io.out('  Decision impact: yes — but no superseding decision (DEC-n) is named');
+    } else if (impact.answer === 'yes') io.out(`  Decision impact: yes — superseded by ${impact.superseding.join(', ')}`);
+    else if (impact.answer === 'unknown') {
+      impactWarning = `the author does not know (don't know) whether the pull request changes ${ids}: the reviewer decides`;
+      io.out("  Decision impact: don't know — the reviewer decides");
+    } else io.out('  Decision impact: no');
+  }
   const out = arg('json');
   if (out) await writeFile(out, JSON.stringify(result, null, 2));
 
@@ -273,6 +295,8 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
     }
     for (const a of notes.values()) io.out(annotation(a.level, a.at, `${a.ruleId} ${a.keys.join(', ')}`, a.title));
     for (const { decision: d, files } of touched) io.out(annotation('warning', { file: files[0] }, `Decision ${d.id}`, `${d.statement} (${d.app}) — does this pull request change it?`));
+    if (impactFailure) io.out(annotation('error', {}, 'Decision impact', impactFailure));
+    if (impactWarning) io.out(annotation('warning', {}, 'Decision impact', impactWarning));
     const summary = io.env.GITHUB_STEP_SUMMARY;
     if (summary) {
       const md = [
@@ -314,7 +338,24 @@ export async function runGate(args: string[], io: GateIo): Promise<number> {
   if (testProblems.length) io.err(`\n✗ Quality gate failed: ${testProblems.length} test report(s) could not be read`);
   if (apiProblems.length) io.err(`\n✗ Quality gate failed: ${apiProblems.length} API contract file(s) could not be read`);
   if (scanProblems.length) io.err(`\n✗ Quality gate failed: ${scanProblems.length} security scan report(s) could not be read`);
-  return failing.length || problems.length || testProblems.length || apiProblems.length || scanProblems.length ? 1 : 0;
+  if (impactFailure) io.err(`\n✗ Quality gate failed: ${impactFailure}`);
+  return failing.length || problems.length || testProblems.length || apiProblems.length || scanProblems.length || impactFailure ? 1 : 0;
+}
+
+/**
+ * The pull request description: `--pr-body FILE`, else in GitHub Actions the event's `pull_request.body` (an empty body
+ * is ''); undefined when there is no pull request to read (a push, a local run) — then the check only informs.
+ */
+async function prBodyOf(file: string | undefined, env: GateIo['env']): Promise<string | undefined> {
+  if (file) return readFile(resolve(file), 'utf8').catch(() => '');
+  if (env.GITHUB_ACTIONS !== 'true' || !env.GITHUB_EVENT_PATH) return undefined;
+  try {
+    const event = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8')) as { pull_request?: { body?: unknown } };
+    if (!event.pull_request || typeof event.pull_request !== 'object') return undefined;
+    return typeof event.pull_request.body === 'string' ? event.pull_request.body : '';
+  } catch {
+    return undefined;
+  }
 }
 
 /** The step summary's section of the suite decisions the pull request touches, with the question to its author. */

@@ -112,7 +112,7 @@
         tabeli i konflikt z historyjką), przypadek w zestawie ewaluacyjnym recenzenta AI; zmiana `meaningHash`
         stron z tabelami da jednorazowy dryf — opisać w notatce wydania.
       - Źródła PDF i skany nie dotyczą ci_for_sdlc (czyta HTML Confluence, Figmę, Markdown i OpenAPI).
-- [x] **Reguła: PR rusza obszar przyjętej decyzji** (zrobione 2026-11-24 w wersji informującej: `analyze --base` wypisuje decyzje suity, których `applies_to` obejmuje pliki PR-a, z pytaniem; ostrzeżenia i tabela w podsumowaniu; szablon PR „Wpływ na decyzje”; blokowanie po odpowiedzi z opisu PR — następny krok; [plan](docs/DECISION-SCOPE-PLAN.md)) (źródło: artykuł „Teaching AI Agents to Remember: ADRs, Specs,
+- [x] **Reguła: PR rusza obszar przyjętej decyzji** (zrobione 2026-11-24 w wersji informującej: `analyze --base` wypisuje decyzje suity, których `applies_to` obejmuje pliki PR-a, z pytaniem; ostrzeżenia i tabela w podsumowaniu; szablon PR „Wpływ na decyzje”; od 2026-11-25 blokuje po odpowiedzi z opisu PR: brak odpowiedzi albo „tak” bez decyzji zastępującej; [plan](docs/DECISION-SCOPE-PLAN.md)) (źródło: artykuł „Teaching AI Agents to Remember: ADRs, Specs,
       Engineering Decisions”, A. Kokane, 2026-10-19 — dwa poprawne PR-y razem odwracają decyzję, bo drugi agent jej
       nie znał). Zależy od pola `applies_to` decyzji w kontrakcie pdi (pozycja w `pdi/TODO.md`).
       - Bramka na PR (`npm run analyze -- --repo …`) dostaje listę zmienionych plików (np. `--changed-files` z

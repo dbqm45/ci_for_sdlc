@@ -29,3 +29,17 @@ decyzje suity, których `applies_to` obejmuje pliki zmienione w PR, z uzasadnien
    adnotacje i podsumowanie; bez `--base` nic; kod wyjścia bez zmian).
 2. Kod; bramki: `npm test`, `npm run test:coverage`, `npm run typecheck`, `npm run build`, `npm run contract:check`,
    `npm run lint:commit`.
+
+## Krok 2 — odpowiedź z opisu PR blokuje (2026-11-25)
+1. **`decisionImpactOf(body)`** (`@ci/core`, `decision-impact.ts`): z sekcji „Wpływ na decyzje” / „Decision impact”
+   opisu PR (szablon `.github/pull_request_template.md`, bez komentarzy `<!-- -->`) odpowiedź `no` / `yes` /
+   `unknown` / `unanswered` (pole puste albo nietknięte „nie / tak … / nie wiem”), decyzje zastępujące (`DEC-n` w tej
+   linii) i wymienione decyzje.
+2. **Bramka:** opis PR z `--pr-body FILE`, a w GitHub Actions z `GITHUB_EVENT_PATH` (`pull_request.body`). Gdy PR
+   rusza obszar decyzji i opis jest dostępny:
+   - brak sekcji albo brak odpowiedzi → **porażka** („answer the Decision impact section”);
+   - „tak” bez `DEC-n` decyzji zastępującej → **porażka**;
+   - „nie wiem” → ostrzeżenie (decyduje człowiek w przeglądzie), bez porażki;
+   - „nie” albo „tak” z `DEC-n` → przechodzi.
+   Bez dostępnego opisu (uruchomienie lokalne bez `--pr-body`) — jak w kroku 1, tylko informacja.
+3. Testy: `packages/core/test/decision-impact.test.ts` (DI-01…), `gate.test.ts` (GATE-23…).
