@@ -14,6 +14,7 @@ export { OWASP_TOP10_CWES, SECURITY_RULES, placeOfResult, securityByItem, securi
 export { parseAcceptanceCriteria, normalizeAction } from './analysis/acceptance.js';
 export { storyStatement, joinedActions } from './analysis/story-shape.js';
 export { MVP_LINE, releaseLineOf, releasePlanOf } from './analysis/release-plan.js';
+export { scopeOverlap } from './analysis/scope.js';
 export { STATE_LABELS, JOURNEY_LABELS, TRAIT_LABELS } from './analysis/vocabulary.js';
 export { designCoveragePercent } from './analysis/states.js';
 export { AUTO_CLOSE_ACTOR, answerProposalId, autoCloseDecision, isVerbatimQuote } from './analysis/auto-close.js';
