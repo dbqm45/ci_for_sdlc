@@ -293,6 +293,68 @@ describe('analyze --sarif (Z8c, docs/SECURITY-SCAN-PLAN.md)', () => {
     expect(r.out).toMatch(/Decisions this pull request touches: not checked \(Cannot read the pull request against origin\/nope/);
   });
 
+  /** A pull request (topic) changing web/ in a checkout whose suite decision copy has DEC-41 on web/**. */
+  async function touchingPr() {
+    const { root, git, commit } = repo();
+    const data = join(tmp, `data${n++}`);
+    const store = new Store(data);
+    await store.init();
+    await store.updateSuiteDecisions(() => ({ decisions: [{ id: 'DEC-41', statement: 'History reads only from the replica', status: 'recorded', app: 'pdi', appliesTo: { paths: ['web/**'] } }] }));
+    git('checkout', '-q', '-b', 'topic');
+    commit({ 'web/history.ts': 'y' }, 'feat: faster list');
+    const body = (text: string) => {
+      const f = join(root, '..', `${root.split('/').pop()}-body${n++}.md`);
+      writeFileSync(f, text);
+      return f;
+    };
+    const run = (extra: string[], env: Record<string, string> = {}) => gate(['--repo', root, '--base', 'main', '--fail-on', 'critical', ...extra], { CI_DATA_DIR: data, ...env });
+    return { root, body, run };
+  }
+  const impact = (answer: string) => `## Summary\nx\n\n## Wpływ na decyzje\n- Dotyczy decyzji: DEC-41\n- Czy zmienia przyjętą decyzję: ${answer}\n- Uzasadnienie: x\n`;
+
+  it('GATE-23: a PR touching a decision with the Decision impact section unanswered fails, naming the decision', async () => {
+    const { body, run } = await touchingPr();
+    const template = readFileSync(fileURLToPath(new URL('../../../.github/pull_request_template.md', import.meta.url)), 'utf8');
+    const r = await run(['--pr-body', body(template)], { GITHUB_ACTIONS: 'true' });
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/Decision impact: unanswered/);
+    expect(r.out).toMatch(/::error title=Decision impact::.*DEC-41/);
+    expect(r.err).toMatch(/Quality gate failed: answer the Decision impact section of the pull request \(DEC-41\)/);
+    expect((await run(['--pr-body', body('## Summary\nJust a fix.\n')])).code).toBe(1);
+  });
+
+  it('GATE-24: "yes" needs a superseding decision', async () => {
+    const { body, run } = await touchingPr();
+    const bad = await run(['--pr-body', body(impact('tak — decyzja zastępująca:'))]);
+    expect(bad.code).toBe(1);
+    expect(bad.err).toMatch(/changes DEC-41 without a superseding decision/);
+    const ok = await run(['--pr-body', body(impact('tak — decyzja zastępująca: DEC-77'))]);
+    expect(ok.code).toBe(0);
+    expect(ok.out).toMatch(/Decision impact: yes — superseded by DEC-77/);
+  });
+
+  it('GATE-25: "no" passes; "don\'t know" passes with a warning for the reviewer', async () => {
+    const { body, run } = await touchingPr();
+    expect((await run(['--pr-body', body(impact('nie'))])).code).toBe(0);
+    const unsure = await run(['--pr-body', body(impact('nie wiem'))], { GITHUB_ACTIONS: 'true' });
+    expect(unsure.code).toBe(0);
+    expect(unsure.out).toMatch(/::warning title=Decision impact::.*don't know.*DEC-41/);
+  });
+
+  it('GATE-26: in GitHub Actions the description comes from the pull request event; without one it only informs', async () => {
+    const { root, run } = await touchingPr();
+    const event = join(root, '..', `${root.split('/').pop()}-event.json`);
+    writeFileSync(event, JSON.stringify({ pull_request: { number: 7, body: impact('tak') } }));
+    expect((await run([], { GITHUB_ACTIONS: 'true', GITHUB_EVENT_PATH: event })).code).toBe(1);
+    writeFileSync(event, JSON.stringify({ pull_request: { number: 7, body: null } }));
+    expect((await run([], { GITHUB_ACTIONS: 'true', GITHUB_EVENT_PATH: event })).code).toBe(1);
+    writeFileSync(event, JSON.stringify({ ref: 'refs/heads/main' }));
+    const push = await run([], { GITHUB_ACTIONS: 'true', GITHUB_EVENT_PATH: event });
+    expect(push.code).toBe(0);
+    expect(push.out).not.toMatch(/Decision impact:/);
+    expect((await run([])).code).toBe(0);
+  });
+
   it('GATE-18: a clean scan passes, and without --sarif nothing about a scan is printed', async () => {
     const { root } = repo();
     writeFileSync(join(root, 'clean.sarif'), sarif([]));
