@@ -267,6 +267,8 @@ export function parseChange(folder: string, files: { intent: string; plan?: stri
   const title = /^#\s+(.+)$/m.exec(intent.body)?.[1]?.trim() || folder;
   const metrics = section(intent.body, /^(metryki sukcesu|success metrics|metryki|metrics)$/i);
   const mvp = (release?.mvp && mvpText(release.mvp)) ?? (metrics.length ? metrics.join(' ') : undefined);
+  // DV5 (SCOPE-001): what the intent puts out of scope, for the change and each of its slices.
+  const outOfScope = section(intent.body, /^(out of scope|poza zakresem( zmiany)?)$/i);
   const intentUrl = opts.urlOf?.('intent.md');
   const pathOf = (file: ChangeFile) => `${CHANGES_DIR}/${folder}/${file}`;
   const fileOf = (file: ChangeFile) => {
@@ -280,6 +282,7 @@ export function parseChange(folder: string, files: { intent: string; plan?: stri
   const designUrl = opts.urlOf?.('design.md');
   const epicRepo: RepoFacts = {
     path: pathOf('intent.md'),
+    ...(outOfScope.length && { outOfScope }),
     ...(design && { design: { path: `${CHANGES_DIR}/${folder}/design.md`, ...(designUrl && { url: designUrl }), rows: design } }),
     ...(plan && { plan: fileOf('plan.md') }),
     ...(release && { release: { ...fileOf('release.yaml'), flags: release.flags } }),
@@ -321,7 +324,10 @@ export function parseChange(folder: string, files: { intent: string; plan?: stri
     updatedAt: updatedAt(plan?.header ?? intent.header),
     ...((row ? planUrl : releaseUrl) && { url: row ? planUrl : releaseUrl }),
     remoteLinks: design && row ? linkedOf(design.filter((d) => (row.requirements ?? []).some((req) => req === d.requirement || req === d.requirement.split('/')[0]))) : [],
-    repo: row ? { path: pathOf('plan.md'), line: row.lineNo, kind: row.kind, ...(row.unblocks && { unblocks: row.unblocks }), requirements: row.requirements } : { path: pathOf('release.yaml') },
+    repo: {
+      ...(row ? { path: pathOf('plan.md'), line: row.lineNo, kind: row.kind, ...(row.unblocks && { unblocks: row.unblocks }), requirements: row.requirements } : { path: pathOf('release.yaml') }),
+      ...(outOfScope.length && { outOfScope }),
+    },
   });
   const stories = rows.filter((r) => r.status !== 'dropped').map((r) => story(r, r.key));
   const listed = new Set(rows.map((r) => r.key));

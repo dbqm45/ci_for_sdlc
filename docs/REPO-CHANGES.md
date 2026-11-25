@@ -13,19 +13,20 @@ report; a folder with `task.json` and no `intent.md` is skipped without a proble
 
 | File | Becomes |
 | --- | --- |
-| `intent.md` (required) | The change as an epic: title from its first `# ` heading, its text as the description, the header's `status`. Without `release.yaml` the "Metryki sukcesu" / "Success metrics" section is the MVP's outcome and metric. |
+| `intent.md` (required) | The change as an epic: title from its first `# ` heading, its text as the description, the header's `status`. Without `release.yaml` the "Metryki sukcesu" / "Success metrics" section is the MVP's outcome and metric. The items of the "Out of scope" / "Poza zakresem" section go to the change and each of its slices for SCOPE-001. |
 | `plan.md` | Each slice (`TSK-n`) of the first table with a "Cięcie" / "Slice" column as a story under the change: "Wartość" / "Value" is its title, "Weryfikacja" / "Verification" its acceptance criterion, "Wydanie" / "Release" and "Flaga" / "Flag" its release line and flag. Optional columns for REL-008: "Rodzaj" / "Kind" (`foundation`, `fundament`, `F` or tf's `F-NN` make a foundation; anything else, or no column, a slice; a value starting "(fundament)" is a foundation too), "Odblokowuje" / "Unblocks" (task keys or text) and "Wymagania" / "Requirements" (ids like `US-02`, `FR-007`, `AC-3`). `dropped` slices are left out. |
 | `decisions.md` (optional) | Decisions on findings: an entry in tf's format with `ustalenie: <finding>` (e.g. `DES-001:TSK-1`) answers that finding's question as a decision in the UI does, with `skutek` (`resolve` by default, `accept_risk`, `dismiss`, `confirm`). Its heading is the answer, `dlaczego` the note, `kto` and `kiedy` who and when, `id` pdi's DEC. It takes the place of a stored decision on the same question. Entries without `ustalenie` are left alone. See [`REPO-DECISIONS-PLAN.md`](REPO-DECISIONS-PLAN.md). |
 | `release.yaml` | The release plan, which wins over the plan's columns: each slice's line from `releases[].tasks`, its flags from `flags[].tasks`, and the MVP (outcome, metric with target and `horizon_days`, guardrails) for REL-002. Each flag's plan (`owner`, `remove_by`, `rollout[]` with `stage`, `min_days`, `exit`) for REL-007. A slice only in `release.yaml` is a story titled with its key. |
 
 The YAML header of `intent.md` and `plan.md` must name the change of its folder (`change: CHG-12`). Every item is
 labelled `change:CHG-12`, so the change's readiness goes to pdi as in Jira mode. The release rules REL-001…006 run on
-the change as on a Jira epic. Two more run only on changes from a repository:
+the change as on a Jira epic. Three more run only on changes from a repository:
 
 | Rule | Default | Finds |
 | --- | --- | --- |
 | REL-007 | info | A flag in `release.yaml` without a plan: no rollout stages, a stage without `exit`, no `owner` or no `remove_by`. One finding per flag, naming what it lacks; it points at the flag's `key:` line in `release.yaml`. |
 | REL-008 | warning | The self-check of tf's `plan-ciec.md`: a foundation without "Odblokowuje" / "Unblocks", "Unblocks" naming a task key that is not in the change (`plan.md` or `release.yaml`), or a slice with neither a verification nor a requirement id. One finding per row; it points at the row in `plan.md`. |
+| SCOPE-001 | warning | A slice that does what the intent puts out of scope (DV5, [`SCOPE-PLAN.md`](SCOPE-PLAN.md)): its value or verification shares the content words of an item of the intent's "Out of scope" / "Poza zakresem" section (an item's only word, or at least two and at least half of its words; words of 4+ letters or acronyms, compared by their first 6 letters). It asks whether to remove the slice, update the intent, or keep it with a note; it points at the row in `plan.md`. |
 
 As for every rule, the policy's `actions` decide what an info or a warning does (by default info is only recorded and
 a warning makes the change need attention) and `disabledRules` switches a rule off.

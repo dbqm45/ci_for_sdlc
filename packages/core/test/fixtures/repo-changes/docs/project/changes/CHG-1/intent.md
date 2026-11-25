@@ -12,3 +12,7 @@ change: CHG-1
 
 ## Problem
 Customers cannot retry a failed payment.
+
+## Out of scope
+<!-- SCOPE-001 fires on TSK-1 -->
+- Retry queue for refunds
