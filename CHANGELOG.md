@@ -4,6 +4,12 @@ Wszystkie istotne zmiany w aplikacji. Format według [Keep a Changelog](https://
 wersje według [Semantic Versioning](https://semver.org/lang/pl/). Najnowsza wersja jest na górze. Jak powstaje nowy
 wpis, opisuje [`docs/RELEASING.md`](docs/RELEASING.md).
 
+## [0.1.70] - 2026-11-25
+
+### Nowe
+
+- **server:** block a PR that changes a decision without an answer (#152)
+
 ## [0.1.69] - 2026-11-25
 
 ### Nowe
