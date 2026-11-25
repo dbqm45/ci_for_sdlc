@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { mergeSuiteDecisions, selectSuiteDecisions, suiteDecisionOf, type SuiteDecisionCache } from '../src/index.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { decisionsTouched, mergeSuiteDecisions, pathMatches, selectSuiteDecisions, suiteDecisionOf, type SuiteDecisionCache } from '../src/index.js';
+
+/** The applies_to matching cases every implementation must pass (pdi contract 0.22.0, decision-record.md §4a). */
+const CASES = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/pdi-contract/0.22.0/applies-to-cases.json', import.meta.url)), 'utf8')) as {
+  cases: { pattern: string; path: string; match: boolean }[];
+};
 
 // D9 (docs/PDI-D9-PLAN.md): a read-only copy of the suite decision index from pdi (`pdi-records changes`, pdi D7),
 // shown in DI Definition next to the findings and questions it may concern.
@@ -79,5 +86,43 @@ describe('suite decisions copy (D9)', () => {
     expect(selectSuiteDecisions(all, { change: 'CHG-12', q: '199' }).map((d) => d.id)).toEqual(['DEC-1']);
     expect(selectSuiteDecisions(all, {})).toEqual([]);
     expect(selectSuiteDecisions(all, { q: 'free', limit: 1 })).toHaveLength(1);
+  });
+
+  it('SD-06: the copy keeps applies_to, review_by and the load-bearing assumptions; a bad applies_to is dropped', () => {
+    const d = suiteDecisionOf(dec('DEC-7', 'Bulk changes go through a job queue', {
+      applies_to: { paths: ['services/bulk/**'], components: ['bulk'] },
+      review_by: '2026-12-01',
+      assumptions: [
+        { statement: 'Chargers answer within 30 s', load_bearing: true, invalidated_if: 'timeouts above 5%' },
+        { statement: 'Minor', load_bearing: false, invalidated_if: 'x' },
+      ],
+    }))!;
+    expect(d).toMatchObject({ appliesTo: { paths: ['services/bulk/**'], components: ['bulk'] }, reviewBy: '2026-12-01', assumptions: [{ statement: 'Chargers answer within 30 s', invalidatedIf: 'timeouts above 5%' }] });
+    expect(suiteDecisionOf(dec('DEC-8', 'x', { applies_to: { paths: ['/etc/passwd', '../x', 7] } }))).not.toHaveProperty('appliesTo');
+    expect(suiteDecisionOf(dec('DEC-9', 'x', { applies_to: { paths: ['ok/**', '../no'] } }))!.appliesTo).toEqual({ paths: ['ok/**'] });
+  });
+
+  it.each(CASES.cases)('SD-07: $pattern ~ $path → $match (contract case)', ({ pattern, path, match }) => {
+    expect(pathMatches(pattern, path)).toBe(match);
+  });
+
+  it('SD-08: the decisions a pull request touches — binding ones with the files they cover, by id', () => {
+    const all = mergeSuiteDecisions({ decisions: [] }, [
+      dec('DEC-10', 'Bulk via a job queue', { applies_to: { paths: ['services/bulk/**'] } }),
+      dec('DEC-3', 'Only the OCPP adapter calls chargers', { applies_to: { paths: ['services/**/ocpp*.ts', 'services/bulk'] } }),
+      dec('DEC-4', 'Old', { status: 'superseded', superseded_by: 'DEC-10', applies_to: { paths: ['services/bulk/**'] } }),
+      dec('DEC-5', 'Not pinned to code'),
+    ], undefined, '2026-11-24T10:00:00Z').decisions;
+    const hits = decisionsTouched(all, ['services/bulk/queue.ts', 'services/bulk/ocpp-client.ts', 'README.md'], '2026-11-24');
+    expect(hits.map((h) => [h.decision.id, h.files])).toEqual([
+      ['DEC-3', ['services/bulk/queue.ts', 'services/bulk/ocpp-client.ts']],
+      ['DEC-10', ['services/bulk/queue.ts', 'services/bulk/ocpp-client.ts']],
+    ]);
+    expect(decisionsTouched(all, ['docs/a.md'], '2026-11-24')).toEqual([]);
+  });
+
+  it('SD-09: a decision past its review date is marked for reconsideration', () => {
+    const all = mergeSuiteDecisions({ decisions: [] }, [dec('DEC-1', 'x', { applies_to: { paths: ['a'] }, review_by: '2026-11-01' }), dec('DEC-2', 'y', { applies_to: { paths: ['a'] }, review_by: '2026-12-01' })], undefined, 't').decisions;
+    expect(decisionsTouched(all, ['a/b.ts'], '2026-11-24').map((h) => [h.decision.id, h.reviewDue])).toEqual([['DEC-1', true], ['DEC-2', false]]);
   });
 });

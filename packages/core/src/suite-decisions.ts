@@ -24,6 +24,12 @@ export interface SuiteDecision {
   /** The owner's page of the decision (https only). */
   link?: string;
   changedAt?: string;
+  /** What the decision applies to in the code (pdi contract 0.22.0, `applies_to`). */
+  appliesTo?: { paths?: string[]; components?: string[] };
+  /** `review_by`: after this date the decision is due for reconsideration. */
+  reviewBy?: string;
+  /** The load-bearing assumptions: if one stops being true, the decision is in question. */
+  assumptions?: { statement: string; invalidatedIf?: string }[];
 }
 
 export interface SuiteDecisionCache {
@@ -39,6 +45,10 @@ const ID = /^[A-Z][A-Z0-9]+-[0-9]+$/;
 const MAX_TEXT = 2000;
 /** Decisions of DI Definition itself are here already. */
 const OWN_APP = 'ci_for_sdlc';
+/** A path pattern and a component name of `applies_to` (pdi contract 0.22.0). */
+const PATH_PATTERN = /^(?!\/)(?!.*(?:^|\/)\.{1,2}(?:\/|$))[^\\]{1,300}$/;
+const COMPONENT = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const MAX_SCOPE = 100;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const text = (v: unknown, max = MAX_TEXT) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
@@ -66,7 +76,62 @@ export function suiteDecisionOf(raw: unknown): SuiteDecision | undefined {
   add('change', typeof links.chg === 'string' && ID.test(links.chg) ? links.chg : undefined);
   add('link', https(origin.url) ?? https(source.url));
   add('changedAt', text(raw.changed_at, 40));
+  add('appliesTo', appliesToOf(raw.applies_to));
+  add('reviewBy', typeof raw.review_by === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.review_by) ? raw.review_by : undefined);
+  const assumptions = (Array.isArray(raw.assumptions) ? raw.assumptions : [])
+    .filter((a): a is Record<string, unknown> => isRecord(a) && a.load_bearing === true && !!text(a.statement))
+    .slice(0, MAX_SCOPE)
+    .map((a) => ({ statement: text(a.statement)!, ...(text(a.invalidated_if) && { invalidatedIf: text(a.invalidated_if) }) }));
+  add('assumptions', assumptions.length ? assumptions : undefined);
   return out;
+}
+
+/** `applies_to` in the contract's shape; patterns and names that are not are dropped. */
+function appliesToOf(v: unknown): SuiteDecision['appliesTo'] {
+  if (!isRecord(v)) return undefined;
+  const list = (x: unknown, ok: RegExp) => [...new Set((Array.isArray(x) ? x : []).filter((s): s is string => typeof s === 'string' && ok.test(s)))].slice(0, MAX_SCOPE);
+  const paths = list(v.paths, PATH_PATTERN);
+  const components = list(v.components, COMPONENT);
+  if (!paths.length && !components.length) return undefined;
+  return { ...(paths.length && { paths }), ...(components.length && { components }) };
+}
+
+const segment = (pattern: string) => new RegExp(`^${[...pattern].map((c) => (c === '*' ? '[^/]*' : c === '?' ? '[^/]' : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).join('')}$`);
+
+/**
+ * Whether an `applies_to.paths` pattern covers a file (pdi contract 0.22.0, decision-record.md §4a): anchored at the
+ * repository root, `*` within a segment, `?` one character, `**` as a whole segment zero or more segments, and a
+ * pattern matching a directory covers everything under it.
+ */
+export function pathMatches(pattern: string, path: string): boolean {
+  const pat = pattern.split('/');
+  const parts = path.replace(/\\/g, '/').replace(/^\.\//, '').split('/');
+  const go = (i: number, j: number): boolean => {
+    if (i === pat.length) return true;
+    if (pat[i] === '**') {
+      for (let k = j; k <= parts.length; k++) if (go(i + 1, k)) return true;
+      return false;
+    }
+    return j < parts.length && segment(pat[i]!).test(parts[j]!) && go(i + 1, j + 1);
+  };
+  return go(0, 0);
+}
+
+/** A binding decision whose `applies_to` covers some of the files, with those files. */
+export interface TouchedDecision {
+  decision: SuiteDecision;
+  files: string[];
+  /** Its `review_by` has passed: reconsider it. */
+  reviewDue: boolean;
+}
+
+/** The binding (`recorded`) decisions whose `applies_to.paths` cover some of `files`, by id. */
+export function decisionsTouched(all: readonly SuiteDecision[], files: readonly string[], today: string): TouchedDecision[] {
+  return all
+    .filter((d) => d.status === 'recorded' && d.appliesTo?.paths?.length)
+    .map((d) => ({ decision: d, files: files.filter((f) => d.appliesTo!.paths!.some((p) => pathMatches(p, f))), reviewDue: !!d.reviewBy && d.reviewBy < today }))
+    .filter((t) => t.files.length)
+    .sort((a, b) => a.decision.id.localeCompare(b.decision.id, 'en', { numeric: true }));
 }
 
 /** The copy after one page: changed decisions replaced in place, new ones appended, our own skipped. */

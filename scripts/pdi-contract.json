@@ -71,6 +71,12 @@
         "event.schema.json": "packages/core/test/fixtures/pdi-contract/0.17.0/event.schema.json",
         "examples/event-decision.recorded.json": "packages/core/test/fixtures/pdi-contract/0.17.0/event-decision.recorded.json"
       }
+    },
+    {
+      "version": "0.22.0",
+      "files": {
+        "fixtures/applies-to/cases.json": "packages/core/test/fixtures/pdi-contract/0.22.0/applies-to-cases.json"
+      }
     }
   ]
 }

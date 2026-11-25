@@ -1,0 +1,24 @@
+{
+  "description": "Przypadki dopasowania wzorców applies_to.paths do ścieżek plików (kontrakt 0.22.0, decision-record.md §4a). Każda implementacja (pdi, tf, ci_for_sdlc) musi dać dla każdego przypadku wynik `match`; wzorcowa implementacja: tools/check_contract.py (applies_to_match). Wzorce z invalid_patterns schemat odrzuca.",
+  "cases": [
+    {"pattern": "services/document-processing/**", "path": "services/document-processing/api/handler.py", "match": true},
+    {"pattern": "services/document-processing/**", "path": "services/document-processing", "match": true},
+    {"pattern": "services/document-processing/**", "path": "services/document-processing-v2/main.py", "match": false},
+    {"pattern": "services/document-processing", "path": "services/document-processing/api/handler.py", "match": true},
+    {"pattern": "src/pdi/inbox.py", "path": "src/pdi/inbox.py", "match": true},
+    {"pattern": "src/pdi/inbox.py", "path": "src/pdi/inbox_test.py", "match": false},
+    {"pattern": "src/*.py", "path": "src/inbox.py", "match": true},
+    {"pattern": "src/*.py", "path": "src/pdi/inbox.py", "match": false},
+    {"pattern": "**/*.sql", "path": "migrations/2026/001_init.sql", "match": true},
+    {"pattern": "**/*.sql", "path": "init.sql", "match": true},
+    {"pattern": "**/migrations/**", "path": "services/billing/migrations/001.sql", "match": true},
+    {"pattern": "docs/adr-00?.md", "path": "docs/adr-007.md", "match": true},
+    {"pattern": "docs/adr-00?.md", "path": "docs/adr-0071.md", "match": false},
+    {"pattern": "contract", "path": "contracts/a.json", "match": false},
+    {"pattern": "Src/pdi", "path": "src/pdi/inbox.py", "match": false},
+    {"pattern": ".github/workflows/**", "path": ".github/workflows/ci.yml", "match": true},
+    {"pattern": "src/pdi/**", "path": "./src/pdi/inbox.py", "match": true},
+    {"pattern": "src/pdi/**", "path": "src\\pdi\\inbox.py", "match": true}
+  ],
+  "invalid_patterns": ["/src/pdi", "./src", "src/../secrets", "..", "src\\pdi", ""]
+}
